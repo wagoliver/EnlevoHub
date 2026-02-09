@@ -9,6 +9,11 @@ interface ParsedTransaction {
   externalId?: string
 }
 
+interface OFXParseResult {
+  transactions: ParsedTransaction[]
+  balance: number | null
+}
+
 interface ImportResult {
   batchId: string
   totalRecords: number
@@ -16,6 +21,8 @@ interface ImportResult {
   duplicateCount: number
   periodStart: Date | null
   periodEnd: Date | null
+  balanceUpdated: boolean
+  newBalance: number | null
 }
 
 export class ImportService {
@@ -38,15 +45,19 @@ export class ImportService {
     const ext = fileName.toLowerCase().split('.').pop() || ''
     let fileType: string
     let transactions: ParsedTransaction[]
+    let ofxBalance: number | null = null
 
     // Decode from Latin1 (common for Brazilian bank exports)
     const text = this.decodeBuffer(buffer, ext)
 
     switch (ext) {
-      case 'ofx':
+      case 'ofx': {
         fileType = 'OFX'
-        transactions = this.parseOFX(text)
+        const ofxResult = this.parseOFX(text)
+        transactions = ofxResult.transactions
+        ofxBalance = ofxResult.balance
         break
+      }
       case 'csv':
         fileType = 'CSV'
         transactions = this.parseCSV(text)
@@ -123,6 +134,14 @@ export class ImportService {
         })
       }
 
+      // Update bank account balance if OFX provided it
+      if (ofxBalance !== null) {
+        await tx.bankAccount.update({
+          where: { id: bankAccountId },
+          data: { balance: ofxBalance },
+        })
+      }
+
       return importBatch
     })
 
@@ -133,6 +152,8 @@ export class ImportService {
       duplicateCount,
       periodStart,
       periodEnd,
+      balanceUpdated: ofxBalance !== null,
+      newBalance: ofxBalance,
     }
   }
 
@@ -154,7 +175,7 @@ export class ImportService {
     return !str.includes('\ufffd')
   }
 
-  private parseOFX(text: string): ParsedTransaction[] {
+  private parseOFX(text: string): OFXParseResult {
     const transactions: ParsedTransaction[] = []
 
     // OFX 1.x (SGML) parser — supports the most common Brazilian bank format
@@ -179,7 +200,15 @@ export class ImportService {
       }
     }
 
-    return transactions
+    // Extract balance from LEDGERBAL or AVAILBAL
+    let balance: number | null = null
+    const balAmtMatch = text.match(/<BALAMT>\s*([^<\n\r]+)/i)
+    if (balAmtMatch) {
+      const parsed = parseFloat(balAmtMatch[1].trim().replace(',', '.'))
+      if (!isNaN(parsed)) balance = parsed
+    }
+
+    return { transactions, balance }
   }
 
   private parseOFXBlock(block: string): ParsedTransaction | null {

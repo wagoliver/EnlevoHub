@@ -51,6 +51,16 @@ export const createMeasurementSchema = z.object({
   photos: z.array(z.string()).optional(),
 })
 
+export const createBatchMeasurementSchema = z.object({
+  contractorId: z.string().uuid().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    activityId: z.string().uuid(),
+    unitActivityId: z.string().uuid(),
+    progress: z.number().min(0).max(100),
+  })).min(1),
+})
+
 export const reviewMeasurementSchema = z.object({
   status: z.enum(['APPROVED', 'REJECTED']),
   reviewNotes: z.string().optional(),
@@ -69,5 +79,6 @@ export type UpdateProjectActivityInput = z.infer<typeof updateProjectActivitySch
 export type CreateFromTemplateInput = z.infer<typeof createFromTemplateSchema>
 export type CreateFromTemplateWithScheduleInput = z.infer<typeof createFromTemplateWithScheduleSchema>
 export type CreateMeasurementInput = z.infer<typeof createMeasurementSchema>
+export type CreateBatchMeasurementInput = z.infer<typeof createBatchMeasurementSchema>
 export type ReviewMeasurementInput = z.infer<typeof reviewMeasurementSchema>
 export type ListMeasurementsQuery = z.infer<typeof listMeasurementsQuerySchema>

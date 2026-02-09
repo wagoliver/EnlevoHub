@@ -19,7 +19,7 @@ class APIClient {
     const { accessToken } = useAuthStore.getState()
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers as Record<string, string>),
     }
 
@@ -321,6 +321,8 @@ export const projectsAPI = {
   },
   createMeasurement: (projectId: string, data: any) =>
     apiClient.post<any>(`/projects/${projectId}/measurements`, data),
+  createBatchMeasurements: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/measurements/batch`, data),
   getMeasurement: (projectId: string, measurementId: string) =>
     apiClient.get<any>(`/projects/${projectId}/measurements/${measurementId}`),
   reviewMeasurement: (projectId: string, measurementId: string, data: any) =>
@@ -420,9 +422,10 @@ export const financialAPI = {
   importFile: (bankAccountId: string, formData: FormData) =>
     apiClient.upload<any>(`/financial/import?bankAccountId=${bankAccountId}`, formData),
   listImports: () => apiClient.get<any>('/financial/imports'),
+  deleteImportBatch: (id: string) => apiClient.delete<any>(`/financial/imports/${id}`),
 
   // Reconciliation
-  getPendingReconciliation: () => apiClient.get<any>('/financial/reconciliation/pending'),
+  getPendingReconciliation: (filter?: string) => apiClient.get<any>(`/financial/reconciliation/pending${filter ? `?filter=${filter}` : ''}`),
   getSuggestions: (id: string) => apiClient.get<any>(`/financial/reconciliation/suggestions/${id}`),
   matchTransaction: (data: { transactionId: string; linkedEntityType: string; linkedEntityId: string; linkedEntityName: string }) =>
     apiClient.post<any>('/financial/reconciliation/match', data),

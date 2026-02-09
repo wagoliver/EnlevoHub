@@ -12,6 +12,7 @@ import {
   createFromTemplateSchema,
   createFromTemplateWithScheduleSchema,
   createMeasurementSchema,
+  createBatchMeasurementSchema,
   reviewMeasurementSchema,
   listMeasurementsQuerySchema,
 } from './project-activity.schemas'
@@ -318,6 +319,40 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
         scope
       )
       return reply.status(201).send(measurement)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Create batch measurements
+  fastify.post('/:id/measurements/batch', {
+    preHandler: [authMiddleware, requirePermission('measurements:create')],
+    schema: {
+      description: 'Submit multiple measurements at once',
+      tags: ['measurements'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = createBatchMeasurementSchema.parse(request.body)
+      const scope = await getContractorScope(request, fastify.prisma)
+      const result = await measurementService.createBatch(
+        getTenantId(request),
+        id,
+        getUserId(request),
+        body,
+        scope
+      )
+      return reply.status(201).send(result)
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })

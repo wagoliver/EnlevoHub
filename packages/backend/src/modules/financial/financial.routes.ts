@@ -327,18 +327,50 @@ export async function financialRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.delete('/imports/:id', {
+    preHandler: [authMiddleware, requirePermission('financial:delete')],
+    schema: {
+      description: 'Delete an import batch and all its transactions',
+      tags: ['financial'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await service.deleteImportBatch(getTenantId(request), id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ==================== Reconciliation ====================
 
   fastify.get('/reconciliation/pending', {
     preHandler: [authMiddleware, requirePermission('financial:view')],
     schema: {
-      description: 'List transactions pending reconciliation',
+      description: 'List imported transactions for reconciliation',
       tags: ['financial'],
       security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          filter: { type: 'string', enum: ['ALL', 'PENDING', 'MATCHED', 'IGNORED'] },
+        },
+      },
     },
   }, async (request, reply) => {
     try {
-      const transactions = await reconciliationService.getPendingTransactions(getTenantId(request))
+      const { filter } = request.query as { filter?: string }
+      const transactions = await reconciliationService.getImportedTransactions(getTenantId(request), filter)
       return reply.send(transactions)
     } catch (error) {
       if (error instanceof Error) {

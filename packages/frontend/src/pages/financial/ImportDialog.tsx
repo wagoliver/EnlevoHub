@@ -187,6 +187,18 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
               </p>
             )}
 
+            {result.balanceUpdated && result.newBalance !== null && (
+              <div className="flex items-center gap-2 rounded-lg bg-blue-50 p-3">
+                <CheckCircle className="h-5 w-5 text-blue-600" />
+                <p className="text-sm text-blue-800">
+                  Saldo da conta atualizado para{' '}
+                  <strong>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(result.newBalance)}
+                  </strong>
+                </p>
+              </div>
+            )}
+
             <DialogFooter>
               <Button onClick={handleClose}>Fechar</Button>
             </DialogFooter>

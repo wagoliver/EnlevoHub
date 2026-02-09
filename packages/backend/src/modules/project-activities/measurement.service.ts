@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import {
   CreateMeasurementInput,
+  CreateBatchMeasurementInput,
   ReviewMeasurementInput,
   ListMeasurementsQuery,
 } from './project-activity.schemas'
@@ -138,6 +139,65 @@ export class MeasurementService {
     })
 
     return this.serialize(measurement)
+  }
+
+  async createBatch(
+    tenantId: string,
+    projectId: string,
+    userId: string,
+    data: CreateBatchMeasurementInput,
+    scope?: ContractorScope
+  ) {
+    // Verify project belongs to tenant
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    // Fetch all referenced unitActivities to get previousProgress
+    const unitActivityIds = data.items.map(i => i.unitActivityId)
+    const unitActivities = await this.prisma.unitActivity.findMany({
+      where: { id: { in: unitActivityIds } },
+    })
+    const uaMap = new Map(unitActivities.map(ua => [ua.id, ua]))
+
+    // Filter items that actually changed
+    const changedItems = data.items.filter(item => {
+      const ua = uaMap.get(item.unitActivityId)
+      if (!ua) return false
+      return item.progress !== Number(ua.progress)
+    })
+
+    if (changedItems.length === 0) {
+      return { count: 0 }
+    }
+
+    const effectiveContractorId = scope?.contractorId || data.contractorId || null
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const measurements = []
+      for (const item of changedItems) {
+        const ua = uaMap.get(item.unitActivityId)!
+        const measurement = await tx.measurement.create({
+          data: {
+            tenantId,
+            activityId: item.activityId,
+            unitActivityId: item.unitActivityId,
+            contractorId: effectiveContractorId,
+            reportedBy: userId,
+            progress: item.progress,
+            previousProgress: Number(ua.progress),
+            notes: data.notes,
+            photos: Prisma.JsonNull,
+            status: 'PENDING',
+          },
+        })
+        measurements.push(measurement)
+      }
+      return measurements
+    })
+
+    return { count: result.length }
   }
 
   async review(

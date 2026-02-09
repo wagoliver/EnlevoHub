@@ -282,6 +282,23 @@ export class FinancialService {
     return batches
   }
 
+  async deleteImportBatch(tenantId: string, id: string) {
+    const batch = await this.prisma.importBatch.findFirst({
+      where: { id, tenantId },
+    })
+    if (!batch) throw new Error('Lote de importação não encontrado')
+
+    // Delete all transactions from this batch, then the batch itself
+    await this.prisma.$transaction(async (tx) => {
+      await tx.financialTransaction.deleteMany({
+        where: { importBatchId: id },
+      })
+      await tx.importBatch.delete({ where: { id } })
+    })
+
+    return { message: 'Importação e transações associadas removidas com sucesso' }
+  }
+
   // ==================== Serialization ====================
 
   private serializeAccount(account: any) {

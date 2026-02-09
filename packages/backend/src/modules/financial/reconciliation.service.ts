@@ -11,13 +11,23 @@ interface ReconciliationSuggestion {
 export class ReconciliationService {
   constructor(private prisma: PrismaClient) {}
 
-  async getPendingTransactions(tenantId: string) {
+  async getImportedTransactions(tenantId: string, filter?: string) {
+    const where: any = {
+      user: { tenantId },
+      importBatchId: { not: null },
+    }
+
+    if (filter === 'PENDING') {
+      where.reconciliationStatus = 'PENDING'
+    } else if (filter === 'MATCHED') {
+      where.reconciliationStatus = { in: ['AUTO_MATCHED', 'MANUAL_MATCHED'] }
+    } else if (filter === 'IGNORED') {
+      where.reconciliationStatus = 'IGNORED'
+    }
+    // 'ALL' or undefined = no filter on reconciliationStatus
+
     const transactions = await this.prisma.financialTransaction.findMany({
-      where: {
-        user: { tenantId },
-        reconciliationStatus: 'PENDING',
-        importBatchId: { not: null },
-      },
+      where,
       include: {
         bankAccount: { select: { bankName: true } },
       },

@@ -56,8 +56,8 @@ export function ContractorFormDialog({
       ? {
           name: contractor.name,
           document: contractor.document,
-          specialties: contractor.specialties
-            ? contractor.specialties.join(', ')
+          specialties: contractor.specialty
+            ? contractor.specialty.join(', ')
             : '',
           teamSize: contractor.teamSize ?? '',
           rating: contractor.rating ?? '',
@@ -89,7 +89,7 @@ export function ContractorFormDialog({
       const payload: any = {
         name: values.name,
         document: values.document,
-        specialties: specialtiesArray,
+        specialty: specialtiesArray,
         teamSize:
           values.teamSize !== '' && values.teamSize !== undefined
             ? Number(values.teamSize)

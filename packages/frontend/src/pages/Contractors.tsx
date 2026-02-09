@@ -198,16 +198,16 @@ export function Contractors() {
                   </p>
 
                   {/* Specialties */}
-                  {contractor.specialties && contractor.specialties.length > 0 && (
+                  {contractor.specialty && contractor.specialty.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {contractor.specialties.slice(0, 3).map((spec: string, idx: number) => (
+                      {contractor.specialty.slice(0, 3).map((spec: string, idx: number) => (
                         <Badge key={idx} variant="outline" className="text-xs">
                           {spec}
                         </Badge>
                       ))}
-                      {contractor.specialties.length > 3 && (
+                      {contractor.specialty.length > 3 && (
                         <Badge variant="outline" className="text-xs">
-                          +{contractor.specialties.length - 3}
+                          +{contractor.specialty.length - 3}
                         </Badge>
                       )}
                     </div>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { contractorsAPI } from '@/lib/api-client'
+import { contractorsAPI, projectsAPI } from '@/lib/api-client'
 import { useAuthStore } from '@/stores/auth.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ContractorFormDialog } from './ContractorFormDialog'
 import {
   ArrowLeft,
@@ -80,6 +87,12 @@ export function ContractorDetail() {
     queryKey: ['contractor', id],
     queryFn: () => contractorsAPI.getById(id!),
     enabled: !!id,
+  })
+
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects', { limit: 100 }],
+    queryFn: () => projectsAPI.list({ limit: 100 }),
+    enabled: showAssignDialog,
   })
 
   const deleteMutation = useMutation({
@@ -229,10 +242,10 @@ export function ContractorDetail() {
               <HardHat className="mt-0.5 h-4 w-4 text-neutral-500" />
               <div>
                 <p className="text-sm font-medium">Especialidades</p>
-                {contractor.specialties &&
-                contractor.specialties.length > 0 ? (
+                {contractor.specialty &&
+                contractor.specialty.length > 0 ? (
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {contractor.specialties.map(
+                    {contractor.specialty.map(
                       (spec: string, idx: number) => (
                         <Badge key={idx} variant="outline" className="text-xs">
                           {spec}
@@ -439,19 +452,25 @@ export function ContractorDetail() {
           <DialogHeader>
             <DialogTitle>Vincular a Projeto</DialogTitle>
             <DialogDescription>
-              Informe o ID do projeto e os dados de vínculo.
+              Selecione o projeto e preencha os dados de vínculo.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="assignProjectId">ID do Projeto *</Label>
-              <Input
-                id="assignProjectId"
-                value={assignProjectId}
-                onChange={(e) => setAssignProjectId(e.target.value)}
-                placeholder="ID do projeto"
-              />
+              <Label>Projeto *</Label>
+              <Select value={assignProjectId} onValueChange={setAssignProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um projeto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(projectsData?.data || []).map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>

@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+dist/
+build/
+.next/
+out/
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local env files
+.env
+.env*.local
+
+# Credentials
+.db-credentials.txt
+
+# Turbo
+.turbo
+
+# Runtime
+runtime/
+logs/
+backups/
+
+# Installers (large binaries)
+installers/*.exe
+D*EnlevoHubinstallers/
+
+# Misc generated
+nul
+
+# Claude Code local
+.claude/
+
+# IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# Keep VS Code settings but ignore some
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# OS
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo

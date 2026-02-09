@@ -1,0 +1,402 @@
+#!/bin/bash
+
+# EnlevoHub Installer for Linux/Mac
+# Installs everything needed to run EnlevoHub
+
+set -e
+
+ENLEVOHUB_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+DB_NAME="enlevohub"
+DB_USER="postgres"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo ""
+echo "========================================"
+echo "  EnlevoHub Installer"
+echo "========================================"
+echo ""
+echo "This will install and configure:"
+echo "  - PostgreSQL (if not installed)"
+echo "  - Node.js dependencies"
+echo "  - Database setup"
+echo ""
+
+# Ask for PostgreSQL password
+echo "========================================"
+echo "  PostgreSQL Configuration"
+echo "========================================"
+echo ""
+echo "You need to set a password for PostgreSQL database."
+echo "This password will be used for all database connections."
+echo ""
+echo "IMPORTANT: Remember this password! You'll need it to manage the database."
+echo ""
+echo "Suggestions:"
+echo "  - Use at least 12 characters"
+echo "  - Mix letters, numbers, and symbols (avoid @ and special URL chars)"
+echo "  - Example: MySecurePass2024!"
+echo ""
+
+while true; do
+    read -s -p "Enter PostgreSQL password: " POSTGRES_PASSWORD
+    echo ""
+
+    if [ -z "$POSTGRES_PASSWORD" ]; then
+        echo ""
+        echo -e "${RED}[ERROR]${NC} Password cannot be empty!"
+        echo ""
+        continue
+    fi
+
+    if [ ${#POSTGRES_PASSWORD} -lt 8 ]; then
+        echo ""
+        echo -e "${YELLOW}[WARN]${NC} Password is short (less than 8 characters). Recommended: 12+ characters."
+        read -p "Continue anyway? (y/N): " CONTINUE
+        if [ "$CONTINUE" != "y" ] && [ "$CONTINUE" != "Y" ]; then
+            echo ""
+            continue
+        fi
+    fi
+
+    read -s -p "Confirm PostgreSQL password: " POSTGRES_PASSWORD_CONFIRM
+    echo ""
+
+    if [ "$POSTGRES_PASSWORD" != "$POSTGRES_PASSWORD_CONFIRM" ]; then
+        echo ""
+        echo -e "${RED}[ERROR]${NC} Passwords do not match! Try again."
+        echo ""
+        continue
+    fi
+
+    break
+done
+
+echo ""
+echo -e "${GREEN}[OK]${NC} Password set successfully!"
+echo ""
+read -p "Press Enter to continue installation..."
+
+cd "$ENLEVOHUB_HOME"
+
+# Detect OS
+OS="$(uname -s)"
+case "$OS" in
+    Linux*)     OS_TYPE=Linux;;
+    Darwin*)    OS_TYPE=Mac;;
+    *)          OS_TYPE="Unknown";;
+esac
+
+echo ""
+echo -e "${BLUE}Detected OS: $OS_TYPE${NC}"
+
+# ========================================
+# Step 1: Check if PostgreSQL is installed
+# ========================================
+echo ""
+echo "[1/6] Checking PostgreSQL..."
+
+if command -v psql &> /dev/null; then
+    echo -e "  ${GREEN}✓${NC} PostgreSQL is already installed!"
+    PG_INSTALLED=1
+elif command -v pg_ctl &> /dev/null; then
+    echo -e "  ${GREEN}✓${NC} PostgreSQL is already installed!"
+    PG_INSTALLED=1
+else
+    echo -e "  ${YELLOW}○${NC} PostgreSQL not found. Installing..."
+    PG_INSTALLED=0
+fi
+
+# ========================================
+# Step 2: Install PostgreSQL
+# ========================================
+if [ $PG_INSTALLED -eq 0 ]; then
+    echo ""
+    echo "[2/6] Installing PostgreSQL..."
+    echo "  This may take 5-10 minutes..."
+
+    if [ "$OS_TYPE" = "Linux" ]; then
+        # Detect Linux distribution
+        if [ -f /etc/debian_version ]; then
+            # Debian/Ubuntu
+            echo "  Using apt-get for installation..."
+            sudo apt-get update
+            sudo apt-get install -y postgresql postgresql-contrib
+
+            # Start PostgreSQL
+            sudo systemctl start postgresql
+            sudo systemctl enable postgresql
+
+            # Create user if needed
+            sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';" || true
+
+        elif [ -f /etc/redhat-release ]; then
+            # RedHat/CentOS/Fedora
+            echo "  Using yum/dnf for installation..."
+            if command -v dnf &> /dev/null; then
+                sudo dnf install -y postgresql-server postgresql-contrib
+            else
+                sudo yum install -y postgresql-server postgresql-contrib
+            fi
+
+            # Initialize and start
+            sudo postgresql-setup --initdb
+            sudo systemctl start postgresql
+            sudo systemctl enable postgresql
+
+            # Configure authentication
+            sudo sed -i 's/ident/md5/g' /var/lib/pgsql/data/pg_hba.conf
+            sudo systemctl restart postgresql
+
+            # Set password
+            sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';" || true
+
+        else
+            echo -e "  ${RED}ERROR: Unsupported Linux distribution${NC}"
+            echo ""
+            echo "  Please install PostgreSQL manually:"
+            echo "  https://www.postgresql.org/download/linux/"
+            echo ""
+            exit 1
+        fi
+
+    elif [ "$OS_TYPE" = "Mac" ]; then
+        # macOS
+        if command -v brew &> /dev/null; then
+            echo "  Using Homebrew for installation..."
+            brew install postgresql@16
+
+            # Start PostgreSQL
+            brew services start postgresql@16
+
+            # Wait for PostgreSQL to start
+            sleep 5
+
+            # Create postgres user if needed (Homebrew uses current user by default)
+            createuser -s postgres 2>/dev/null || true
+            psql -U postgres -d postgres -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
+
+        else
+            echo -e "  ${RED}ERROR: Homebrew is not installed${NC}"
+            echo ""
+            echo "  Please install Homebrew first:"
+            echo "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+            echo ""
+            echo "  Or install PostgreSQL manually:"
+            echo "  https://www.postgresql.org/download/macosx/"
+            echo ""
+            exit 1
+        fi
+    else
+        echo -e "  ${RED}ERROR: Unsupported operating system${NC}"
+        exit 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} PostgreSQL installed successfully!"
+
+    # Wait for PostgreSQL to be ready
+    echo "  Waiting for PostgreSQL to start..."
+    sleep 5
+else
+    echo ""
+    echo "[2/6] PostgreSQL already installed, skipping..."
+fi
+
+# Update PostgreSQL password
+echo ""
+echo "  Setting PostgreSQL password..."
+
+# Try to update password
+# First try without password (new installation or trust authentication)
+if psql -U postgres -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';" >/dev/null 2>&1; then
+    echo -e "  ${GREEN}[OK]${NC} PostgreSQL password updated successfully"
+else
+    # Try with sudo for system user
+    if sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';" >/dev/null 2>&1; then
+        echo -e "  ${GREEN}[OK]${NC} PostgreSQL password updated successfully"
+    else
+        # Try common default passwords
+        for default_pass in postgres root admin; do
+            if PGPASSWORD="$default_pass" psql -U postgres -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';" >/dev/null 2>&1; then
+                echo -e "  ${GREEN}[OK]${NC} PostgreSQL password updated successfully"
+                break
+            fi
+        done
+    fi
+fi
+
+# ========================================
+# Step 3: Create Database
+# ========================================
+echo ""
+echo "[3/6] Creating database..."
+
+# Set password for commands
+export PGPASSWORD="$POSTGRES_PASSWORD"
+
+# Check if database exists
+if psql -U postgres -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+    echo -e "  ${GREEN}✓${NC} Database '$DB_NAME' already exists!"
+else
+    echo "  Creating database '$DB_NAME'..."
+
+    # Try with postgres user
+    if createdb -U postgres "$DB_NAME" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} Database created successfully!"
+    else
+        # Try with current user (macOS Homebrew default)
+        if createdb "$DB_NAME" 2>/dev/null; then
+            echo -e "  ${GREEN}✓${NC} Database created successfully!"
+        else
+            echo -e "  ${RED}ERROR: Failed to create database${NC}"
+            echo ""
+            echo "  Please create manually:"
+            echo "  psql -U postgres"
+            echo "  CREATE DATABASE $DB_NAME;"
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
+# ========================================
+# Step 4: Check Node.js
+# ========================================
+echo ""
+echo "[4/6] Checking Node.js..."
+
+if ! command -v node &> /dev/null; then
+    echo -e "  ${RED}ERROR: Node.js is not installed${NC}"
+    echo ""
+    echo "  Please install Node.js 20+ from:"
+    echo "  https://nodejs.org/"
+    echo ""
+    echo "  Or use a version manager:"
+    echo "  - nvm: https://github.com/nvm-sh/nvm"
+    echo "  - volta: https://volta.sh/"
+    echo ""
+    exit 1
+fi
+
+NODE_VERSION=$(node --version)
+echo -e "  ${GREEN}✓${NC} Node.js $NODE_VERSION is installed!"
+
+# ========================================
+# Step 5: Install Dependencies
+# ========================================
+echo ""
+echo "[5/6] Installing dependencies..."
+echo "  This may take a few minutes..."
+
+npm install
+
+echo -e "  ${GREEN}✓${NC} Dependencies installed!"
+
+# ========================================
+# Step 6: Setup Database Schema
+# ========================================
+echo ""
+echo "[6/6] Setting up database schema..."
+
+# Create/update .env file for backend
+if [ ! -f "packages/backend/.env" ]; then
+    echo "  Creating backend .env file..."
+    cat > packages/backend/.env <<EOL
+# Database
+DATABASE_URL="postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432/${DB_NAME}"
+
+# Application
+NODE_ENV="development"
+PORT=3001
+HOST="0.0.0.0"
+
+# JWT
+JWT_SECRET="enlevohub-secret-key-change-in-production"
+JWT_EXPIRES_IN="15m"
+JWT_REFRESH_EXPIRES_IN="7d"
+
+# Upload
+UPLOAD_MAX_SIZE="10485760"
+
+# Logs
+LOG_LEVEL="info"
+EOL
+fi
+
+# Run Prisma migrations
+cd packages/backend
+echo "  Running database migrations..."
+
+if npx prisma migrate deploy 2>/dev/null; then
+    echo -e "  ${GREEN}✓${NC} Migrations applied!"
+else
+    echo "  Running first migration..."
+    npx prisma migrate dev --name init
+fi
+
+cd ../..
+
+# Create frontend .env
+if [ ! -f "packages/frontend/.env" ]; then
+    echo "  Creating frontend .env..."
+    echo "VITE_API_URL=http://localhost:3001/api/v1" > packages/frontend/.env
+fi
+
+# Make enlevohub script executable
+chmod +x bin/enlevohub
+
+# Save credentials for reference
+echo ""
+echo "  Saving credentials reference..."
+cat > .db-credentials.txt <<EOL
+EnlevoHub - Database Credentials
+=================================
+
+Host:     localhost
+Port:     5432
+Database: $DB_NAME
+User:     postgres
+Password: $POSTGRES_PASSWORD
+
+Generated: $(date)
+
+IMPORTANT: Keep this file secure and do not commit to version control!
+EOL
+
+chmod 600 .db-credentials.txt
+echo "  Credentials saved to: .db-credentials.txt"
+
+# ========================================
+# Done!
+# ========================================
+echo ""
+echo "========================================"
+echo -e "  ${GREEN}Installation Complete!${NC}"
+echo "========================================"
+echo ""
+echo "  PostgreSQL Configuration:"
+echo "  ------------------------"
+echo "  Host:     localhost"
+echo "  Port:     5432"
+echo "  Database: $DB_NAME"
+echo "  User:     postgres"
+echo "  Password: $POSTGRES_PASSWORD"
+echo ""
+echo -e "  ${YELLOW}[IMPORTANT]${NC} Credentials saved in: .db-credentials.txt"
+echo "  Keep this file secure!"
+echo ""
+echo "  To start EnlevoHub:"
+echo "  ./bin/enlevohub start"
+echo ""
+echo "  First time setup:"
+echo "  1. Run: ./bin/enlevohub start"
+echo "  2. Open: http://localhost:3000"
+echo "  3. Create your account"
+echo ""
+echo "========================================"
+echo ""

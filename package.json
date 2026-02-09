@@ -1,0 +1,30 @@
+{
+  "name": "enlevohub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SaaS de Gestão de Obras - EnlevoHub",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "node scripts/start.js",
+    "stop": "node scripts/stop.js",
+    "setup": "node scripts/setup.js",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.9.2"
+}

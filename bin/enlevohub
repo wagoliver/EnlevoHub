@@ -1,0 +1,373 @@
+#!/bin/bash
+
+# EnlevoHub Control Script for Linux/Mac
+# Usage: enlevohub {start|stop|restart|status} [--debug]
+
+ENLEVOHUB_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+ACTION="$1"
+DEBUG_MODE=0
+
+# Check for --debug flag
+if [ "$1" = "--debug" ]; then
+    DEBUG_MODE=1
+    ACTION="$2"
+fi
+if [ "$2" = "--debug" ]; then
+    DEBUG_MODE=1
+fi
+
+if [ -z "$ACTION" ]; then
+    echo "Usage: enlevohub {start|stop|restart|status} [--debug]"
+    exit 1
+fi
+
+cd "$ENLEVOHUB_HOME"
+
+start_enlevohub() {
+    echo ""
+    echo "Starting EnlevoHub..."
+    echo ""
+
+    # Check if node_modules exists
+    if [ ! -d "node_modules" ]; then
+        echo "Setup: Installing dependencies..."
+        npm install
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to install dependencies"
+            exit 1
+        fi
+    fi
+
+    # Check if frontend dependencies are installed
+    if [ ! -d "packages/frontend/node_modules" ]; then
+        echo "Setup: Installing frontend dependencies..."
+        cd packages/frontend
+        npm install
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to install frontend dependencies"
+            exit 1
+        fi
+        cd ../..
+    fi
+
+    # Create .env if not exists
+    if [ ! -f ".env" ]; then
+        if [ -f ".env.example" ]; then
+            echo "Setup: Creating .env file..."
+            cp .env.example .env
+        fi
+    fi
+
+    # Create necessary directories
+    mkdir -p runtime logs backups
+
+    # Start Frontend directly (simpler, more reliable)
+    echo "Starting Frontend server..."
+
+    if [ $DEBUG_MODE -eq 1 ]; then
+        echo "Opening frontend in DEBUG mode..."
+        # On Mac/Linux, we can't hide terminal easily, so just mention it
+        (cd packages/frontend && npm run dev) &
+        FRONTEND_PID=$!
+    else
+        (cd packages/frontend && npm run dev > /dev/null 2>&1) &
+        FRONTEND_PID=$!
+    fi
+
+    # Wait for frontend to start
+    echo "Waiting for frontend to start..."
+    sleep 5
+
+    # Check if frontend is up
+    echo "Checking if frontend started..."
+    FRONTEND_UP=0
+    FRONTEND_PORT=3000
+
+    # Try up to 6 times (30 seconds total)
+    for i in {1..6}; do
+        # Check port 3000
+        if lsof -i :3000 > /dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":3000.*LISTEN"; then
+            FRONTEND_UP=1
+            break
+        fi
+        # Check port 3001
+        if lsof -i :3001 > /dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":3001.*LISTEN"; then
+            FRONTEND_UP=1
+            FRONTEND_PORT=3001
+            break
+        fi
+        echo "  Attempt $i/6: Waiting for frontend to start..."
+        sleep 5
+    done
+
+    if [ $FRONTEND_UP -eq 1 ]; then
+        # Save PID info
+        echo $FRONTEND_PID > runtime/frontend.pid
+
+        echo ""
+        echo "URL:  http://localhost:$FRONTEND_PORT"
+        echo ""
+        echo "Commands:"
+        echo "  Stop:      enlevohub stop"
+        echo "  Status:    enlevohub status"
+        echo "  Restart:   enlevohub restart"
+
+        if [ $DEBUG_MODE -eq 1 ]; then
+            echo ""
+            echo "DEBUG: Frontend process PID: $FRONTEND_PID"
+            echo "DEBUG: Check the terminal for detailed logs"
+            echo "DEBUG: Port: $FRONTEND_PORT"
+        fi
+
+        echo ""
+        echo "========================================"
+        echo "SUCCESS: EnlevoHub started"
+        echo "========================================"
+        echo ""
+
+        # Open browser (skip in debug mode to see logs first)
+        if [ $DEBUG_MODE -eq 0 ]; then
+            sleep 2
+            if command -v xdg-open > /dev/null 2>&1; then
+                xdg-open "http://localhost:$FRONTEND_PORT" 2>/dev/null &
+            elif command -v open > /dev/null 2>&1; then
+                open "http://localhost:$FRONTEND_PORT" 2>/dev/null &
+            fi
+        else
+            echo "DEBUG: Browser NOT auto-opened (debug mode)"
+            echo "DEBUG: Open manually: http://localhost:$FRONTEND_PORT"
+            echo ""
+        fi
+
+        # Exit successfully
+        return 0
+    else
+        echo ""
+        echo "========================================"
+        echo "FAILED: Could not start EnlevoHub"
+        echo "========================================"
+        echo ""
+        echo "Possible causes:"
+        echo "  - Port 3000 already in use by another application"
+        echo "  - Node.js not installed or not in PATH"
+        echo "  - Missing dependencies"
+        echo ""
+        echo "Troubleshooting:"
+        echo ""
+        echo "  1. Check if port 3000 is already in use:"
+        echo "     lsof -i :3000"
+        echo ""
+        echo "  2. If port is in use, stop the other application"
+        echo "     or restart your computer"
+        echo ""
+        echo "  3. For advanced troubleshooting, run with --debug:"
+        echo "     enlevohub start --debug"
+        echo ""
+        echo "  4. Get help:"
+        echo "     See TROUBLESHOOTING.md for more solutions"
+        echo ""
+        exit 1
+    fi
+}
+
+stop_enlevohub() {
+    echo ""
+    echo "Stopping EnlevoHub..."
+    echo ""
+
+    STOPPED=0
+
+    # Stop frontend using PID file
+    if [ -f "runtime/frontend.pid" ]; then
+        FRONTEND_PID=$(cat runtime/frontend.pid)
+        if ps -p $FRONTEND_PID > /dev/null 2>&1; then
+            kill -TERM $FRONTEND_PID 2>/dev/null
+            if [ $? -eq 0 ]; then
+                echo "  Stopped: Frontend (PID $FRONTEND_PID)"
+                STOPPED=1
+            fi
+        fi
+        rm -f runtime/frontend.pid
+    fi
+
+    # Kill any remaining Vite processes
+    pkill -f "vite" 2>/dev/null && STOPPED=1
+
+    # Kill EnlevoHub daemon processes
+    pkill -f "enlevohub" 2>/dev/null && STOPPED=1
+
+    # Kill PostgreSQL if running
+    pkill -f "postgres" 2>/dev/null && STOPPED=1
+
+    # Clean up PID files
+    rm -f runtime/enlevohub.pid 2>/dev/null
+
+    echo ""
+    if [ $STOPPED -eq 1 ]; then
+        echo "========================================"
+        echo "SUCCESS: EnlevoHub stopped"
+        echo "========================================"
+    else
+        echo "========================================"
+        echo "INFO: EnlevoHub was not running"
+        echo "========================================"
+    fi
+    echo ""
+}
+
+status_enlevohub() {
+    echo ""
+    echo "EnlevoHub Status"
+    echo "================"
+    echo ""
+
+    # Initialize variables
+    DAEMON_STATUS="STOPPED"
+    DAEMON_PID="-"
+    FRONTEND_STATUS="STOPPED"
+    FRONTEND_PID="-"
+    FRONTEND_PORT="-"
+    BACKEND_STATUS="STOPPED"
+    BACKEND_PID="-"
+    BACKEND_PORT="-"
+    DATABASE_STATUS="STOPPED"
+    DATABASE_PID="-"
+    DATABASE_PORT="-"
+
+    # Check Daemon
+    if [ -f "runtime/enlevohub.pid" ]; then
+        DAEMON_PID=$(cat runtime/enlevohub.pid)
+        if ps -p $DAEMON_PID > /dev/null 2>&1; then
+            DAEMON_STATUS="RUNNING"
+        else
+            DAEMON_PID="-"
+        fi
+    fi
+
+    # Check Frontend (port 3000)
+    if lsof -i :3000 > /dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":3000.*LISTEN"; then
+        FRONTEND_PID=$(lsof -ti :3000 2>/dev/null || netstat -tulpn 2>/dev/null | grep ":3000 " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+        FRONTEND_STATUS="RUNNING"
+        FRONTEND_PORT="3000"
+    fi
+
+    # Check Backend (port 3001)
+    if lsof -i :3001 > /dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":3001.*LISTEN"; then
+        BACKEND_PID=$(lsof -ti :3001 2>/dev/null || netstat -tulpn 2>/dev/null | grep ":3001 " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+        BACKEND_STATUS="RUNNING"
+        BACKEND_PORT="3001"
+    fi
+
+    # Check Database (port 5432)
+    if lsof -i :5432 > /dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":5432.*LISTEN"; then
+        DATABASE_PID=$(lsof -ti :5432 2>/dev/null || netstat -tulpn 2>/dev/null | grep ":5432 " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+        DATABASE_STATUS="RUNNING"
+        DATABASE_PORT="5432"
+    fi
+
+    # Display table
+    printf "Service         Name                      Status      PID       Port\n"
+    printf "-------         ----                      ------      ---       ----\n"
+    printf "Frontend        frontend-service          %-11s %-9s %s\n" "$FRONTEND_STATUS" "$FRONTEND_PID" "$FRONTEND_PORT"
+    printf "Backend         backend-service           %-11s %-9s %s\n" "$BACKEND_STATUS" "$BACKEND_PID" "$BACKEND_PORT"
+    printf "Database        postgres-database         %-11s %-9s %s\n" "$DATABASE_STATUS" "$DATABASE_PID" "$DATABASE_PORT"
+    printf "Daemon          enlevohub-daemon          %-11s %-9s %s\n" "$DAEMON_STATUS" "$DAEMON_PID" "-"
+    echo ""
+
+    # Overall Status
+    if [ "$DAEMON_STATUS" = "RUNNING" ] || [ "$FRONTEND_STATUS" = "RUNNING" ]; then
+        echo "Overall Status: RUNNING"
+    else
+        echo "Overall Status: STOPPED"
+    fi
+    echo ""
+
+    # Show additional info if running
+    if [ "$DAEMON_STATUS" = "RUNNING" ] || [ "$FRONTEND_STATUS" = "RUNNING" ]; then
+        echo "Health Checks:"
+
+        # Frontend health
+        if curl -s http://localhost:3000 > /dev/null 2>&1; then
+            echo "  Frontend:     OK (http://localhost:3000)"
+        else
+            if [ "$FRONTEND_STATUS" = "RUNNING" ]; then
+                echo "  Frontend:     NO RESPONSE (port open but not responding)"
+            else
+                echo "  Frontend:     STOPPED"
+            fi
+        fi
+
+        # Backend health
+        if curl -s http://localhost:3001/health > /dev/null 2>&1; then
+            echo "  Backend:      OK (http://localhost:3001)"
+        else
+            if [ "$BACKEND_STATUS" = "RUNNING" ]; then
+                echo "  Backend:      NO RESPONSE (port open but not responding)"
+            else
+                echo "  Backend:      STOPPED"
+            fi
+        fi
+
+        # API Docs
+        if curl -s http://localhost:3001/docs > /dev/null 2>&1; then
+            echo "  API Docs:     OK (http://localhost:3001/docs)"
+        else
+            echo "  API Docs:     NOT AVAILABLE"
+        fi
+
+        echo ""
+        echo "Resources:"
+
+        # Log size
+        if [ -f "logs/enlevohub.log" ]; then
+            LOG_SIZE=$(du -k logs/enlevohub.log 2>/dev/null | cut -f1)
+            echo "  Log Size:     ${LOG_SIZE} KB"
+        else
+            echo "  Log Size:     0 KB"
+        fi
+
+        # Memory usage (total for all node processes)
+        TOTAL_MEM=$(ps aux | grep -E "node" | grep -v grep | awk '{sum += $6} END {print sum}')
+        if [ ! -z "$TOTAL_MEM" ] && [ "$TOTAL_MEM" -gt 0 ]; then
+            TOTAL_MEM_MB=$((TOTAL_MEM / 1024))
+            echo "  Memory:       ${TOTAL_MEM_MB} MB"
+        fi
+
+        echo ""
+        echo "Quick Actions:"
+        echo "  View logs:    tail -f logs/enlevohub.log"
+        echo "  Restart:      enlevohub restart"
+        echo "  Stop:         enlevohub stop"
+    else
+        echo "To start:"
+        echo "  enlevohub start"
+    fi
+
+    echo ""
+}
+
+case "$ACTION" in
+    start)
+        start_enlevohub
+        ;;
+    stop)
+        stop_enlevohub
+        ;;
+    restart)
+        echo ""
+        echo "Restarting EnlevoHub..."
+        echo ""
+        stop_enlevohub
+        echo "Waiting 3 seconds..."
+        sleep 3
+        echo ""
+        start_enlevohub
+        ;;
+    status)
+        status_enlevohub
+        ;;
+    *)
+        echo "Usage: enlevohub {start|stop|restart|status}"
+        exit 1
+        ;;
+esac

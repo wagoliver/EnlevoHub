@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Backend",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/packages/backend/src/index.ts",
+      "preLaunchTask": "npm: build",
+      "outFiles": ["${workspaceFolder}/packages/backend/dist/**/*.js"],
+      "cwd": "${workspaceFolder}/packages/backend"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Daemon",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/packages/daemon/src/index.ts",
+      "preLaunchTask": "npm: build",
+      "outFiles": ["${workspaceFolder}/packages/daemon/dist/**/*.js"],
+      "cwd": "${workspaceFolder}/packages/daemon"
+    }
+  ]
+}

@@ -53,7 +53,6 @@ const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'measurements:view', 'measurements:create',
     'contractors:view',
     'contracts:view',
-    'financial:view',
   ],
   VIEWER: [
     'projects:view',

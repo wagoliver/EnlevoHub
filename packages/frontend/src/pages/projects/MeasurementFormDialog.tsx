@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth.store'
 
 interface MeasurementFormDialogProps {
   projectId: string
@@ -40,6 +41,7 @@ interface ActivityNode {
   order: number
   scope?: string
   parentId?: string | null
+  averageProgress?: number
   unitActivities: UnitActivityNode[]
   children?: ActivityNode[]
   [key: string]: any
@@ -63,6 +65,22 @@ interface EditableItem {
   newProgress: number
 }
 
+const ALL_ACTIVITIES_VALUE = '__all__'
+
+/** Recursively collect leaf ACTIVITY nodes from a tree */
+function collectLeafActivities(nodes: ActivityNode[]): ActivityNode[] {
+  const result: ActivityNode[] = []
+  for (const node of nodes) {
+    if (node.level === 'ACTIVITY' || (!node.children?.length && !node.level)) {
+      result.push(node)
+    }
+    if (node.children?.length) {
+      result.push(...collectLeafActivities(node.children))
+    }
+  }
+  return result
+}
+
 /** Walk a hierarchical tree to find the phase & stage that contain a given activityId */
 function findAncestors(
   tree: ActivityNode[],
@@ -70,21 +88,19 @@ function findAncestors(
 ): { phaseId: string; stageId: string } | null {
   for (const phase of tree) {
     if (phase.level === 'PHASE' && phase.children) {
-      for (const stage of phase.children) {
-        if (stage.level === 'STAGE' && stage.children) {
-          for (const act of stage.children) {
+      for (const child of phase.children) {
+        if (child.level === 'STAGE' && child.children) {
+          for (const act of child.children) {
             if (act.id === targetId) {
-              return { phaseId: phase.id, stageId: stage.id }
+              return { phaseId: phase.id, stageId: child.id }
             }
           }
         }
-        // activity directly under phase (no stage)
-        if (stage.id === targetId) {
+        if (child.id === targetId) {
           return { phaseId: phase.id, stageId: '' }
         }
       }
     }
-    // activity directly at root
     if (phase.id === targetId) {
       return { phaseId: '', stageId: '' }
     }
@@ -100,9 +116,14 @@ export function MeasurementFormDialog({
   defaultUnitActivityId: _defaultUnitActivityId,
 }: MeasurementFormDialogProps) {
   const queryClient = useQueryClient()
+  const authUser = useAuthStore((s) => s.user)
+  const isContractorUser = authUser?.role === 'CONTRACTOR' && !!authUser?.contractorId
 
   const [selectedPhaseId, setSelectedPhaseId] = useState('')
   const [selectedStageId, setSelectedStageId] = useState('')
+  const [selectedActivityId, setSelectedActivityId] = useState('')
+  const [selectedUnitActivityId, setSelectedUnitActivityId] = useState('')
+  const [singleProgress, setSingleProgress] = useState(0)
   const [contractorId, setContractorId] = useState('')
   const [notes, setNotes] = useState('')
   const [editableItems, setEditableItems] = useState<EditableItem[]>([])
@@ -127,9 +148,7 @@ export function MeasurementFormDialog({
 
   // Determine if hierarchical
   const hasHierarchy = useMemo(() => {
-    return activities.some(
-      (a) => a.level === 'PHASE' || a.level === 'STAGE'
-    )
+    return activities.some((a) => a.level === 'PHASE' || a.level === 'STAGE')
   }, [activities])
 
   // Extract phases
@@ -138,31 +157,101 @@ export function MeasurementFormDialog({
     return activities.filter((a) => a.level === 'PHASE')
   }, [activities, hasHierarchy])
 
-  // Extract stages for selected phase
-  const stages = useMemo(() => {
+  // Extract children of selected phase
+  const phaseChildren = useMemo(() => {
     if (!selectedPhaseId) return []
     const phase = phases.find((p) => p.id === selectedPhaseId)
-    return (phase?.children || []).filter((c) => c.level === 'STAGE')
+    return phase?.children || []
   }, [phases, selectedPhaseId])
 
-  // Get leaf activities to show
-  const leafActivities = useMemo((): ActivityNode[] => {
-    if (!hasHierarchy) {
-      // Flat: return all activities that have unitActivities (leaf-level)
-      return activities.filter((a) => a.unitActivities && a.unitActivities.length > 0)
-    }
-    if (!selectedStageId) return []
-    const stage = stages.find((s) => s.id === selectedStageId)
-    if (!stage || !stage.children) return []
-    return stage.children.filter((c) => c.level === 'ACTIVITY')
-  }, [hasHierarchy, activities, stages, selectedStageId])
+  // Determine if selected phase has stages
+  const hasStages = useMemo(() => {
+    return phaseChildren.some((c) => c.level === 'STAGE')
+  }, [phaseChildren])
 
-  // Build editable items from leaf activities
+  // Extract stages for selected phase
+  const stages = useMemo(() => {
+    if (!hasStages) return []
+    return phaseChildren.filter((c) => c.level === 'STAGE')
+  }, [phaseChildren, hasStages])
+
+  // Get ACTIVITY-level nodes available
+  const availableActivities = useMemo((): ActivityNode[] => {
+    if (!hasHierarchy) {
+      // Flat project: all root-level activities
+      return activities
+    }
+    if (!selectedPhaseId) return []
+    if (hasStages) {
+      if (!selectedStageId) return []
+      const stage = stages.find((s) => s.id === selectedStageId)
+      if (!stage) return []
+      return collectLeafActivities(stage.children || [])
+    }
+    return collectLeafActivities(phaseChildren)
+  }, [hasHierarchy, activities, selectedPhaseId, hasStages, selectedStageId, stages, phaseChildren])
+
+  // Mode: single activity or batch (all)
+  const isSingleMode = selectedActivityId !== '' && selectedActivityId !== ALL_ACTIVITIES_VALUE
+  const isBatchMode = selectedActivityId === ALL_ACTIVITIES_VALUE
+
+  // Selected single activity node
+  const selectedActivity = useMemo(() => {
+    if (!isSingleMode) return null
+    return availableActivities.find((a) => a.id === selectedActivityId) || null
+  }, [isSingleMode, availableActivities, selectedActivityId])
+
+  // Unit activities for the selected single activity
+  const unitActivities = selectedActivity?.unitActivities || []
+
+  // Current progress of the selected unit activity (for single mode)
+  const currentSingleProgress = useMemo(() => {
+    if (!selectedActivity) return 0
+    if (unitActivities.length === 0) return selectedActivity.averageProgress || 0
+    if (selectedUnitActivityId) {
+      const ua = unitActivities.find((u) => u.id === selectedUnitActivityId)
+      return ua?.progress ?? 0
+    }
+    if (unitActivities.length === 1) return unitActivities[0].progress
+    return selectedActivity.averageProgress || 0
+  }, [selectedActivity, unitActivities, selectedUnitActivityId])
+
+  // Auto-select unitActivity when activity changes (single mode)
   useEffect(() => {
+    if (!isSingleMode || !selectedActivity) return
+    if (unitActivities.length === 1) {
+      setSelectedUnitActivityId(unitActivities[0].id)
+      setSingleProgress(unitActivities[0].progress)
+    } else if (unitActivities.length === 0) {
+      setSelectedUnitActivityId('')
+      setSingleProgress(selectedActivity.averageProgress || 0)
+    } else {
+      setSelectedUnitActivityId('')
+      setSingleProgress(0)
+    }
+  }, [isSingleMode, selectedActivity, unitActivities])
+
+  // Update singleProgress when unitActivity selection changes
+  useEffect(() => {
+    if (!isSingleMode || !selectedUnitActivityId) return
+    const ua = unitActivities.find((u) => u.id === selectedUnitActivityId)
+    if (ua) setSingleProgress(ua.progress)
+  }, [isSingleMode, selectedUnitActivityId, unitActivities])
+
+  // Build editable items for batch mode
+  const batchActivities = useMemo((): ActivityNode[] => {
+    if (!isBatchMode) return []
+    return availableActivities
+  }, [isBatchMode, availableActivities])
+
+  useEffect(() => {
+    if (!isBatchMode) {
+      setEditableItems([])
+      return
+    }
     const items: EditableItem[] = []
-    for (const act of leafActivities) {
+    for (const act of batchActivities) {
       if (act.unitActivities.length <= 1) {
-        // Single unitActivity (GENERAL) or exactly one
         const ua = act.unitActivities[0]
         if (ua) {
           items.push({
@@ -174,9 +263,10 @@ export function MeasurementFormDialog({
             currentProgress: ua.progress,
             newProgress: ua.progress,
           })
+        } else {
+          // Activity without unitActivities — cannot batch, skip
         }
       } else {
-        // Multiple unitActivities — one row per unit
         for (const ua of act.unitActivities) {
           items.push({
             activityId: act.id,
@@ -192,9 +282,9 @@ export function MeasurementFormDialog({
     }
     setEditableItems(items)
     setExpandedActivities(new Set())
-  }, [leafActivities])
+  }, [isBatchMode, batchActivities])
 
-  // Initialize from defaultActivityId when dialog opens
+  // Initialize when dialog opens
   useEffect(() => {
     if (!open) {
       setInitialized(false)
@@ -202,47 +292,53 @@ export function MeasurementFormDialog({
     }
     if (initialized || activities.length === 0) return
 
-    setContractorId('')
+    setContractorId(isContractorUser ? authUser!.contractorId! : '')
     setNotes('')
+    setSingleProgress(0)
+    setSelectedUnitActivityId('')
 
     if (defaultActivityId && hasHierarchy) {
       const ancestors = findAncestors(activities, defaultActivityId)
       if (ancestors) {
         setSelectedPhaseId(ancestors.phaseId)
         setSelectedStageId(ancestors.stageId)
+        setSelectedActivityId(defaultActivityId)
+      } else {
+        setSelectedPhaseId('')
+        setSelectedStageId('')
+        setSelectedActivityId('')
       }
     } else if (!hasHierarchy) {
       setSelectedPhaseId('')
       setSelectedStageId('')
+      setSelectedActivityId(defaultActivityId || '')
+    } else {
+      setSelectedPhaseId('')
+      setSelectedStageId('')
+      setSelectedActivityId('')
     }
     setInitialized(true)
-  }, [open, activities, defaultActivityId, hasHierarchy, initialized])
+  }, [open, activities, defaultActivityId, hasHierarchy, initialized, isContractorUser, authUser])
 
-  // Calculate stage progress (weighted average)
+  // Batch progress calculations
   const stageProgress = useMemo(() => {
     if (editableItems.length === 0) return 0
     const totalWeight = editableItems.reduce((sum, i) => sum + i.weight, 0)
     if (totalWeight === 0) return 0
-    const weightedSum = editableItems.reduce(
-      (sum, i) => sum + i.weight * i.newProgress,
-      0
-    )
+    const weightedSum = editableItems.reduce((sum, i) => sum + i.weight * i.newProgress, 0)
     return Math.round((weightedSum / totalWeight) * 100) / 100
   }, [editableItems])
 
-  // Count changed items
   const changedItems = useMemo(
     () => editableItems.filter((i) => i.newProgress !== i.currentProgress),
     [editableItems]
   )
 
-  // Group items by activity for multi-unit display
   const groupedByActivity = useMemo(() => {
     const groups: Map<string, EditableItem[]> = new Map()
     for (const item of editableItems) {
-      const key = item.activityId
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key)!.push(item)
+      if (!groups.has(item.activityId)) groups.set(item.activityId, [])
+      groups.get(item.activityId)!.push(item)
     }
     return groups
   }, [editableItems])
@@ -261,10 +357,7 @@ export function MeasurementFormDialog({
     setEditableItems((prev) =>
       prev.map((item) =>
         item.unitActivityId === unitActivityId
-          ? {
-              ...item,
-              newProgress: item.newProgress === 100 ? item.currentProgress : 100,
-            }
+          ? { ...item, newProgress: item.newProgress === 100 ? item.currentProgress : 100 }
           : item
       )
     )
@@ -279,22 +372,34 @@ export function MeasurementFormDialog({
     })
   }
 
-  // Batch create mutation
+  // --- Mutations ---
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['project-measurements', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
+  }
+
+  // Single measurement (original endpoint)
+  const singleMutation = useMutation({
+    mutationFn: (data: any) => projectsAPI.createMeasurement(projectId, data),
+    onSuccess: () => {
+      toast.success('Medição registrada com sucesso!')
+      invalidateAll()
+      onOpenChange(false)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao registrar medição')
+    },
+  })
+
+  // Batch measurements
   const batchMutation = useMutation({
-    mutationFn: (data: any) =>
-      projectsAPI.createBatchMeasurements(projectId, data),
+    mutationFn: (data: any) => projectsAPI.createBatchMeasurements(projectId, data),
     onSuccess: (result) => {
       const count = result?.count ?? changedItems.length
       toast.success(`${count} medição(ões) registrada(s) com sucesso!`)
-      queryClient.invalidateQueries({
-        queryKey: ['project-measurements', projectId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['project-activities', projectId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['project-progress', projectId],
-      })
+      invalidateAll()
       onOpenChange(false)
     },
     onError: (error: Error) => {
@@ -302,65 +407,114 @@ export function MeasurementFormDialog({
     },
   })
 
+  const isPending = singleMutation.isPending || batchMutation.isPending
+
+  // --- Submit ---
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (changedItems.length === 0) {
-      toast.error('Nenhuma atividade foi alterada')
-      return
-    }
+    const effectiveContractorId = contractorId && contractorId !== 'none' ? contractorId : undefined
 
-    const data: any = {
-      items: changedItems.map((item) => ({
-        activityId: item.activityId,
-        unitActivityId: item.unitActivityId,
-        progress: item.newProgress,
-      })),
-      notes: notes.trim() || undefined,
-    }
+    if (isSingleMode) {
+      // Single activity mode
+      if (!selectedActivityId) {
+        toast.error('Selecione uma atividade')
+        return
+      }
+      if (singleProgress < 0 || singleProgress > 100) {
+        toast.error('Progresso deve estar entre 0 e 100')
+        return
+      }
 
-    if (contractorId && contractorId !== 'none') {
-      data.contractorId = contractorId
-    }
+      const data: any = {
+        activityId: selectedActivityId,
+        progress: singleProgress,
+        notes: notes.trim() || undefined,
+        contractorId: effectiveContractorId,
+      }
 
-    batchMutation.mutate(data)
+      if (selectedUnitActivityId) {
+        data.unitActivityId = selectedUnitActivityId
+      }
+
+      singleMutation.mutate(data)
+    } else if (isBatchMode) {
+      // Batch mode
+      if (changedItems.length === 0) {
+        toast.error('Nenhuma atividade foi alterada')
+        return
+      }
+
+      batchMutation.mutate({
+        items: changedItems.map((item) => ({
+          activityId: item.activityId,
+          unitActivityId: item.unitActivityId,
+          progress: item.newProgress,
+        })),
+        notes: notes.trim() || undefined,
+        contractorId: effectiveContractorId,
+      })
+    }
   }
 
-  const renderActivityRow = (
-    activityId: string,
-    items: EditableItem[]
-  ) => {
+  // Can submit?
+  const canSubmit = useMemo(() => {
+    if (isPending) return false
+    if (isSingleMode) {
+      return singleProgress !== currentSingleProgress && singleProgress >= 0 && singleProgress <= 100
+    }
+    if (isBatchMode) {
+      return changedItems.length > 0
+    }
+    return false
+  }, [isPending, isSingleMode, isBatchMode, singleProgress, currentSingleProgress, changedItems])
+
+  // Submit label
+  const submitLabel = useMemo(() => {
+    if (isSingleMode) return 'Registrar Medição'
+    if (isBatchMode) {
+      if (changedItems.length === 0) return 'Nenhuma alteração'
+      return `Registrar ${changedItems.length} medição(ões)`
+    }
+    return 'Registrar Medição'
+  }, [isSingleMode, isBatchMode, changedItems])
+
+  // Empty state message
+  const emptyMessage = useMemo(() => {
+    if (!hasHierarchy) return 'Selecione uma atividade'
+    if (!selectedPhaseId) return 'Selecione uma fase para começar'
+    if (hasStages && !selectedStageId) return 'Selecione uma etapa'
+    if (!selectedActivityId) return 'Selecione uma atividade'
+    return 'Nenhuma atividade encontrada'
+  }, [hasHierarchy, selectedPhaseId, hasStages, selectedStageId, selectedActivityId])
+
+  // --- Render helpers ---
+
+  const renderBatchRow = (activityId: string, items: EditableItem[]) => {
     const isMultiUnit = items.length > 1
     const firstItem = items[0]
     const isExpanded = expandedActivities.has(activityId)
     const isHighlighted = defaultActivityId === activityId
 
     if (!isMultiUnit) {
-      // Single unit — render inline row
       const item = firstItem
       return (
         <div
           key={item.unitActivityId}
           className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
-            isHighlighted
-              ? 'border-primary/50 bg-primary/5'
-              : 'border-neutral-200'
+            isHighlighted ? 'border-primary/50 bg-primary/5' : 'border-neutral-200'
           }`}
         >
-          {/* Checkbox */}
           <input
             type="checkbox"
             checked={item.newProgress === 100}
             onChange={() => toggleComplete(item.unitActivityId)}
             className="h-4 w-4 rounded border-neutral-300 text-primary focus:ring-primary"
           />
-
-          {/* Activity name */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium">
-                {item.activityName}
-              </span>
+              <span className="truncate text-sm font-medium">{item.activityName}</span>
               <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0">
                 Peso: {item.weight}
               </Badge>
@@ -369,42 +523,29 @@ export function MeasurementFormDialog({
               anterior: {Math.round(item.currentProgress)}%
             </span>
           </div>
-
-          {/* Progress input */}
           <div className="flex items-center gap-2">
             <Input
               type="number"
               min={0}
               max={100}
               value={item.newProgress}
-              onChange={(e) =>
-                updateProgress(item.unitActivityId, Number(e.target.value))
-              }
+              onChange={(e) => updateProgress(item.unitActivityId, Number(e.target.value))}
               className="h-8 w-16 text-center text-sm"
             />
             <span className="text-xs text-neutral-500">%</span>
           </div>
-
-          {/* Mini progress bar */}
-          <Progress
-            value={item.newProgress}
-            className="h-2 w-20 shrink-0"
-          />
+          <Progress value={item.newProgress} className="h-2 w-20 shrink-0" />
         </div>
       )
     }
 
-    // Multi-unit: collapsible group
     return (
       <div
         key={activityId}
         className={`rounded-lg border transition-colors ${
-          isHighlighted
-            ? 'border-primary/50 bg-primary/5'
-            : 'border-neutral-200'
+          isHighlighted ? 'border-primary/50 bg-primary/5' : 'border-neutral-200'
         }`}
       >
-        {/* Group header */}
         <button
           type="button"
           onClick={() => toggleExpand(activityId)}
@@ -415,9 +556,7 @@ export function MeasurementFormDialog({
           ) : (
             <ChevronRight className="h-4 w-4 text-neutral-400" />
           )}
-          <span className="flex-1 text-sm font-medium">
-            {firstItem.activityName}
-          </span>
+          <span className="flex-1 text-sm font-medium">{firstItem.activityName}</span>
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
             Peso: {firstItem.weight}
           </Badge>
@@ -425,8 +564,6 @@ export function MeasurementFormDialog({
             {items.length} unidades
           </Badge>
         </button>
-
-        {/* Expanded unit rows */}
         {isExpanded && (
           <div className="border-t border-neutral-100 px-3 pb-3">
             {items.map((item) => (
@@ -440,9 +577,7 @@ export function MeasurementFormDialog({
                   onChange={() => toggleComplete(item.unitActivityId)}
                   className="h-4 w-4 rounded border-neutral-300 text-primary focus:ring-primary"
                 />
-                <span className="min-w-0 flex-1 text-sm">
-                  {item.unitCode || 'Geral'}
-                </span>
+                <span className="min-w-0 flex-1 text-sm">{item.unitCode || 'Geral'}</span>
                 <span className="text-xs text-neutral-500">
                   ant: {Math.round(item.currentProgress)}%
                 </span>
@@ -451,19 +586,11 @@ export function MeasurementFormDialog({
                   min={0}
                   max={100}
                   value={item.newProgress}
-                  onChange={(e) =>
-                    updateProgress(
-                      item.unitActivityId,
-                      Number(e.target.value)
-                    )
-                  }
+                  onChange={(e) => updateProgress(item.unitActivityId, Number(e.target.value))}
                   className="h-7 w-16 text-center text-sm"
                 />
                 <span className="text-xs text-neutral-500">%</span>
-                <Progress
-                  value={item.newProgress}
-                  className="h-2 w-16 shrink-0"
-                />
+                <Progress value={item.newProgress} className="h-2 w-16 shrink-0" />
               </div>
             ))}
           </div>
@@ -471,6 +598,8 @@ export function MeasurementFormDialog({
       </div>
     )
   }
+
+  // --- Main render ---
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -480,115 +609,237 @@ export function MeasurementFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Filters row */}
+          {/* === Hierarchy filters === */}
           {hasHierarchy && (
-            <div className="grid grid-cols-2 gap-3">
-              {/* Phase select */}
-              <div>
-                <Label>Fase</Label>
-                <Select
-                  value={selectedPhaseId}
-                  onValueChange={(v) => {
-                    setSelectedPhaseId(v)
-                    setSelectedStageId('')
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a fase..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {phases.map((phase) => (
-                      <SelectItem key={phase.id} value={phase.id}>
-                        {phase.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Fase</Label>
+                  <Select
+                    value={selectedPhaseId}
+                    onValueChange={(v) => {
+                      setSelectedPhaseId(v)
+                      setSelectedStageId('')
+                      setSelectedActivityId('')
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a fase..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {phases.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {hasStages ? (
+                  <div>
+                    <Label>Etapa</Label>
+                    <Select
+                      value={selectedStageId}
+                      onValueChange={(v) => {
+                        setSelectedStageId(v)
+                        setSelectedActivityId('')
+                      }}
+                      disabled={!selectedPhaseId || stages.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a etapa..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stages.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div />
+                )}
               </div>
 
-              {/* Stage select */}
-              <div>
-                <Label>Etapa</Label>
-                <Select
-                  value={selectedStageId}
-                  onValueChange={setSelectedStageId}
-                  disabled={!selectedPhaseId || stages.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a etapa..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stages.map((stage) => (
-                      <SelectItem key={stage.id} value={stage.id}>
-                        {stage.name}
+              {availableActivities.length > 0 && (
+                <div>
+                  <Label>Atividade</Label>
+                  <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a atividade..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_ACTIVITIES_VALUE}>
+                        Todas as atividades ({availableActivities.length})
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      {availableActivities.map((act) => (
+                        <SelectItem key={act.id} value={act.id}>{act.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Contractor */}
+          {/* === Flat project activity select === */}
+          {!hasHierarchy && activities.length > 0 && (
+            <div>
+              <Label>Atividade</Label>
+              <Select value={selectedActivityId} onValueChange={setSelectedActivityId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a atividade..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_ACTIVITIES_VALUE}>
+                    Todas as atividades ({availableActivities.length})
+                  </SelectItem>
+                  {availableActivities.map((act) => (
+                    <SelectItem key={act.id} value={act.id}>{act.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* === Contractor === */}
           <div>
-            <Label>Empreiteiro (opcional)</Label>
-            <Select value={contractorId} onValueChange={setContractorId}>
+            <Label>{isContractorUser ? 'Empreiteiro' : 'Empreiteiro (opcional)'}</Label>
+            <Select value={contractorId} onValueChange={setContractorId} disabled={isContractorUser}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o empreiteiro..." />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Nenhum</SelectItem>
-                {(Array.isArray(contractors) ? contractors : []).map(
-                  (item: any) => {
-                    const c = item.contractor || item
-                    return (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    )
-                  }
-                )}
+                {(Array.isArray(contractors) ? contractors : []).map((item: any) => {
+                  const c = item.contractor || item
+                  return (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Stage progress bar */}
-          {editableItems.length > 0 && (
-            <div className="rounded-lg bg-neutral-50 p-3">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm font-medium text-neutral-700">
-                  {hasHierarchy ? 'Progresso da Etapa' : 'Progresso Geral'}
-                </span>
-                <span className="text-sm font-semibold text-primary">
-                  {Math.round(stageProgress)}%
-                </span>
+          {/* ============================================= */}
+          {/* === SINGLE ACTIVITY MODE: direct % input === */}
+          {/* ============================================= */}
+          {isSingleMode && selectedActivity && (
+            <div className="space-y-4 rounded-lg border border-neutral-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{selectedActivity.name}</p>
+                  <p className="text-xs text-neutral-500">
+                    Peso: {selectedActivity.weight}
+                    {' | '}
+                    Progresso atual: {Math.round(currentSingleProgress)}%
+                  </p>
+                </div>
+                <Badge variant={currentSingleProgress >= 100 ? 'completed' : currentSingleProgress > 0 ? 'inProgress' : 'secondary'}>
+                  {Math.round(currentSingleProgress)}%
+                </Badge>
               </div>
-              <Progress value={stageProgress} className="h-3" />
-            </div>
-          )}
 
-          {/* Activities list */}
-          {editableItems.length > 0 ? (
-            <div className="space-y-2">
-              <Label>Atividades</Label>
-              <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
-                {Array.from(groupedByActivity.entries()).map(
-                  ([activityId, items]) =>
-                    renderActivityRow(activityId, items)
+              {/* Unit selector (only if multiple units) */}
+              {unitActivities.length > 1 && (
+                <div>
+                  <Label>Unidade</Label>
+                  <Select value={selectedUnitActivityId} onValueChange={setSelectedUnitActivityId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a unidade..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {unitActivities.map((ua) => (
+                        <SelectItem key={ua.id} value={ua.id}>
+                          {ua.unit?.code || 'Geral'} - {Math.round(ua.progress)}% atual
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Progress input */}
+              <div>
+                <Label htmlFor="single-progress">Novo progresso (%)</Label>
+                <div className="mt-1 flex items-center gap-3">
+                  <Input
+                    id="single-progress"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={singleProgress}
+                    onChange={(e) => setSingleProgress(Math.min(100, Math.max(0, Number(e.target.value))))}
+                    className="w-24 text-center"
+                  />
+                  <div className="flex-1">
+                    <Progress value={singleProgress} className="h-3" />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSingleProgress(100)}
+                    className="shrink-0"
+                  >
+                    100%
+                  </Button>
+                </div>
+                {singleProgress !== currentSingleProgress && (
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {Math.round(currentSingleProgress)}% &rarr; {Math.round(singleProgress)}%
+                  </p>
                 )}
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* ============================== */}
+          {/* === BATCH MODE: checklist  === */}
+          {/* ============================== */}
+          {isBatchMode && (
+            <>
+              {/* Stage progress */}
+              {editableItems.length > 0 && (
+                <div className="rounded-lg bg-neutral-50 p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-sm font-medium text-neutral-700">
+                      {hasHierarchy ? 'Progresso da Etapa' : 'Progresso Geral'}
+                    </span>
+                    <span className="text-sm font-semibold text-primary">
+                      {Math.round(stageProgress)}%
+                    </span>
+                  </div>
+                  <Progress value={stageProgress} className="h-3" />
+                </div>
+              )}
+
+              {editableItems.length > 0 ? (
+                <div className="space-y-2">
+                  <Label>Atividades</Label>
+                  <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
+                    {Array.from(groupedByActivity.entries()).map(([actId, items]) =>
+                      renderBatchRow(actId, items)
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center">
+                  <p className="text-sm text-neutral-500">
+                    Nenhuma atividade com unidades vinculadas
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* === No selection yet === */}
+          {!isSingleMode && !isBatchMode && (
             <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center">
-              <p className="text-sm text-neutral-500">
-                {hasHierarchy
-                  ? 'Selecione uma fase e etapa para ver as atividades'
-                  : 'Nenhuma atividade encontrada neste projeto'}
-              </p>
+              <p className="text-sm text-neutral-500">{emptyMessage}</p>
             </div>
           )}
 
-          {/* Notes */}
+          {/* === Notes === */}
           <div>
             <Label>Observações</Label>
             <Textarea
@@ -600,23 +851,12 @@ export function MeasurementFormDialog({
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={changedItems.length === 0 || batchMutation.isPending}
-            >
-              {batchMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {changedItems.length === 0
-                ? 'Nenhuma alteração'
-                : `Registrar ${changedItems.length} medição(ões)`}
+            <Button type="submit" disabled={!canSubmit}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitLabel}
             </Button>
           </DialogFooter>
         </form>

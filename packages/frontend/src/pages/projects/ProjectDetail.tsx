@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { projectsAPI } from '@/lib/api-client'
-import { usePermission } from '@/hooks/usePermission'
+import { usePermission, useRole } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -87,6 +87,9 @@ export function ProjectDetail() {
   const queryClient = useQueryClient()
   const canEdit = usePermission('projects:edit')
   const canDelete = usePermission('projects:delete')
+  const canViewFinancial = usePermission('financial:view')
+  const role = useRole()
+  const isContractor = role === 'CONTRACTOR'
   const [showEditDialog, setShowEditDialog] = useState(false)
 
   const { data: project, isLoading } = useQuery({
@@ -192,7 +195,7 @@ export function ProjectDetail() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-4 md:grid-cols-2 ${isContractor ? '' : 'lg:grid-cols-4'}`}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Progresso</CardTitle>
@@ -206,22 +209,24 @@ export function ProjectDetail() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orçamento</CardTitle>
-            <DollarSign className="h-4 w-4 text-neutral-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">
-              {formatCurrency(project.budget)}
-            </div>
-            {stats && (
-              <p className="text-xs text-neutral-500 mt-1">
-                Gasto: {formatCurrency(stats.totalSpent)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {!isContractor && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Orçamento</CardTitle>
+              <DollarSign className="h-4 w-4 text-neutral-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-bold">
+                {formatCurrency(project.budget)}
+              </div>
+              {stats && (
+                <p className="text-xs text-neutral-500 mt-1">
+                  Gasto: {formatCurrency(stats.totalSpent)}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -238,17 +243,19 @@ export function ProjectDetail() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pedidos de Compra</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-neutral-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">
-              {stats?.purchaseOrders || 0}
-            </div>
-          </CardContent>
-        </Card>
+        {!isContractor && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pedidos de Compra</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-neutral-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-bold">
+                {stats?.purchaseOrders || 0}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Tabs */}
@@ -258,7 +265,9 @@ export function ProjectDetail() {
           <TabsTrigger value="activities">Atividades</TabsTrigger>
           <TabsTrigger value="measurements">Medições</TabsTrigger>
           <TabsTrigger value="units">Unidades ({project._count?.units || 0})</TabsTrigger>
-          <TabsTrigger value="financial">Financeiro</TabsTrigger>
+          {canViewFinancial && (
+            <TabsTrigger value="financial">Financeiro</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Overview Tab */}
@@ -325,17 +334,21 @@ export function ProjectDetail() {
                   </div>
                 </div>
 
-                <Separator />
+                {!isContractor && (
+                  <>
+                    <Separator />
 
-                <div className="flex items-start gap-3">
-                  <DollarSign className="mt-0.5 h-4 w-4 text-neutral-500" />
-                  <div>
-                    <p className="text-sm font-medium">Orçamento</p>
-                    <p className="text-lg font-bold text-neutral-900">
-                      {formatCurrency(project.budget)}
-                    </p>
-                  </div>
-                </div>
+                    <div className="flex items-start gap-3">
+                      <DollarSign className="mt-0.5 h-4 w-4 text-neutral-500" />
+                      <div>
+                        <p className="text-sm font-medium">Orçamento</p>
+                        <p className="text-lg font-bold text-neutral-900">
+                          {formatCurrency(project.budget)}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -403,17 +416,19 @@ export function ProjectDetail() {
         </TabsContent>
 
         {/* Financial Tab */}
-        <TabsContent value="financial" className="mt-6">
-          <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
-            <Landmark className="h-12 w-12 text-neutral-300" />
-            <h3 className="mt-4 text-lg font-medium text-neutral-900">
-              Módulo Financeiro
-            </h3>
-            <p className="mt-2 text-sm text-neutral-500">
-              O módulo financeiro será implementado em uma fase posterior.
-            </p>
-          </div>
-        </TabsContent>
+        {canViewFinancial && (
+          <TabsContent value="financial" className="mt-6">
+            <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
+              <Landmark className="h-12 w-12 text-neutral-300" />
+              <h3 className="mt-4 text-lg font-medium text-neutral-900">
+                Módulo Financeiro
+              </h3>
+              <p className="mt-2 text-sm text-neutral-500">
+                O módulo financeiro será implementado em uma fase posterior.
+              </p>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Edit Dialog */}

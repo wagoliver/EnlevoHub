@@ -368,6 +368,7 @@ model Contractor {
   projects     ContractorProject[]
   contracts    Contract[]
   measurements Measurement[]
+  activities   ContractorActivity[]
 
   @@index([tenantId])
   @@index([document])
@@ -392,6 +393,21 @@ model ContractorProject {
   @@index([contractorId])
   @@index([projectId])
   @@map("contractor_projects")
+}
+
+model ContractorActivity {
+  id                String   @id @default(uuid())
+  contractorId      String
+  projectActivityId String
+  createdAt         DateTime @default(now())
+
+  contractor Contractor      @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  activity   ProjectActivity @relation(fields: [projectActivityId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, projectActivityId])
+  @@index([contractorId])
+  @@index([projectActivityId])
+  @@map("contractor_activities")
 }
 
 // ==================== BROKERS & SALES ====================
@@ -700,11 +716,12 @@ model ProjectActivity {
   updatedAt        DateTime          @updatedAt
 
   // Relations
-  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent         ProjectActivity?   @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children       ProjectActivity[]  @relation("ActivityHierarchy")
-  unitActivities UnitActivity[]
-  measurements   Measurement[]
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent               ProjectActivity?     @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children             ProjectActivity[]    @relation("ActivityHierarchy")
+  unitActivities       UnitActivity[]
+  measurements         Measurement[]
+  contractorActivities ContractorActivity[]
 
   @@index([projectId])
   @@index([parentId])

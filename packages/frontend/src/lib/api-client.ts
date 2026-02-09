@@ -364,6 +364,14 @@ export const contractorsAPI = {
     apiClient.delete<any>(`/contractors/${contractorId}/projects/${projectId}`),
   listByProject: (projectId: string) =>
     apiClient.get<any>(`/contractors/project/${projectId}`),
+
+  // Contractor Activities
+  syncActivities: (contractorId: string, projectId: string, activityIds: string[]) =>
+    apiClient.post<any>(`/contractors/${contractorId}/projects/${projectId}/activities`, { activityIds }),
+  unassignActivity: (contractorId: string, activityId: string) =>
+    apiClient.delete<any>(`/contractors/${contractorId}/activities/${activityId}`),
+  listActivitiesByProject: (contractorId: string, projectId: string) =>
+    apiClient.get<any>(`/contractors/${contractorId}/projects/${projectId}/activities`),
 }
 
 export const usersAPI = {

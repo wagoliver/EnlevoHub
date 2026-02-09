@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 export interface ContractorScope {
   contractorId?: string
   projectIds?: string[]
+  activityIds?: string[]
 }
 
 /**
@@ -21,13 +22,20 @@ export async function getContractorScope(
 
   const contractorId = user.contractorId
 
-  // Get projects assigned to this contractor
-  const contractorProjects = await prisma.contractorProject.findMany({
-    where: { contractorId },
-    select: { projectId: true }
-  })
+  // Get projects and activities assigned to this contractor
+  const [contractorProjects, contractorActivities] = await Promise.all([
+    prisma.contractorProject.findMany({
+      where: { contractorId },
+      select: { projectId: true }
+    }),
+    prisma.contractorActivity.findMany({
+      where: { contractorId },
+      select: { projectActivityId: true }
+    }),
+  ])
 
   const projectIds = contractorProjects.map(cp => cp.projectId)
+  const activityIds = contractorActivities.map(ca => ca.projectActivityId)
 
-  return { contractorId, projectIds }
+  return { contractorId, projectIds, activityIds }
 }

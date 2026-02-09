@@ -57,7 +57,8 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const result = await activityService.listByProject(getTenantId(request), id)
+      const scope = await getContractorScope(request, fastify.prisma)
+      const result = await activityService.listByProject(getTenantId(request), id, scope)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {
@@ -243,7 +244,8 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const progress = await activityService.getProjectProgress(getTenantId(request), id)
+      const scope = await getContractorScope(request, fastify.prisma)
+      const progress = await activityService.getProjectProgress(getTenantId(request), id, scope)
       return reply.send(progress)
     } catch (error) {
       if (error instanceof Error) {

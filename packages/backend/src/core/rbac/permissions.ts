@@ -233,9 +233,6 @@ export const Roles = {
 
       // Contracts (view - apenas proprios)
       Permissions.CONTRACTS_VIEW,
-
-      // Financial (view - apenas proprio orcamento)
-      Permissions.FINANCIAL_VIEW,
     ] as Permission[]
   },
   VIEWER: {

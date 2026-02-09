@@ -8,6 +8,7 @@ import {
   updateContractorSchema,
   listContractorsQuerySchema,
   assignContractorToProjectSchema,
+  assignActivitiesSchema,
 } from './contractor.schemas'
 
 function requirePermission(permission: string) {
@@ -236,6 +237,96 @@ export async function contractorRoutes(fastify: FastifyInstance) {
     try {
       const { projectId } = request.params as { projectId: string }
       const result = await service.listByProject(getTenantId(request), projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ==================== CONTRACTOR ACTIVITIES ====================
+
+  // Assign activities to contractor (sync: replaces all for a project)
+  fastify.post('/:id/projects/:projectId/activities', {
+    preHandler: [authMiddleware, requirePermission('contractors:edit')],
+    schema: {
+      description: 'Sync contractor activities for a project',
+      tags: ['contractors'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'projectId'],
+        properties: {
+          id: { type: 'string' },
+          projectId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, projectId } = request.params as { id: string; projectId: string }
+      const body = assignActivitiesSchema.parse(request.body)
+      const result = await service.syncActivities(getTenantId(request), id, projectId, body.activityIds)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Remove activity assignment from contractor
+  fastify.delete('/:id/activities/:activityId', {
+    preHandler: [authMiddleware, requirePermission('contractors:edit')],
+    schema: {
+      description: 'Remove an activity assignment from a contractor',
+      tags: ['contractors'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'activityId'],
+        properties: {
+          id: { type: 'string' },
+          activityId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, activityId } = request.params as { id: string; activityId: string }
+      const result = await service.unassignActivity(getTenantId(request), id, activityId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // List contractor activities for a project
+  fastify.get('/:id/projects/:projectId/activities', {
+    preHandler: [authMiddleware, requirePermission('contractors:view')],
+    schema: {
+      description: 'List activities assigned to a contractor in a project',
+      tags: ['contractors'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'projectId'],
+        properties: {
+          id: { type: 'string' },
+          projectId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, projectId } = request.params as { id: string; projectId: string }
+      const result = await service.listActivitiesByProject(getTenantId(request), id, projectId)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

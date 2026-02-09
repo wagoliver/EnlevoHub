@@ -41,7 +41,12 @@ export const assignContractorToProjectSchema = z.object({
   role: z.string().min(2),
 })
 
+export const assignActivitiesSchema = z.object({
+  activityIds: z.array(z.string().uuid()).min(1),
+})
+
 export type CreateContractorInput = z.infer<typeof createContractorSchema>
 export type UpdateContractorInput = z.infer<typeof updateContractorSchema>
 export type ListContractorsQuery = z.infer<typeof listContractorsQuerySchema>
 export type AssignContractorToProjectInput = z.infer<typeof assignContractorToProjectSchema>
+export type AssignActivitiesInput = z.infer<typeof assignActivitiesSchema>

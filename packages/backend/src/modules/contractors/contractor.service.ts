@@ -221,6 +221,118 @@ export class ContractorService {
     }))
   }
 
+  async assignActivities(tenantId: string, contractorId: string, activityIds: string[]) {
+    const contractor = await this.prisma.contractor.findFirst({
+      where: { id: contractorId, tenantId },
+    })
+    if (!contractor) throw new Error('Empreiteiro não encontrado')
+
+    await this.prisma.contractorActivity.createMany({
+      data: activityIds.map(activityId => ({
+        contractorId,
+        projectActivityId: activityId,
+      })),
+      skipDuplicates: true,
+    })
+
+    return { message: 'Atividades atribuídas com sucesso', count: activityIds.length }
+  }
+
+  async unassignActivity(tenantId: string, contractorId: string, activityId: string) {
+    const contractor = await this.prisma.contractor.findFirst({
+      where: { id: contractorId, tenantId },
+    })
+    if (!contractor) throw new Error('Empreiteiro não encontrado')
+
+    const existing = await this.prisma.contractorActivity.findUnique({
+      where: {
+        contractorId_projectActivityId: { contractorId, projectActivityId: activityId },
+      },
+    })
+    if (!existing) throw new Error('Vínculo de atividade não encontrado')
+
+    await this.prisma.contractorActivity.delete({ where: { id: existing.id } })
+
+    return { message: 'Atividade desvinculada com sucesso' }
+  }
+
+  async listActivitiesByProject(tenantId: string, contractorId: string, projectId: string) {
+    const [contractor, project] = await Promise.all([
+      this.prisma.contractor.findFirst({ where: { id: contractorId, tenantId } }),
+      this.prisma.project.findFirst({ where: { id: projectId, tenantId } }),
+    ])
+    if (!contractor) throw new Error('Empreiteiro não encontrado')
+    if (!project) throw new Error('Projeto não encontrado')
+
+    const contractorActivities = await this.prisma.contractorActivity.findMany({
+      where: {
+        contractorId,
+        activity: { projectId },
+      },
+      include: {
+        activity: {
+          select: {
+            id: true,
+            name: true,
+            level: true,
+            parentId: true,
+            order: true,
+          },
+        },
+      },
+    })
+
+    return contractorActivities.map(ca => ({
+      ...ca.activity,
+      contractorActivityId: ca.id,
+      projectActivityId: ca.projectActivityId,
+    }))
+  }
+
+  async syncActivities(tenantId: string, contractorId: string, projectId: string, activityIds: string[]) {
+    const [contractor, project] = await Promise.all([
+      this.prisma.contractor.findFirst({ where: { id: contractorId, tenantId } }),
+      this.prisma.project.findFirst({ where: { id: projectId, tenantId } }),
+    ])
+    if (!contractor) throw new Error('Empreiteiro não encontrado')
+    if (!project) throw new Error('Projeto não encontrado')
+
+    // Get current activity assignments for this contractor + project
+    const current = await this.prisma.contractorActivity.findMany({
+      where: {
+        contractorId,
+        activity: { projectId },
+      },
+      select: { id: true, projectActivityId: true },
+    })
+    const currentIds = new Set(current.map(c => c.projectActivityId))
+    const newIds = new Set(activityIds)
+
+    // To remove: in current but not in new
+    const toRemove = current.filter(c => !newIds.has(c.projectActivityId))
+    // To add: in new but not in current
+    const toAdd = activityIds.filter(id => !currentIds.has(id))
+
+    await this.prisma.$transaction(async (tx) => {
+      if (toRemove.length > 0) {
+        await tx.contractorActivity.deleteMany({
+          where: { id: { in: toRemove.map(r => r.id) } },
+        })
+      }
+      if (toAdd.length > 0) {
+        await tx.contractorActivity.createMany({
+          data: toAdd.map(activityId => ({
+            contractorId,
+            projectActivityId: activityId,
+          })),
+          skipDuplicates: true,
+        })
+      }
+    })
+
+    return { message: 'Atividades sincronizadas com sucesso', added: toAdd.length, removed: toRemove.length }
+  }
+
   private serialize(contractor: any) {
     return {
       ...contractor,

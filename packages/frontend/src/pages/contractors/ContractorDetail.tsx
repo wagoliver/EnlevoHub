@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ContractorFormDialog } from './ContractorFormDialog'
+import { ContractorActivitiesDialog } from './ContractorActivitiesDialog'
 import {
   ArrowLeft,
   Edit,
@@ -49,6 +50,7 @@ import {
   Unlink,
   Loader2,
   FolderOpen,
+  ClipboardList,
 } from 'lucide-react'
 
 function renderStars(rating: number) {
@@ -81,6 +83,10 @@ export function ContractorDetail() {
   const [assignRole, setAssignRole] = useState('')
   const [assignStartDate, setAssignStartDate] = useState('')
   const [assignEndDate, setAssignEndDate] = useState('')
+  const [activitiesProject, setActivitiesProject] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
   const { data: contractor, isLoading } = useQuery({
     queryKey: ['contractor', id],
@@ -371,7 +377,7 @@ export function ContractorDetail() {
                   <TableHead>Função</TableHead>
                   <TableHead>Data Início</TableHead>
                   <TableHead>Data Fim</TableHead>
-                  {canEdit && <TableHead className="w-[100px]">Ações</TableHead>}
+                  {canEdit && <TableHead className="w-[200px]">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -397,25 +403,40 @@ export function ContractorDetail() {
                     </TableCell>
                     {canEdit && (
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                'Tem certeza que deseja desvincular este empreiteiro do projeto?'
-                              )
-                            ) {
-                              unassignMutation.mutate(
-                                assignment.projectId || assignment.project?.id
-                              )
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setActivitiesProject({
+                                id: assignment.projectId || assignment.project?.id,
+                                name: assignment.project?.name || 'Projeto',
+                              })
                             }
-                          }}
-                        >
-                          <Unlink className="mr-1 h-4 w-4" />
-                          Desvincular
-                        </Button>
+                          >
+                            <ClipboardList className="mr-1 h-4 w-4" />
+                            Atividades
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  'Tem certeza que deseja desvincular este empreiteiro do projeto?'
+                                )
+                              ) {
+                                unassignMutation.mutate(
+                                  assignment.projectId || assignment.project?.id
+                                )
+                              }
+                            }}
+                          >
+                            <Unlink className="mr-1 h-4 w-4" />
+                            Desvincular
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
@@ -532,6 +553,19 @@ export function ContractorDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Contractor Activities Dialog */}
+      {activitiesProject && (
+        <ContractorActivitiesDialog
+          open={!!activitiesProject}
+          onOpenChange={(open) => {
+            if (!open) setActivitiesProject(null)
+          }}
+          contractorId={id!}
+          projectId={activitiesProject.id}
+          projectName={activitiesProject.name}
+        />
+      )}
     </div>
   )
 }

@@ -4,18 +4,58 @@ import {
   UpdateProjectActivityInput,
   CreateFromTemplateWithScheduleInput,
 } from './project-activity.schemas'
+import { ContractorScope } from '../../core/rbac/contractor-filter'
 
 export class ProjectActivityService {
   constructor(private prisma: PrismaClient) {}
 
-  async listByProject(tenantId: string, projectId: string) {
+  async listByProject(tenantId: string, projectId: string, scope?: ContractorScope) {
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, tenantId },
     })
     if (!project) throw new Error('Projeto não encontrado')
 
+    // Build where clause - filter by contractor activities if scope has activityIds
+    const where: Prisma.ProjectActivityWhereInput = { projectId }
+    if (scope?.activityIds && scope.activityIds.length > 0) {
+      // Get activity IDs that belong to this project
+      const projectActivityIds = await this.prisma.contractorActivity.findMany({
+        where: {
+          contractorId: scope.contractorId,
+          activity: { projectId },
+        },
+        select: { projectActivityId: true },
+      })
+      const filteredIds = projectActivityIds.map(ca => ca.projectActivityId)
+      if (filteredIds.length > 0) {
+        // Include filtered activities AND their parent phases/stages for tree context
+        const filteredActivities = await this.prisma.projectActivity.findMany({
+          where: { id: { in: filteredIds } },
+          select: { id: true, parentId: true },
+        })
+        const allIds = new Set(filteredIds)
+        // Collect all ancestor IDs
+        const parentIds = filteredActivities
+          .map(a => a.parentId)
+          .filter((pid): pid is string => pid !== null)
+        if (parentIds.length > 0) {
+          const ancestors = await this.prisma.projectActivity.findMany({
+            where: { projectId, id: { in: parentIds } },
+            select: { id: true, parentId: true },
+          })
+          ancestors.forEach(a => allIds.add(a.id))
+          // Get grandparents too (phase level)
+          const gpIds = ancestors
+            .map(a => a.parentId)
+            .filter((pid): pid is string => pid !== null)
+          gpIds.forEach(gpId => allIds.add(gpId))
+        }
+        where.id = { in: Array.from(allIds) }
+      }
+    }
+
     const activities = await this.prisma.projectActivity.findMany({
-      where: { projectId },
+      where,
       orderBy: { order: 'asc' },
       include: {
         unitActivities: {
@@ -391,14 +431,49 @@ export class ProjectActivityService {
     return results
   }
 
-  async getProjectProgress(tenantId: string, projectId: string) {
+  async getProjectProgress(tenantId: string, projectId: string, scope?: ContractorScope) {
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, tenantId },
     })
     if (!project) throw new Error('Projeto não encontrado')
 
+    // Build where clause - filter by contractor activities if scope has activityIds
+    const where: Prisma.ProjectActivityWhereInput = { projectId }
+    if (scope?.activityIds && scope.activityIds.length > 0) {
+      const projectActivityIds = await this.prisma.contractorActivity.findMany({
+        where: {
+          contractorId: scope.contractorId,
+          activity: { projectId },
+        },
+        select: { projectActivityId: true },
+      })
+      const filteredIds = projectActivityIds.map(ca => ca.projectActivityId)
+      if (filteredIds.length > 0) {
+        const filteredActivities = await this.prisma.projectActivity.findMany({
+          where: { id: { in: filteredIds } },
+          select: { id: true, parentId: true },
+        })
+        const allIds = new Set(filteredIds)
+        const parentIds = filteredActivities
+          .map(a => a.parentId)
+          .filter((pid): pid is string => pid !== null)
+        if (parentIds.length > 0) {
+          const ancestors = await this.prisma.projectActivity.findMany({
+            where: { projectId, id: { in: parentIds } },
+            select: { id: true, parentId: true },
+          })
+          ancestors.forEach(a => allIds.add(a.id))
+          const gpIds = ancestors
+            .map(a => a.parentId)
+            .filter((pid): pid is string => pid !== null)
+          gpIds.forEach(gpId => allIds.add(gpId))
+        }
+        where.id = { in: Array.from(allIds) }
+      }
+    }
+
     const activities = await this.prisma.projectActivity.findMany({
-      where: { projectId },
+      where,
       orderBy: { order: 'asc' },
       include: {
         unitActivities: true,

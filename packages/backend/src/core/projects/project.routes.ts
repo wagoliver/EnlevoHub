@@ -5,6 +5,7 @@ import { hasPermission } from '../rbac/permissions'
 import { getContractorScope } from '../rbac/contractor-filter'
 import { ProjectService } from './project.service'
 import { EvolutionService } from './evolution.service'
+import { UnitService } from './unit.service'
 import { UploadService } from './upload.service'
 import {
   createProjectSchema,
@@ -12,6 +13,9 @@ import {
   listProjectsQuerySchema,
   createEvolutionSchema,
   updateEvolutionSchema,
+  createUnitSchema,
+  updateUnitSchema,
+  listUnitsQuerySchema,
 } from './project.schemas'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -33,6 +37,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
   const authMiddleware = createAuthMiddleware(jwtService)
   const projectService = new ProjectService(fastify.prisma)
   const evolutionService = new EvolutionService(fastify.prisma)
+  const unitService = new UnitService(fastify.prisma)
   const uploadService = new UploadService()
 
   // Helper to get tenantId from request
@@ -504,5 +509,192 @@ export async function projectRoutes(fastify: FastifyInstance) {
     const stream = fs.createReadStream(filePath)
 
     return reply.type(contentType).send(stream)
+  })
+
+  // ==================== UNITS CRUD ====================
+
+  // List units
+  fastify.get('/:id/units', {
+    preHandler: [authMiddleware, requirePermission('units:view')],
+    schema: {
+      description: 'List project units with pagination and filters',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' },
+        },
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', default: 1 },
+          limit: { type: 'integer', default: 50 },
+          search: { type: 'string' },
+          status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED'] },
+          type: { type: 'string', enum: ['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND'] },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const query = listUnitsQuerySchema.parse(request.query)
+      const result = await unitService.list(getTenantId(request), id, query)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Get unit by ID
+  fastify.get('/:id/units/:unitId', {
+    preHandler: [authMiddleware, requirePermission('units:view')],
+    schema: {
+      description: 'Get unit details',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'unitId'],
+        properties: {
+          id: { type: 'string' },
+          unitId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, unitId } = request.params as { id: string; unitId: string }
+      const unit = await unitService.getById(getTenantId(request), id, unitId)
+      return reply.send(unit)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Create unit
+  fastify.post('/:id/units', {
+    preHandler: [authMiddleware, requirePermission('units:create')],
+    schema: {
+      description: 'Create a new unit in the project',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['code', 'type', 'area', 'price'],
+        properties: {
+          code: { type: 'string' },
+          type: { type: 'string', enum: ['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND'] },
+          floor: { type: 'integer' },
+          area: { type: 'number' },
+          bedrooms: { type: 'integer' },
+          bathrooms: { type: 'integer' },
+          price: { type: 'number' },
+          status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED'] },
+          metadata: { type: 'object' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = createUnitSchema.parse(request.body)
+      const unit = await unitService.create(getTenantId(request), id, body)
+      return reply.status(201).send(unit)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Update unit
+  fastify.patch('/:id/units/:unitId', {
+    preHandler: [authMiddleware, requirePermission('units:edit')],
+    schema: {
+      description: 'Update a unit',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'unitId'],
+        properties: {
+          id: { type: 'string' },
+          unitId: { type: 'string' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+          type: { type: 'string', enum: ['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND'] },
+          floor: { type: 'integer' },
+          area: { type: 'number' },
+          bedrooms: { type: 'integer' },
+          bathrooms: { type: 'integer' },
+          price: { type: 'number' },
+          status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED'] },
+          metadata: { type: 'object' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, unitId } = request.params as { id: string; unitId: string }
+      const body = updateUnitSchema.parse(request.body)
+      const unit = await unitService.update(getTenantId(request), id, unitId, body)
+      return reply.send(unit)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Delete unit
+  fastify.delete('/:id/units/:unitId', {
+    preHandler: [authMiddleware, requirePermission('units:delete')],
+    schema: {
+      description: 'Delete a unit',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'unitId'],
+        properties: {
+          id: { type: 'string' },
+          unitId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, unitId } = request.params as { id: string; unitId: string }
+      const result = await unitService.delete(getTenantId(request), id, unitId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
   })
 }

@@ -45,6 +45,7 @@ export const createFromTemplateWithScheduleSchema = z.object({
 export const createMeasurementSchema = z.object({
   activityId: z.string().uuid(),
   unitActivityId: z.string().uuid().optional(),
+  unitId: z.string().uuid().optional(),
   contractorId: z.string().uuid().optional(),
   progress: z.number().min(0).max(100),
   notes: z.string().optional(),

@@ -11,17 +11,10 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { ProjectFormDialog } from './ProjectFormDialog'
 import { ActivitiesTab } from './ActivitiesTab'
 import { MeasurementsTab } from './MeasurementsTab'
+import { UnitsTab } from './UnitsTab'
 import { ProgressOverview } from './ProgressOverview'
 import {
   ArrowLeft,
@@ -51,27 +44,6 @@ const statusLabel: Record<string, string> = {
   PAUSED: 'Pausado',
   COMPLETED: 'Concluído',
   CANCELLED: 'Cancelado',
-}
-
-const unitStatusLabel: Record<string, string> = {
-  AVAILABLE: 'Disponível',
-  RESERVED: 'Reservado',
-  SOLD: 'Vendido',
-  BLOCKED: 'Bloqueado',
-}
-
-const unitStatusVariant: Record<string, any> = {
-  AVAILABLE: 'available',
-  RESERVED: 'reserved',
-  SOLD: 'sold',
-  BLOCKED: 'blocked',
-}
-
-const unitTypeLabel: Record<string, string> = {
-  APARTMENT: 'Apartamento',
-  HOUSE: 'Casa',
-  COMMERCIAL: 'Comercial',
-  LAND: 'Terreno',
 }
 
 function formatCurrency(value: number) {
@@ -369,50 +341,7 @@ export function ProjectDetail() {
 
         {/* Units Tab */}
         <TabsContent value="units" className="mt-6">
-          {project.units && project.units.length > 0 ? (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Andar</TableHead>
-                    <TableHead>Área (m²)</TableHead>
-                    <TableHead>Quartos</TableHead>
-                    <TableHead>Preço</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {project.units.map((unit: any) => (
-                    <TableRow key={unit.id}>
-                      <TableCell className="font-medium">{unit.code}</TableCell>
-                      <TableCell>{unitTypeLabel[unit.type] || unit.type}</TableCell>
-                      <TableCell>{unit.floor ?? '-'}</TableCell>
-                      <TableCell>{unit.area}</TableCell>
-                      <TableCell>{unit.bedrooms ?? '-'}</TableCell>
-                      <TableCell>{formatCurrency(unit.price)}</TableCell>
-                      <TableCell>
-                        <Badge variant={unitStatusVariant[unit.status]}>
-                          {unitStatusLabel[unit.status]}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
-              <Home className="h-12 w-12 text-neutral-300" />
-              <h3 className="mt-4 text-lg font-medium text-neutral-900">
-                Nenhuma unidade cadastrada
-              </h3>
-              <p className="mt-2 text-sm text-neutral-500">
-                As unidades serão implementadas na próxima fase.
-              </p>
-            </div>
-          )}
+          <UnitsTab projectId={id!} />
         </TabsContent>
 
         {/* Financial Tab */}

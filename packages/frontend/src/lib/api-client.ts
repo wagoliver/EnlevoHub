@@ -330,6 +330,32 @@ export const projectsAPI = {
   uploadMeasurementPhotos: (projectId: string, formData: FormData) =>
     apiClient.upload<{ urls: string[] }>(`/projects/${projectId}/measurements/upload`, formData),
 
+  // Units
+  listUnits: (projectId: string, params?: {
+    page?: number
+    limit?: number
+    search?: string
+    status?: string
+    type?: string
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.set(key, String(value))
+        }
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/projects/${projectId}/units${qs ? `?${qs}` : ''}`)
+  },
+  createUnit: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/units`, data),
+  updateUnit: (projectId: string, unitId: string, data: any) =>
+    apiClient.patch<any>(`/projects/${projectId}/units/${unitId}`, data),
+  deleteUnit: (projectId: string, unitId: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/units/${unitId}`),
+
   // Upload (legacy)
   uploadPhotos: (projectId: string, formData: FormData) =>
     apiClient.upload<{ urls: string[] }>(`/projects/${projectId}/evolutions/upload`, formData),

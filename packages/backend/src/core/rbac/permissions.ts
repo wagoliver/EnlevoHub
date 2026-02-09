@@ -221,6 +221,9 @@ export const Roles = {
       // Projects (view - filtrado pelo backend ao escopo do empreiteiro)
       Permissions.PROJECTS_VIEW,
 
+      // Units (view - para selecionar unidade ao registrar medição)
+      Permissions.UNITS_VIEW,
+
       // Activities (view - filtrado ao escopo)
       Permissions.ACTIVITIES_VIEW,
 

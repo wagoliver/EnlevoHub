@@ -58,8 +58,33 @@ export const updateEvolutionSchema = z.object({
   photos: z.array(z.string()).optional(),
 })
 
+export const createUnitSchema = z.object({
+  code: z.string().min(1).max(20),
+  type: z.enum(['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND']),
+  floor: z.number().int().optional(),
+  area: z.number().positive(),
+  bedrooms: z.number().int().min(0).optional(),
+  bathrooms: z.number().int().min(0).optional(),
+  price: z.number().positive(),
+  status: z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).optional(),
+  metadata: z.record(z.any()).optional(),
+})
+
+export const updateUnitSchema = createUnitSchema.partial()
+
+export const listUnitsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+  search: z.string().optional(),
+  status: z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).optional(),
+  type: z.enum(['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND']).optional(),
+})
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>
 export type CreateEvolutionInput = z.infer<typeof createEvolutionSchema>
 export type UpdateEvolutionInput = z.infer<typeof updateEvolutionSchema>
+export type CreateUnitInput = z.infer<typeof createUnitSchema>
+export type UpdateUnitInput = z.infer<typeof updateUnitSchema>
+export type ListUnitsQuery = z.infer<typeof listUnitsQuerySchema>

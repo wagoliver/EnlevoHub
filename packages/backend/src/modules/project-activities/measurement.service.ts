@@ -100,6 +100,19 @@ export class MeasurementService {
     })
     if (!activity) throw new Error('Atividade não encontrada')
 
+    // Resolve unitId → UnitActivity (find-or-create)
+    if (data.unitId && !data.unitActivityId) {
+      let ua = await this.prisma.unitActivity.findUnique({
+        where: { activityId_unitId: { activityId: data.activityId, unitId: data.unitId } },
+      })
+      if (!ua) {
+        ua = await this.prisma.unitActivity.create({
+          data: { activityId: data.activityId, unitId: data.unitId },
+        })
+      }
+      data.unitActivityId = ua.id
+    }
+
     // Get previous progress
     let previousProgress = 0
     if (data.unitActivityId) {

@@ -1,4 +1,5 @@
 export { projectRoutes } from './project.routes'
 export { ProjectService } from './project.service'
 export { EvolutionService } from './evolution.service'
+export { UnitService } from './unit.service'
 export { UploadService } from './upload.service'

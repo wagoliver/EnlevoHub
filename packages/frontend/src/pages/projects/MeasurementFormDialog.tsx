@@ -123,6 +123,7 @@ export function MeasurementFormDialog({
   const [selectedStageId, setSelectedStageId] = useState('')
   const [selectedActivityId, setSelectedActivityId] = useState('')
   const [selectedUnitActivityId, setSelectedUnitActivityId] = useState('')
+  const [selectedUnitId, setSelectedUnitId] = useState('')
   const [singleProgress, setSingleProgress] = useState(0)
   const [contractorId, setContractorId] = useState('')
   const [notes, setNotes] = useState('')
@@ -143,6 +144,15 @@ export function MeasurementFormDialog({
     queryFn: () => contractorsAPI.listByProject(projectId),
     enabled: open,
   })
+
+  // Fetch project units
+  const { data: unitsData } = useQuery({
+    queryKey: ['project-units', projectId],
+    queryFn: () => projectsAPI.listUnits(projectId, { limit: 200 }),
+    enabled: open,
+  })
+  const projectUnits: Array<{ id: string; code: string; [key: string]: any }> =
+    (unitsData as any)?.data || []
 
   const activities = activitiesRaw as ActivityNode[]
 
@@ -208,17 +218,23 @@ export function MeasurementFormDialog({
   const currentSingleProgress = useMemo(() => {
     if (!selectedActivity) return 0
     if (unitActivities.length === 0) return selectedActivity.averageProgress || 0
+    // When a unit is selected via the new dropdown, find matching UnitActivity
+    if (selectedUnitId) {
+      const ua = unitActivities.find((u) => u.unit?.id === selectedUnitId)
+      return ua?.progress ?? 0
+    }
     if (selectedUnitActivityId) {
       const ua = unitActivities.find((u) => u.id === selectedUnitActivityId)
       return ua?.progress ?? 0
     }
     if (unitActivities.length === 1) return unitActivities[0].progress
     return selectedActivity.averageProgress || 0
-  }, [selectedActivity, unitActivities, selectedUnitActivityId])
+  }, [selectedActivity, unitActivities, selectedUnitActivityId, selectedUnitId])
 
   // Auto-select unitActivity when activity changes (single mode)
   useEffect(() => {
     if (!isSingleMode || !selectedActivity) return
+    setSelectedUnitId('')
     if (unitActivities.length === 1) {
       setSelectedUnitActivityId(unitActivities[0].id)
       setSingleProgress(unitActivities[0].progress)
@@ -237,6 +253,13 @@ export function MeasurementFormDialog({
     const ua = unitActivities.find((u) => u.id === selectedUnitActivityId)
     if (ua) setSingleProgress(ua.progress)
   }, [isSingleMode, selectedUnitActivityId, unitActivities])
+
+  // Update singleProgress when unit selection changes (new unit dropdown)
+  useEffect(() => {
+    if (!isSingleMode || !selectedUnitId) return
+    const ua = unitActivities.find((u) => u.unit?.id === selectedUnitId)
+    setSingleProgress(ua?.progress ?? 0)
+  }, [isSingleMode, selectedUnitId, unitActivities])
 
   // Build editable items for batch mode
   const batchActivities = useMemo((): ActivityNode[] => {
@@ -296,6 +319,7 @@ export function MeasurementFormDialog({
     setNotes('')
     setSingleProgress(0)
     setSelectedUnitActivityId('')
+    setSelectedUnitId('')
 
     if (defaultActivityId && hasHierarchy) {
       const ancestors = findAncestors(activities, defaultActivityId)
@@ -434,7 +458,9 @@ export function MeasurementFormDialog({
         contractorId: effectiveContractorId,
       }
 
-      if (selectedUnitActivityId) {
+      if (selectedUnitId) {
+        data.unitId = selectedUnitId
+      } else if (selectedUnitActivityId) {
         data.unitActivityId = selectedUnitActivityId
       }
 
@@ -739,20 +765,36 @@ export function MeasurementFormDialog({
                 </Badge>
               </div>
 
-              {/* Unit selector (only if multiple units) */}
-              {unitActivities.length > 1 && (
+              {/* Unit selector (for non-GENERAL activities when project has units) */}
+              {selectedActivity?.scope !== 'GENERAL' && projectUnits.length > 0 && (
                 <div>
                   <Label>Unidade</Label>
-                  <Select value={selectedUnitActivityId} onValueChange={setSelectedUnitActivityId}>
+                  <Select
+                    value={selectedUnitId}
+                    onValueChange={(v) => {
+                      setSelectedUnitId(v)
+                      // Clear the old unitActivityId-based selection
+                      setSelectedUnitActivityId('')
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione a unidade..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {unitActivities.map((ua) => (
-                        <SelectItem key={ua.id} value={ua.id}>
-                          {ua.unit?.code || 'Geral'} - {Math.round(ua.progress)}% atual
-                        </SelectItem>
-                      ))}
+                      {projectUnits.map((unit) => {
+                        const ua = unitActivities.find((u) => u.unit?.id === unit.id)
+                        const progress = ua ? Math.round(ua.progress) : 0
+                        const isCompleted = progress >= 100
+                        return (
+                          <SelectItem
+                            key={unit.id}
+                            value={unit.id}
+                            disabled={isCompleted}
+                          >
+                            {unit.code} - {isCompleted ? '100% (Concluída)' : `${progress}% atual`}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

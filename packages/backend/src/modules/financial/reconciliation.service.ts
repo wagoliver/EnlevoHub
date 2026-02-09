@@ -1,0 +1,259 @@
+import { PrismaClient } from '@prisma/client'
+
+interface ReconciliationSuggestion {
+  entityType: string
+  entityId: string
+  entityName: string
+  confidence: number // 0-100
+  reason: string
+}
+
+export class ReconciliationService {
+  constructor(private prisma: PrismaClient) {}
+
+  async getPendingTransactions(tenantId: string) {
+    const transactions = await this.prisma.financialTransaction.findMany({
+      where: {
+        user: { tenantId },
+        reconciliationStatus: 'PENDING',
+        importBatchId: { not: null },
+      },
+      include: {
+        bankAccount: { select: { bankName: true } },
+      },
+      orderBy: { date: 'desc' },
+    })
+    return transactions.map(tx => ({
+      ...tx,
+      amount: Number(tx.amount),
+    }))
+  }
+
+  async getSuggestions(tenantId: string, transactionId: string): Promise<ReconciliationSuggestion[]> {
+    const transaction = await this.prisma.financialTransaction.findFirst({
+      where: { id: transactionId, user: { tenantId } },
+    })
+    if (!transaction) throw new Error('Transação não encontrada')
+
+    const suggestions: ReconciliationSuggestion[] = []
+    const description = (transaction.rawDescription || transaction.description).toUpperCase()
+    const amount = Number(transaction.amount)
+
+    // 1. Match by CNPJ in description
+    const cnpjMatch = description.match(/(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/g)
+    if (cnpjMatch) {
+      for (const rawCnpj of cnpjMatch) {
+        const cleanCnpj = rawCnpj.replace(/[.\/-]/g, '')
+
+        // Check suppliers
+        const suppliers = await this.prisma.supplier.findMany({
+          where: { tenantId, document: { contains: cleanCnpj } },
+          select: { id: true, name: true, document: true },
+        })
+        for (const supplier of suppliers) {
+          suggestions.push({
+            entityType: 'supplier',
+            entityId: supplier.id,
+            entityName: supplier.name,
+            confidence: 90,
+            reason: `CNPJ ${supplier.document} encontrado na descrição`,
+          })
+        }
+
+        // Check contractors
+        const contractors = await this.prisma.contractor.findMany({
+          where: { tenantId, document: { contains: cleanCnpj } },
+          select: { id: true, name: true, document: true },
+        })
+        for (const contractor of contractors) {
+          suggestions.push({
+            entityType: 'contractor',
+            entityId: contractor.id,
+            entityName: contractor.name,
+            confidence: 90,
+            reason: `CNPJ ${contractor.document} encontrado na descrição`,
+          })
+        }
+      }
+    }
+
+    // 2. Match by value + date proximity (±3 days) against purchase orders
+    if (transaction.type === 'EXPENSE') {
+      const dateWindow = 3 * 24 * 60 * 60 * 1000 // 3 days in ms
+      const dateLow = new Date(transaction.date.getTime() - dateWindow)
+      const dateHigh = new Date(transaction.date.getTime() + dateWindow)
+
+      const purchases = await this.prisma.purchaseOrder.findMany({
+        where: {
+          project: { tenantId },
+          totalAmount: amount,
+          orderDate: { gte: dateLow, lte: dateHigh },
+          status: { in: ['APPROVED', 'ORDERED', 'DELIVERED'] },
+        },
+        include: {
+          supplier: { select: { name: true } },
+          project: { select: { name: true } },
+        },
+        take: 5,
+      })
+
+      for (const po of purchases) {
+        // Avoid duplicate suggestions
+        const alreadySuggested = suggestions.some(s => s.entityType === 'purchase' && s.entityId === po.id)
+        if (!alreadySuggested) {
+          suggestions.push({
+            entityType: 'purchase',
+            entityId: po.id,
+            entityName: `OC ${po.orderNumber} - ${po.supplier.name} (${po.project.name})`,
+            confidence: 70,
+            reason: `Valor R$ ${amount.toFixed(2)} e data próxima`,
+          })
+        }
+      }
+    }
+
+    // 3. Match by name in description
+    const [suppliers, contractors] = await Promise.all([
+      this.prisma.supplier.findMany({
+        where: { tenantId, isActive: true },
+        select: { id: true, name: true },
+      }),
+      this.prisma.contractor.findMany({
+        where: { tenantId, isActive: true },
+        select: { id: true, name: true },
+      }),
+    ])
+
+    for (const supplier of suppliers) {
+      const nameWords = supplier.name.toUpperCase().split(/\s+/).filter(w => w.length > 3)
+      const matchCount = nameWords.filter(w => description.includes(w)).length
+      if (matchCount >= 2 || (nameWords.length === 1 && matchCount === 1 && nameWords[0].length > 5)) {
+        const alreadySuggested = suggestions.some(s => s.entityId === supplier.id)
+        if (!alreadySuggested) {
+          suggestions.push({
+            entityType: 'supplier',
+            entityId: supplier.id,
+            entityName: supplier.name,
+            confidence: 50,
+            reason: `Nome "${supplier.name}" encontrado na descrição`,
+          })
+        }
+      }
+    }
+
+    for (const contractor of contractors) {
+      const nameWords = contractor.name.toUpperCase().split(/\s+/).filter(w => w.length > 3)
+      const matchCount = nameWords.filter(w => description.includes(w)).length
+      if (matchCount >= 2 || (nameWords.length === 1 && matchCount === 1 && nameWords[0].length > 5)) {
+        const alreadySuggested = suggestions.some(s => s.entityId === contractor.id)
+        if (!alreadySuggested) {
+          suggestions.push({
+            entityType: 'contractor',
+            entityId: contractor.id,
+            entityName: contractor.name,
+            confidence: 50,
+            reason: `Nome "${contractor.name}" encontrado na descrição`,
+          })
+        }
+      }
+    }
+
+    // Sort by confidence descending
+    suggestions.sort((a, b) => b.confidence - a.confidence)
+    return suggestions
+  }
+
+  async matchTransaction(tenantId: string, transactionId: string, entityType: string, entityId: string, entityName: string) {
+    const transaction = await this.prisma.financialTransaction.findFirst({
+      where: { id: transactionId, user: { tenantId } },
+    })
+    if (!transaction) throw new Error('Transação não encontrada')
+
+    const updated = await this.prisma.financialTransaction.update({
+      where: { id: transactionId },
+      data: {
+        reconciliationStatus: 'MANUAL_MATCHED',
+        linkedEntityType: entityType,
+        linkedEntityId: entityId,
+        linkedEntityName: entityName,
+      },
+    })
+    return { ...updated, amount: Number(updated.amount) }
+  }
+
+  async ignoreTransaction(tenantId: string, transactionId: string) {
+    const transaction = await this.prisma.financialTransaction.findFirst({
+      where: { id: transactionId, user: { tenantId } },
+    })
+    if (!transaction) throw new Error('Transação não encontrada')
+
+    const updated = await this.prisma.financialTransaction.update({
+      where: { id: transactionId },
+      data: { reconciliationStatus: 'IGNORED' },
+    })
+    return { ...updated, amount: Number(updated.amount) }
+  }
+
+  async autoReconcile(tenantId: string, batchId: string): Promise<number> {
+    const transactions = await this.prisma.financialTransaction.findMany({
+      where: {
+        importBatchId: batchId,
+        reconciliationStatus: 'PENDING',
+      },
+    })
+
+    let matched = 0
+
+    for (const tx of transactions) {
+      const description = (tx.rawDescription || tx.description).toUpperCase()
+
+      // Try CNPJ match
+      const cnpjMatch = description.match(/(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/g)
+      if (cnpjMatch) {
+        for (const rawCnpj of cnpjMatch) {
+          const cleanCnpj = rawCnpj.replace(/[.\/-]/g, '')
+
+          const supplier = await this.prisma.supplier.findFirst({
+            where: { tenantId, document: { contains: cleanCnpj } },
+            select: { id: true, name: true },
+          })
+
+          if (supplier) {
+            await this.prisma.financialTransaction.update({
+              where: { id: tx.id },
+              data: {
+                reconciliationStatus: 'AUTO_MATCHED',
+                linkedEntityType: 'supplier',
+                linkedEntityId: supplier.id,
+                linkedEntityName: supplier.name,
+              },
+            })
+            matched++
+            break
+          }
+
+          const contractor = await this.prisma.contractor.findFirst({
+            where: { tenantId, document: { contains: cleanCnpj } },
+            select: { id: true, name: true },
+          })
+
+          if (contractor) {
+            await this.prisma.financialTransaction.update({
+              where: { id: tx.id },
+              data: {
+                reconciliationStatus: 'AUTO_MATCHED',
+                linkedEntityType: 'contractor',
+                linkedEntityId: contractor.id,
+                linkedEntityName: contractor.name,
+              },
+            })
+            matched++
+            break
+          }
+        }
+      }
+    }
+
+    return matched
+  }
+}

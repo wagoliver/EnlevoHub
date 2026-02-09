@@ -377,6 +377,58 @@ export const usersAPI = {
   reject: (id: string) => apiClient.post<any>(`/users/${id}/reject`),
 }
 
+export const financialAPI = {
+  // Dashboard
+  getDashboard: () => apiClient.get<any>('/financial/dashboard'),
+
+  // Accounts
+  listAccounts: () => apiClient.get<any>('/financial/accounts'),
+  createAccount: (data: any) => apiClient.post<any>('/financial/accounts', data),
+  updateAccount: (id: string, data: any) => apiClient.patch<any>(`/financial/accounts/${id}`, data),
+  deleteAccount: (id: string) => apiClient.delete<any>(`/financial/accounts/${id}`),
+
+  // Transactions
+  listTransactions: (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    type?: string
+    category?: string
+    status?: string
+    bankAccountId?: string
+    projectId?: string
+    reconciliationStatus?: string
+    dateFrom?: string
+    dateTo?: string
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.set(key, String(value))
+        }
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/financial/transactions${qs ? `?${qs}` : ''}`)
+  },
+  createTransaction: (data: any) => apiClient.post<any>('/financial/transactions', data),
+  updateTransaction: (id: string, data: any) => apiClient.patch<any>(`/financial/transactions/${id}`, data),
+  deleteTransaction: (id: string) => apiClient.delete<any>(`/financial/transactions/${id}`),
+
+  // Import
+  importFile: (bankAccountId: string, formData: FormData) =>
+    apiClient.upload<any>(`/financial/import?bankAccountId=${bankAccountId}`, formData),
+  listImports: () => apiClient.get<any>('/financial/imports'),
+
+  // Reconciliation
+  getPendingReconciliation: () => apiClient.get<any>('/financial/reconciliation/pending'),
+  getSuggestions: (id: string) => apiClient.get<any>(`/financial/reconciliation/suggestions/${id}`),
+  matchTransaction: (data: { transactionId: string; linkedEntityType: string; linkedEntityId: string; linkedEntityName: string }) =>
+    apiClient.post<any>('/financial/reconciliation/match', data),
+  ignoreTransaction: (id: string) => apiClient.post<any>(`/financial/reconciliation/ignore/${id}`),
+}
+
 export const activityTemplatesAPI = {
   list: (params?: {
     page?: number

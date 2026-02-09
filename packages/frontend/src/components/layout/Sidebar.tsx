@@ -12,7 +12,6 @@ import {
   BarChart3,
   ListChecks,
   UsersRound,
-  Mail,
   Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -96,12 +95,6 @@ const settingsNavigation: NavItem[] = [
     permission: 'activities:create',
   },
   {
-    title: 'Email',
-    href: '/settings/email',
-    icon: Mail,
-    permission: 'tenant:edit',
-  },
-  {
     title: 'Usuários',
     href: '/users',
     icon: UsersRound,
@@ -137,10 +130,9 @@ function NavItemComponent({ item }: { item: NavItem }) {
 function SettingsSection() {
   // Check if user has permission to see at least one settings item
   const canSeeTemplates = usePermission('activities:create')
-  const canSeeEmail = usePermission('tenant:edit')
   const canSeeUsers = usePermission('users:view')
 
-  if (!canSeeTemplates && !canSeeEmail && !canSeeUsers) {
+  if (!canSeeTemplates && !canSeeUsers) {
     return null
   }
 

@@ -30,6 +30,7 @@ model Tenant {
   contracts          Contract[]
   materials          Material[]
   bankAccounts       BankAccount[]
+  importBatches      ImportBatch[]
   activityTemplates  ActivityTemplate[]
   measurements       Measurement[]
 
@@ -65,6 +66,7 @@ model User {
   passwordResetTokens  PasswordResetToken[]
   projectEvolutions    ProjectEvolution[]
   transactions      FinancialTransaction[]
+  importBatches     ImportBatch[]
   measurementsReported Measurement[]    @relation("measurementReporter")
   measurementsReviewed Measurement[]    @relation("measurementReviewer")
 
@@ -503,6 +505,10 @@ model BankAccount {
   bankName      String
   accountNumber String
   balance       Decimal  @db.Decimal(15, 2)
+  bankCode      String?
+  agency        String?
+  accountType   String?  // "CHECKING" | "SAVINGS"
+  isActive      Boolean  @default(true)
   syncEnabled   Boolean  @default(false)
   lastSync      DateTime?
   metadata      Json?
@@ -510,8 +516,9 @@ model BankAccount {
   updatedAt     DateTime @updatedAt
 
   // Relations
-  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactions FinancialTransaction[]
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions  FinancialTransaction[]
+  importBatches ImportBatch[]
 
   @@index([tenantId])
   @@map("bank_accounts")
@@ -533,17 +540,56 @@ model FinancialTransaction {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
+  // Import fields
+  externalId        String?
+  rawDescription    String?           @db.Text
+  importBatchId     String?
+
+  // Reconciliation fields
+  reconciliationStatus ReconciliationStatus @default(PENDING)
+  linkedEntityType  String?
+  linkedEntityId    String?
+  linkedEntityName  String?
+
   // Relations
   project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
   user        User         @relation(fields: [createdBy], references: [id])
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id])
 
   @@index([projectId])
   @@index([bankAccountId])
   @@index([type])
   @@index([category])
   @@index([date])
+  @@index([externalId])
+  @@index([reconciliationStatus])
   @@map("financial_transactions")
+}
+
+model ImportBatch {
+  id             String    @id @default(uuid())
+  tenantId       String
+  bankAccountId  String
+  fileName       String
+  fileType       String
+  totalRecords   Int
+  importedCount  Int
+  duplicateCount Int
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  importedBy     String
+  createdAt      DateTime  @default(now())
+
+  // Relations
+  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bankAccount  BankAccount            @relation(fields: [bankAccountId], references: [id])
+  user         User                   @relation(fields: [importedBy], references: [id])
+  transactions FinancialTransaction[]
+
+  @@index([tenantId])
+  @@index([bankAccountId])
+  @@map("import_batches")
 }
 
 enum TransactionType {
@@ -555,6 +601,13 @@ enum TransactionStatus {
   PENDING
   COMPLETED
   CANCELLED
+}
+
+enum ReconciliationStatus {
+  PENDING
+  AUTO_MATCHED
+  MANUAL_MATCHED
+  IGNORED
 }
 
 // ==================== ACTIVITIES & MEASUREMENTS ====================

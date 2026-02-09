@@ -18,6 +18,7 @@ import { ActivityTemplates } from './pages/settings/ActivityTemplates'
 import { ActivityTemplateEditor } from './pages/settings/ActivityTemplateEditor'
 import { Users } from './pages/Users'
 import { Profile } from './pages/Profile'
+import { Financial } from './pages/Financial'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -60,14 +61,13 @@ function App() {
             <Route path="contractors/:id" element={<ContractorDetail />} />
             <Route path="brokers" element={<ComingSoon title="Corretores" />} />
             <Route path="purchases" element={<ComingSoon title="Compras" />} />
-            <Route path="financial" element={<ComingSoon title="Financeiro" />} />
+            <Route path="financial" element={<Financial />} />
             <Route path="contracts" element={<ComingSoon title="Contratos" />} />
             <Route path="reports" element={<ComingSoon title="Relatórios" />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="settings" element={<ComingSoon title="Configurações" />} />
+            <Route path="settings" element={<EmailSettings />} />
             <Route path="settings/templates" element={<ActivityTemplates />} />
             <Route path="settings/templates/:id" element={<ActivityTemplateEditor />} />
-            <Route path="settings/email" element={<EmailSettings />} />
             <Route path="users" element={<Users />} />
           </Route>
 

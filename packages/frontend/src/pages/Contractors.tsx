@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { contractorsAPI } from '@/lib/api-client'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,8 +46,7 @@ function renderStars(rating: number) {
 
 export function Contractors() {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
-  const canCreate = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const canCreate = usePermission('contractors:create')
 
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [page, setPage] = useState(1)

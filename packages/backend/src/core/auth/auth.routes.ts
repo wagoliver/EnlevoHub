@@ -6,7 +6,9 @@ import {
   registerSchema,
   loginSchema,
   refreshTokenSchema,
-  changePasswordSchema
+  changePasswordSchema,
+  registerContractorSchema,
+  updateProfileSchema
 } from './auth.schemas'
 
 export async function authRoutes(fastify: FastifyInstance) {
@@ -41,7 +43,9 @@ export async function authRoutes(fastify: FastifyInstance) {
                 email: { type: 'string' },
                 name: { type: 'string' },
                 role: { type: 'string' },
-                tenantId: { type: 'string' }
+                tenantId: { type: 'string' },
+                contractorId: { type: ['string', 'null'] },
+                isApproved: { type: 'boolean' }
               }
             },
             tenant: {
@@ -79,6 +83,49 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // Register Contractor (auto-cadastro)
+  fastify.post('/auth/register-contractor', {
+    schema: {
+      description: 'Register contractor with auto-signup (pending approval)',
+      tags: ['auth'],
+      body: {
+        type: 'object',
+        required: ['email', 'password', 'name', 'tenantDocument', 'document', 'specialty'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 },
+          name: { type: 'string', minLength: 2 },
+          tenantDocument: { type: 'string', minLength: 11 },
+          document: { type: 'string', minLength: 11 },
+          specialty: { type: 'array', items: { type: 'string' } },
+          contacts: {}
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const body = registerContractorSchema.parse(request.body)
+      const result = await authService.registerContractor(body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return (reply as any).status(400).send({
+          error: 'Falha no cadastro',
+          message: error.message
+        })
+      }
+      throw error
+    }
+  })
+
   // Login
   fastify.post('/auth/login', {
     schema: {
@@ -103,7 +150,9 @@ export async function authRoutes(fastify: FastifyInstance) {
                 email: { type: 'string' },
                 name: { type: 'string' },
                 role: { type: 'string' },
-                tenantId: { type: 'string' }
+                tenantId: { type: 'string' },
+                contractorId: { type: ['string', 'null'] },
+                isApproved: { type: 'boolean' }
               }
             },
             tenant: {
@@ -195,6 +244,8 @@ export async function authRoutes(fastify: FastifyInstance) {
             name: { type: 'string' },
             role: { type: 'string' },
             tenantId: { type: 'string' },
+            contractorId: { type: ['string', 'null'] },
+            isApproved: { type: 'boolean' },
             createdAt: { type: 'string' },
             tenant: {
               type: 'object',
@@ -202,6 +253,15 @@ export async function authRoutes(fastify: FastifyInstance) {
                 id: { type: 'string' },
                 name: { type: 'string' },
                 plan: { type: 'string' }
+              }
+            },
+            contractor: {
+              type: ['object', 'null'],
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                document: { type: 'string' },
+                specialty: { type: 'array', items: { type: 'string' } }
               }
             }
           }
@@ -216,6 +276,72 @@ export async function authRoutes(fastify: FastifyInstance) {
       if (error instanceof Error) {
         return (reply as any).status(404).send({
           error: 'User not found',
+          message: error.message
+        })
+      }
+      throw error
+    }
+  })
+
+  // Update profile (protected route)
+  fastify.patch('/auth/profile', {
+    preHandler: authMiddleware,
+    schema: {
+      description: 'Update user profile',
+      tags: ['auth'],
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 2 },
+          email: { type: 'string', format: 'email' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            email: { type: 'string' },
+            name: { type: 'string' },
+            role: { type: 'string' },
+            tenantId: { type: 'string' },
+            contractorId: { type: ['string', 'null'] },
+            isApproved: { type: 'boolean' },
+            createdAt: { type: 'string' },
+            tenant: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                plan: { type: 'string' }
+              }
+            },
+            contractor: {
+              type: ['object', 'null'],
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                document: { type: 'string' },
+                specialty: { type: 'array', items: { type: 'string' } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const body = updateProfileSchema.parse(request.body)
+      const result = await authService.updateProfile(
+        (request as any).user.userId,
+        body
+      )
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return (reply as any).status(400).send({
+          error: 'Falha ao atualizar perfil',
           message: error.message
         })
       }

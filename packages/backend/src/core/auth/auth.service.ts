@@ -12,9 +12,24 @@ export interface RegisterInput {
   tenantDocument: string
 }
 
+export interface RegisterContractorInput {
+  email: string
+  password: string
+  name: string
+  tenantDocument: string
+  document: string
+  specialty: string[]
+  contacts?: any
+}
+
 export interface LoginInput {
   email: string
   password: string
+}
+
+export interface UpdateProfileInput {
+  name?: string
+  email?: string
 }
 
 export interface AuthResponse {
@@ -24,6 +39,8 @@ export interface AuthResponse {
     name: string
     role: string
     tenantId: string
+    contractorId?: string | null
+    isApproved: boolean
   }
   tenant: {
     id: string
@@ -76,14 +93,15 @@ export class AuthService {
         }
       })
 
-      // Create user (admin of the tenant)
+      // Create user (ROOT of the tenant)
       const user = await tx.user.create({
         data: {
           email: input.email,
           password: hashedPassword,
           name: input.name,
-          role: 'ADMIN',
+          role: 'ROOT',
           tenantId: tenant.id,
+          isApproved: true,
           permissions: {}
         }
       })
@@ -105,7 +123,9 @@ export class AuthService {
         email: result.user.email,
         name: result.user.name,
         role: result.user.role,
-        tenantId: result.tenant.id
+        tenantId: result.tenant.id,
+        contractorId: null,
+        isApproved: true
       },
       tenant: {
         id: result.tenant.id,
@@ -114,6 +134,63 @@ export class AuthService {
       },
       tokens
     }
+  }
+
+  /**
+   * Register contractor (auto-cadastro)
+   */
+  async registerContractor(input: RegisterContractorInput): Promise<{ message: string }> {
+    // Check if user already exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: input.email }
+    })
+
+    if (existingUser) {
+      throw new Error('Já existe um usuário com este email')
+    }
+
+    // Find tenant by document (CNPJ)
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { document: input.tenantDocument }
+    })
+
+    if (!tenant) {
+      throw new Error('Empresa não encontrada. Verifique o CNPJ informado.')
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS)
+
+    // Create contractor and user in transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Create contractor
+      const contractor = await tx.contractor.create({
+        data: {
+          tenantId: tenant.id,
+          name: input.name,
+          document: input.document,
+          specialty: input.specialty,
+          contacts: input.contacts || {},
+          isActive: true,
+        }
+      })
+
+      // Create user with role CONTRACTOR, isApproved = false
+      await tx.user.create({
+        data: {
+          email: input.email,
+          password: hashedPassword,
+          name: input.name,
+          role: 'CONTRACTOR',
+          tenantId: tenant.id,
+          contractorId: contractor.id,
+          isApproved: false,
+          permissions: {}
+        }
+      })
+    })
+
+    return { message: 'Cadastro realizado com sucesso. Aguardando aprovação da empresa.' }
   }
 
   /**
@@ -127,14 +204,24 @@ export class AuthService {
     })
 
     if (!user) {
-      throw new Error('Invalid email or password')
+      throw new Error('Email ou senha inválidos')
     }
 
     // Verify password
     const isValidPassword = await bcrypt.compare(input.password, user.password)
 
     if (!isValidPassword) {
-      throw new Error('Invalid email or password')
+      throw new Error('Email ou senha inválidos')
+    }
+
+    // Check if user is approved
+    if (!user.isApproved) {
+      throw new Error('Conta pendente de aprovação. Aguarde a aprovação da empresa.')
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      throw new Error('Conta desativada. Entre em contato com o administrador.')
     }
 
     // Generate tokens
@@ -142,7 +229,8 @@ export class AuthService {
       userId: user.id,
       tenantId: user.tenantId,
       email: user.email,
-      role: user.role
+      role: user.role,
+      contractorId: user.contractorId || undefined
     })
 
     return {
@@ -151,7 +239,9 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
-        tenantId: user.tenantId
+        tenantId: user.tenantId,
+        contractorId: user.contractorId,
+        isApproved: user.isApproved
       },
       tenant: {
         id: user.tenant.id,
@@ -183,7 +273,8 @@ export class AuthService {
       userId: user.id,
       tenantId: user.tenantId,
       email: user.email,
-      role: user.role
+      role: user.role,
+      contractorId: user.contractorId || undefined
     })
 
     return tokens
@@ -202,6 +293,14 @@ export class AuthService {
             name: true,
             plan: true
           }
+        },
+        contractor: {
+          select: {
+            id: true,
+            name: true,
+            document: true,
+            specialty: true
+          }
         }
       }
     })
@@ -216,9 +315,37 @@ export class AuthService {
       name: user.name,
       role: user.role,
       tenantId: user.tenantId,
+      contractorId: user.contractorId,
+      isApproved: user.isApproved,
       createdAt: user.createdAt,
-      tenant: user.tenant
+      tenant: user.tenant,
+      contractor: user.contractor || null
     }
+  }
+
+  /**
+   * Update user profile
+   */
+  async updateProfile(userId: string, input: UpdateProfileInput) {
+    if (input.email) {
+      const existing = await this.prisma.user.findFirst({
+        where: { email: input.email, NOT: { id: userId } }
+      })
+      if (existing) {
+        throw new Error('Já existe um usuário com este email')
+      }
+    }
+
+    const data: any = {}
+    if (input.name !== undefined) data.name = input.name
+    if (input.email !== undefined) data.email = input.email
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data
+    })
+
+    return this.getUserById(userId)
   }
 
   /**

@@ -13,6 +13,8 @@ import { Contractors } from './pages/Contractors'
 import { ContractorDetail } from './pages/contractors/ContractorDetail'
 import { ActivityTemplates } from './pages/settings/ActivityTemplates'
 import { ActivityTemplateEditor } from './pages/settings/ActivityTemplateEditor'
+import { Users } from './pages/Users'
+import { Profile } from './pages/Profile'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -32,6 +34,8 @@ function App() {
           {/* Public Routes */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/register-contractor" element={<Navigate to="/register" replace />} />
+          <Route path="/pending-approval" element={<PendingApproval />} />
 
           {/* Protected Routes */}
           <Route
@@ -54,10 +58,11 @@ function App() {
             <Route path="financial" element={<ComingSoon title="Financeiro" />} />
             <Route path="contracts" element={<ComingSoon title="Contratos" />} />
             <Route path="reports" element={<ComingSoon title="Relatórios" />} />
-            <Route path="profile" element={<ComingSoon title="Meu Perfil" />} />
+            <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<ComingSoon title="Configurações" />} />
             <Route path="settings/templates" element={<ActivityTemplates />} />
             <Route path="settings/templates/:id" element={<ActivityTemplateEditor />} />
+            <Route path="users" element={<Users />} />
           </Route>
 
           {/* Catch all - redirect to home */}
@@ -78,6 +83,43 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>
+}
+
+// Pending approval page
+function PendingApproval() {
+  const { user, clearAuth } = useAuthStore()
+
+  const handleLogout = () => {
+    clearAuth()
+    window.location.href = '/login'
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-6">
+      <div className="w-full max-w-md text-center">
+        <div className="rounded-lg bg-white p-8 shadow-sm border border-neutral-200">
+          <div className="mx-auto h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+            <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-semibold text-neutral-900">Aguardando Aprovação</h2>
+          <p className="mt-3 text-neutral-600">
+            Olá{user?.name ? `, ${user.name}` : ''}! Seu cadastro foi recebido e está aguardando aprovação da empresa.
+          </p>
+          <p className="mt-2 text-sm text-neutral-500">
+            Você receberá acesso assim que um administrador aprovar sua conta.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="mt-6 text-sm font-medium text-primary-600 hover:text-primary-700"
+          >
+            Sair e voltar ao login
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Coming soon placeholder

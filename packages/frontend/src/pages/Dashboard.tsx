@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { projectsAPI } from '@/lib/api-client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -27,7 +28,7 @@ const statusLabel: Record<string, string> = {
 export function Dashboard() {
   const { user, tenant } = useAuthStore()
   const navigate = useNavigate()
-  const canCreate = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const canCreate = usePermission('projects:create')
 
   const { data: dashboardStats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],

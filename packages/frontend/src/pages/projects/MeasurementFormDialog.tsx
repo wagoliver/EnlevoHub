@@ -85,13 +85,15 @@ export function MeasurementFormDialog({
   )
   const currentProgress = selectedUnitActivity?.progress ?? 0
 
-  // When activity changes, reset unitActivityId if it's no longer valid
+  // When activity changes, auto-select unitActivityId if only one (e.g. GENERAL scope)
+  // or reset if current selection is no longer valid
   useEffect(() => {
     if (activityId && selectedActivity) {
-      const uaIds = (selectedActivity.unitActivities || []).map(
-        (ua: any) => ua.id
-      )
-      if (unitActivityId && !uaIds.includes(unitActivityId)) {
+      const uas = selectedActivity.unitActivities || []
+      const uaIds = uas.map((ua: any) => ua.id)
+      if (uas.length === 1) {
+        setUnitActivityId(uas[0].id)
+      } else if (unitActivityId && !uaIds.includes(unitActivityId)) {
         setUnitActivityId('')
       }
     }
@@ -170,6 +172,11 @@ export function MeasurementFormDialog({
       return
     }
 
+    if (unitActivities.length > 0 && !unitActivityId) {
+      toast.error('Selecione uma unidade')
+      return
+    }
+
     if (progress < 0 || progress > 100) {
       toast.error('Progresso deve estar entre 0 e 100')
       return
@@ -186,7 +193,7 @@ export function MeasurementFormDialog({
       data.unitActivityId = unitActivityId
     }
 
-    if (contractorId) {
+    if (contractorId && contractorId !== 'none') {
       data.contractorId = contractorId
     }
 
@@ -224,10 +231,10 @@ export function MeasurementFormDialog({
             </Select>
           </div>
 
-          {/* UnitActivity Select */}
-          {unitActivities.length > 0 && (
+          {/* UnitActivity Select - show only when multiple units */}
+          {unitActivities.length > 1 && (
             <div>
-              <Label htmlFor="measurement-unit-activity">Unidade</Label>
+              <Label htmlFor="measurement-unit-activity">Unidade *</Label>
               <Select
                 value={unitActivityId}
                 onValueChange={setUnitActivityId}
@@ -247,6 +254,12 @@ export function MeasurementFormDialog({
               </Select>
             </div>
           )}
+          {unitActivities.length === 1 && (
+            <p className="text-sm text-neutral-500">
+              Escopo: <span className="font-medium text-neutral-700">{unitActivities[0].unit?.code || 'Atividade geral (completa)'}</span>
+              {' '}- {Math.round(unitActivities[0].progress ?? 0)}% atual
+            </p>
+          )}
 
           {/* Contractor Select */}
           <div>
@@ -263,14 +276,17 @@ export function MeasurementFormDialog({
               <SelectContent>
                 <SelectItem value="none">Nenhum</SelectItem>
                 {(Array.isArray(contractors) ? contractors : []).map(
-                  (contractor: any) => (
-                    <SelectItem
-                      key={contractor.id}
-                      value={contractor.id}
-                    >
-                      {contractor.name}
-                    </SelectItem>
-                  )
+                  (item: any) => {
+                    const c = item.contractor || item
+                    return (
+                      <SelectItem
+                        key={c.id}
+                        value={c.id}
+                      >
+                        {c.name}
+                      </SelectItem>
+                    )
+                  }
                 )}
               </SelectContent>
             </Select>

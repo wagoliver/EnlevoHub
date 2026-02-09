@@ -6,10 +6,15 @@ interface PrivateRouteProps {
 }
 
 export function PrivateRoute({ children }: PrivateRouteProps) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  // Redirect unapproved users to pending approval page
+  if (user && user.isApproved === false) {
+    return <Navigate to="/pending-approval" replace />
   }
 
   return <>{children}</>

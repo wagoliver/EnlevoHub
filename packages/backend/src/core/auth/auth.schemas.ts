@@ -43,3 +43,27 @@ export const changePasswordSchema = z.object({
 })
 
 export type ChangePasswordSchema = z.infer<typeof changePasswordSchema>
+
+// Register contractor schema
+export const registerContractorSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z
+    .string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres')
+    .regex(/[A-Z]/, 'Senha deve conter pelo menos uma letra maiúscula')
+    .regex(/[a-z]/, 'Senha deve conter pelo menos uma letra minúscula')
+    .regex(/[0-9]/, 'Senha deve conter pelo menos um número'),
+  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
+  tenantDocument: z.string().min(11, 'CNPJ da empresa é obrigatório'),
+  document: z.string().min(11, 'CPF/CNPJ do empreiteiro é obrigatório'),
+  specialty: z.array(z.string()).min(1, 'Pelo menos uma especialidade é obrigatória'),
+  contacts: z.any(),
+})
+
+export type RegisterContractorSchema = z.infer<typeof registerContractorSchema>
+
+// Update profile schema
+export const updateProfileSchema = z.object({
+  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').optional(),
+  email: z.string().email('Email inválido').optional(),
+})

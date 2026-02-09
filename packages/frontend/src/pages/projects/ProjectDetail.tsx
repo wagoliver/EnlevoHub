@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { projectsAPI } from '@/lib/api-client'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -85,9 +85,8 @@ export function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
-  const canDelete = user?.role === 'ADMIN'
+  const canEdit = usePermission('projects:edit')
+  const canDelete = usePermission('projects:delete')
   const [showEditDialog, setShowEditDialog] = useState(false)
 
   const { data: project, isLoading } = useQuery({

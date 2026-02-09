@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { projectsAPI } from '@/lib/api-client'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -60,8 +60,7 @@ interface MeasurementsTabProps {
 
 export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
-  const canReview = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const canReview = usePermission('measurements:approve')
 
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('ALL')

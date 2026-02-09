@@ -202,7 +202,20 @@ export const authAPI = {
     tenantDocument: string
   }) => apiClient.post('/auth/register', data),
 
+  registerContractor: (data: {
+    email: string
+    password: string
+    name: string
+    tenantDocument: string
+    document: string
+    specialty: string[]
+    contacts: any
+  }) => apiClient.post('/auth/register-contractor', data),
+
   getMe: () => apiClient.get('/auth/me'),
+
+  updateProfile: (data: { name?: string; email?: string }) =>
+    apiClient.patch('/auth/profile', data),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     apiClient.post('/auth/change-password', { currentPassword, newPassword }),
@@ -342,6 +355,19 @@ export const contractorsAPI = {
     apiClient.delete<any>(`/contractors/${contractorId}/projects/${projectId}`),
   listByProject: (projectId: string) =>
     apiClient.get<any>(`/contractors/project/${projectId}`),
+}
+
+export const usersAPI = {
+  list: () => apiClient.get<any>('/users'),
+  create: (data: {
+    email: string
+    password: string
+    name: string
+    role: string
+  }) => apiClient.post<any>('/users', data),
+  update: (id: string, data: any) => apiClient.patch<any>(`/users/${id}`, data),
+  approve: (id: string) => apiClient.post<any>(`/users/${id}/approve`),
+  reject: (id: string) => apiClient.post<any>(`/users/${id}/reject`),
 }
 
 export const activityTemplatesAPI = {

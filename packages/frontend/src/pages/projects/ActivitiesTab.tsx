@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { projectsAPI } from '@/lib/api-client'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -240,8 +240,7 @@ function ActivityRow({
 
 export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const canEdit = usePermission('activities:edit')
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [showAddDialog, setShowAddDialog] = useState(false)

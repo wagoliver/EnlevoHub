@@ -40,7 +40,7 @@ import {
   User,
   ImageIcon,
 } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 
 const evolutionFormSchema = z.object({
   date: z.string().min(1, 'Data é obrigatória'),
@@ -59,8 +59,7 @@ export function EvolutionTimeline({ projectId }: EvolutionTimelineProps) {
   const [showForm, setShowForm] = useState(false)
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([])
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const canEdit = usePermission('projects:edit')
 
   const { data: evolutions = [], isLoading } = useQuery({
     queryKey: ['evolutions', projectId],

@@ -1,8 +1,10 @@
 // Shared TypeScript types
 
 export enum UserRole {
-  ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
+  ROOT = 'ROOT',
+  ENGINEER = 'ENGINEER',
+  ADMIN_STAFF = 'ADMIN_STAFF',
+  CONTRACTOR = 'CONTRACTOR',
   VIEWER = 'VIEWER',
 }
 

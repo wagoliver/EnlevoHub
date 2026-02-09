@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { createAuthMiddleware } from '../../core/auth/auth.middleware'
 import { JWTService } from '../../core/auth/jwt.service'
 import { hasPermission } from '../../core/rbac/permissions'
+import { getContractorScope } from '../../core/rbac/contractor-filter'
 import { ProjectActivityService } from './project-activity.service'
 import { MeasurementService } from './measurement.service'
 import { UploadService } from '../../core/projects/upload.service'
@@ -280,7 +281,8 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string }
       const query = listMeasurementsQuerySchema.parse(request.query)
-      const result = await measurementService.listByProject(getTenantId(request), id, query)
+      const scope = await getContractorScope(request, fastify.prisma)
+      const result = await measurementService.listByProject(getTenantId(request), id, query, scope)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {
@@ -307,11 +309,13 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string }
       const body = createMeasurementSchema.parse(request.body)
+      const scope = await getContractorScope(request, fastify.prisma)
       const measurement = await measurementService.create(
         getTenantId(request),
         id,
         getUserId(request),
-        body
+        body,
+        scope
       )
       return reply.status(201).send(measurement)
     } catch (error) {

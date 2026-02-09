@@ -143,7 +143,7 @@ export async function tenantRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       // Check if user is admin
-      if ((request as any).user.role !== 'ADMIN') {
+      if ((request as any).user.role !== 'ROOT') {
         return (reply as any).status(403).send({
           error: 'Forbidden',
           message: 'Only admins can update tenant settings'

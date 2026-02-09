@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { LogOut, Settings, User } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth.store'
+import { useAuthStore, Role } from '@/stores/auth.store'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -10,6 +10,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+
+const ROLE_LABELS: Record<Role, string> = {
+  ROOT: 'Root',
+  ENGINEER: 'Engenheiro',
+  ADMIN_STAFF: 'Administrativo',
+  CONTRACTOR: 'Empreiteiro',
+  VIEWER: 'Visualizador',
+}
+
+const ROLE_COLORS: Record<Role, string> = {
+  ROOT: 'bg-red-100 text-red-700',
+  ENGINEER: 'bg-blue-100 text-blue-700',
+  ADMIN_STAFF: 'bg-amber-100 text-amber-700',
+  CONTRACTOR: 'bg-green-100 text-green-700',
+  VIEWER: 'bg-neutral-100 text-neutral-700',
+}
 
 export function Header() {
   const navigate = useNavigate()
@@ -29,17 +45,12 @@ export function Header() {
     return user.name.substring(0, 2).toUpperCase()
   }
 
+  const getRoleLabel = (role: string) => {
+    return ROLE_LABELS[role as Role] || role
+  }
+
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'ADMIN':
-        return 'bg-primary-100 text-primary-700'
-      case 'MANAGER':
-        return 'bg-accent-100 text-accent-700'
-      case 'VIEWER':
-        return 'bg-neutral-100 text-neutral-700'
-      default:
-        return 'bg-neutral-100 text-neutral-700'
-    }
+    return ROLE_COLORS[role as Role] || 'bg-neutral-100 text-neutral-700'
   }
 
   return (
@@ -67,7 +78,7 @@ export function Header() {
                       user.role
                     )}`}
                   >
-                    {user.role}
+                    {getRoleLabel(user.role)}
                   </span>
                 </div>
               </div>

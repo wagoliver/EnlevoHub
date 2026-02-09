@@ -3,6 +3,7 @@ import { authRoutes } from '../core/auth'
 import { tenantRoutes } from '../core/tenancy'
 import { rbacRoutes } from '../core/rbac'
 import { projectRoutes } from '../core/projects'
+import { userRoutes } from '../core/users'
 import { contractorRoutes } from '../modules/contractors'
 import { activityTemplateRoutes } from '../modules/activity-templates'
 import { projectActivityRoutes } from '../modules/project-activities'
@@ -19,6 +20,9 @@ export function registerRoutes(server: FastifyInstance) {
 
       // RBAC routes
       api.register(rbacRoutes)
+
+      // User management routes
+      api.register(userRoutes, { prefix: '/users' })
 
       // Project routes
       api.register(projectRoutes, { prefix: '/projects' })

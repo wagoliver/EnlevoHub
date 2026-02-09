@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { createAuthMiddleware } from '../auth/auth.middleware'
 import { JWTService } from '../auth/jwt.service'
 import { hasPermission } from '../rbac/permissions'
+import { getContractorScope } from '../rbac/contractor-filter'
 import { ProjectService } from './project.service'
 import { EvolutionService } from './evolution.service'
 import { UploadService } from './upload.service'
@@ -62,7 +63,8 @@ export async function projectRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const query = listProjectsQuerySchema.parse(request.query)
-      const result = await projectService.list(getTenantId(request), query)
+      const scope = await getContractorScope(request, fastify.prisma)
+      const result = await projectService.list(getTenantId(request), query, scope)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {
@@ -128,7 +130,8 @@ export async function projectRoutes(fastify: FastifyInstance) {
     },
   }, async (request, reply) => {
     try {
-      const stats = await projectService.getDashboardStats(getTenantId(request))
+      const scope = await getContractorScope(request, fastify.prisma)
+      const stats = await projectService.getDashboardStats(getTenantId(request), scope)
       return reply.send(stats)
     } catch (error) {
       if (error instanceof Error) {

@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import { CreateProjectInput, UpdateProjectInput, ListProjectsQuery } from './project.schemas'
+import { ContractorScope } from '../rbac/contractor-filter'
 
 export class ProjectService {
   constructor(private prisma: PrismaClient) {}
@@ -31,7 +32,7 @@ export class ProjectService {
     return this.serializeProject(project)
   }
 
-  async list(tenantId: string, query: ListProjectsQuery) {
+  async list(tenantId: string, query: ListProjectsQuery, scope?: ContractorScope) {
     const { page, limit, search, status, sortBy, sortOrder } = query
     const skip = (page - 1) * limit
 
@@ -44,6 +45,8 @@ export class ProjectService {
           { description: { contains: search, mode: 'insensitive' as const } },
         ],
       }),
+      // CONTRACTOR: only projects assigned to them
+      ...(scope?.projectIds && { id: { in: scope.projectIds } }),
     }
 
     const [projects, total] = await Promise.all([
@@ -244,7 +247,12 @@ export class ProjectService {
     }
   }
 
-  async getDashboardStats(tenantId: string) {
+  async getDashboardStats(tenantId: string, scope?: ContractorScope) {
+    const projectFilter: Prisma.ProjectWhereInput = {
+      tenantId,
+      ...(scope?.projectIds && { id: { in: scope.projectIds } }),
+    }
+
     const [
       totalProjects,
       projectsByStatus,
@@ -252,22 +260,22 @@ export class ProjectService {
       unitsByStatus,
       recentProjects,
     ] = await Promise.all([
-      this.prisma.project.count({ where: { tenantId } }),
+      this.prisma.project.count({ where: projectFilter }),
       this.prisma.project.groupBy({
         by: ['status'],
-        where: { tenantId },
+        where: projectFilter,
         _count: true,
       }),
       this.prisma.unit.count({
-        where: { project: { tenantId } },
+        where: { project: projectFilter },
       }),
       this.prisma.unit.groupBy({
         by: ['status'],
-        where: { project: { tenantId } },
+        where: { project: projectFilter },
         _count: true,
       }),
       this.prisma.project.findMany({
-        where: { tenantId },
+        where: projectFilter,
         orderBy: { updatedAt: 'desc' },
         take: 5,
         include: {

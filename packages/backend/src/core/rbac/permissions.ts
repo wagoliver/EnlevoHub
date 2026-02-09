@@ -35,6 +35,7 @@ export const Permissions = {
   ACTIVITIES_DELETE: 'activities:delete',
 
   // Measurements
+  MEASUREMENTS_VIEW: 'measurements:view',
   MEASUREMENTS_CREATE: 'measurements:create',
   MEASUREMENTS_APPROVE: 'measurements:approve',
 
@@ -84,16 +85,22 @@ export type Permission = typeof Permissions[keyof typeof Permissions]
 
 /**
  * Role definitions with their permissions
+ *
+ * ROOT = admin total (antigo ADMIN)
+ * ENGINEER = gerencia obra, aprova medicoes (antigo MANAGER)
+ * ADMIN_STAFF = financeiro, compras, fornecedores (sem aprovar medicoes)
+ * CONTRACTOR = login proprio, ve apenas atividades atribuidas
+ * VIEWER = somente leitura
  */
 export const Roles = {
-  ADMIN: {
-    name: 'ADMIN',
-    description: 'Full system access',
-    permissions: Object.values(Permissions) as Permission[] // All permissions
+  ROOT: {
+    name: 'ROOT',
+    description: 'Acesso total ao sistema',
+    permissions: Object.values(Permissions) as Permission[]
   },
-  MANAGER: {
-    name: 'MANAGER',
-    description: 'Can manage projects and team',
+  ENGINEER: {
+    name: 'ENGINEER',
+    description: 'Gerencia obra, aprova medições',
     permissions: [
       // Projects
       Permissions.PROJECTS_VIEW,
@@ -105,41 +112,90 @@ export const Roles = {
       Permissions.UNITS_CREATE,
       Permissions.UNITS_EDIT,
 
-      // Suppliers
+      // Suppliers (view only)
       Permissions.SUPPLIERS_VIEW,
-      Permissions.SUPPLIERS_CREATE,
-      Permissions.SUPPLIERS_EDIT,
 
       // Contractors
       Permissions.CONTRACTORS_VIEW,
       Permissions.CONTRACTORS_CREATE,
       Permissions.CONTRACTORS_EDIT,
 
-      // Activities
+      // Activities (full)
       Permissions.ACTIVITIES_VIEW,
       Permissions.ACTIVITIES_CREATE,
       Permissions.ACTIVITIES_EDIT,
       Permissions.ACTIVITIES_DELETE,
 
-      // Measurements
+      // Measurements (create + approve)
+      Permissions.MEASUREMENTS_VIEW,
       Permissions.MEASUREMENTS_CREATE,
       Permissions.MEASUREMENTS_APPROVE,
 
-      // Brokers
+      // Brokers (view only)
       Permissions.BROKERS_VIEW,
-      Permissions.BROKERS_CREATE,
-      Permissions.BROKERS_EDIT,
 
-      // Purchases
+      // Purchases (view only)
+      Permissions.PURCHASES_VIEW,
+
+      // Financial (view only)
+      Permissions.FINANCIAL_VIEW,
+
+      // Contracts
+      Permissions.CONTRACTS_VIEW,
+      Permissions.CONTRACTS_CREATE,
+      Permissions.CONTRACTS_EDIT,
+
+      // Users (view only)
+      Permissions.USERS_VIEW,
+
+      // Tenant (view only)
+      Permissions.TENANT_VIEW,
+
+      // Reports
+      Permissions.REPORTS_VIEW,
+      Permissions.REPORTS_EXPORT,
+    ] as Permission[]
+  },
+  ADMIN_STAFF: {
+    name: 'ADMIN_STAFF',
+    description: 'Financeiro, compras, fornecedores',
+    permissions: [
+      // Projects (view only)
+      Permissions.PROJECTS_VIEW,
+
+      // Units (view only)
+      Permissions.UNITS_VIEW,
+
+      // Suppliers (full)
+      Permissions.SUPPLIERS_VIEW,
+      Permissions.SUPPLIERS_CREATE,
+      Permissions.SUPPLIERS_EDIT,
+      Permissions.SUPPLIERS_DELETE,
+
+      // Contractors (view only)
+      Permissions.CONTRACTORS_VIEW,
+
+      // Activities (view only)
+      Permissions.ACTIVITIES_VIEW,
+
+      // Measurements (view only)
+      Permissions.MEASUREMENTS_VIEW,
+
+      // Brokers (view only)
+      Permissions.BROKERS_VIEW,
+
+      // Purchases (full + approve)
       Permissions.PURCHASES_VIEW,
       Permissions.PURCHASES_CREATE,
       Permissions.PURCHASES_EDIT,
+      Permissions.PURCHASES_DELETE,
       Permissions.PURCHASES_APPROVE,
 
-      // Financial
+      // Financial (full + reports)
       Permissions.FINANCIAL_VIEW,
       Permissions.FINANCIAL_CREATE,
       Permissions.FINANCIAL_EDIT,
+      Permissions.FINANCIAL_DELETE,
       Permissions.FINANCIAL_REPORTS,
 
       // Contracts
@@ -158,41 +214,45 @@ export const Roles = {
       Permissions.REPORTS_EXPORT,
     ] as Permission[]
   },
-  VIEWER: {
-    name: 'VIEWER',
-    description: 'Read-only access',
+  CONTRACTOR: {
+    name: 'CONTRACTOR',
+    description: 'Empreiteiro - acesso restrito a atividades atribuídas',
     permissions: [
-      // Projects (view only)
+      // Projects (view - filtrado pelo backend ao escopo do empreiteiro)
       Permissions.PROJECTS_VIEW,
 
-      // Units (view only)
-      Permissions.UNITS_VIEW,
-
-      // Suppliers (view only)
-      Permissions.SUPPLIERS_VIEW,
-
-      // Contractors (view only)
-      Permissions.CONTRACTORS_VIEW,
-
-      // Activities (view only)
+      // Activities (view - filtrado ao escopo)
       Permissions.ACTIVITIES_VIEW,
 
-      // Brokers (view only)
-      Permissions.BROKERS_VIEW,
+      // Measurements (view + create - filtrado ao escopo)
+      Permissions.MEASUREMENTS_VIEW,
+      Permissions.MEASUREMENTS_CREATE,
 
-      // Purchases (view only)
-      Permissions.PURCHASES_VIEW,
+      // Contractors (view - apenas proprio)
+      Permissions.CONTRACTORS_VIEW,
 
-      // Financial (view only)
-      Permissions.FINANCIAL_VIEW,
-
-      // Contracts (view only)
+      // Contracts (view - apenas proprios)
       Permissions.CONTRACTS_VIEW,
 
-      // Tenant (view only)
+      // Financial (view - apenas proprio orcamento)
+      Permissions.FINANCIAL_VIEW,
+    ] as Permission[]
+  },
+  VIEWER: {
+    name: 'VIEWER',
+    description: 'Somente leitura',
+    permissions: [
+      Permissions.PROJECTS_VIEW,
+      Permissions.UNITS_VIEW,
+      Permissions.SUPPLIERS_VIEW,
+      Permissions.CONTRACTORS_VIEW,
+      Permissions.ACTIVITIES_VIEW,
+      Permissions.MEASUREMENTS_VIEW,
+      Permissions.BROKERS_VIEW,
+      Permissions.PURCHASES_VIEW,
+      Permissions.FINANCIAL_VIEW,
+      Permissions.CONTRACTS_VIEW,
       Permissions.TENANT_VIEW,
-
-      // Reports (view only)
       Permissions.REPORTS_VIEW,
     ] as Permission[]
   }

@@ -4,11 +4,12 @@ import {
   ReviewMeasurementInput,
   ListMeasurementsQuery,
 } from './project-activity.schemas'
+import { ContractorScope } from '../../core/rbac/contractor-filter'
 
 export class MeasurementService {
   constructor(private prisma: PrismaClient) {}
 
-  async listByProject(tenantId: string, projectId: string, query: ListMeasurementsQuery) {
+  async listByProject(tenantId: string, projectId: string, query: ListMeasurementsQuery, scope?: ContractorScope) {
     const { page, limit, status, activityId, contractorId } = query
     const skip = (page - 1) * limit
 
@@ -24,6 +25,8 @@ export class MeasurementService {
       ...(status && { status }),
       ...(activityId && { activityId }),
       ...(contractorId && { contractorId }),
+      // CONTRACTOR: only their own measurements
+      ...(scope?.contractorId && { contractorId: scope.contractorId }),
     }
 
     const [measurements, total] = await Promise.all([
@@ -87,7 +90,8 @@ export class MeasurementService {
     tenantId: string,
     projectId: string,
     userId: string,
-    data: CreateMeasurementInput
+    data: CreateMeasurementInput,
+    scope?: ContractorScope
   ) {
     // Verify activity belongs to project in tenant
     const activity = await this.prisma.projectActivity.findFirst({
@@ -105,12 +109,15 @@ export class MeasurementService {
       previousProgress = Number(ua.progress)
     }
 
+    // Auto-set contractorId for CONTRACTOR users
+    const effectiveContractorId = scope?.contractorId || data.contractorId || null
+
     const measurement = await this.prisma.measurement.create({
       data: {
         tenantId,
         activityId: data.activityId,
         unitActivityId: data.unitActivityId || null,
-        contractorId: data.contractorId || null,
+        contractorId: effectiveContractorId,
         reportedBy: userId,
         progress: data.progress,
         previousProgress,

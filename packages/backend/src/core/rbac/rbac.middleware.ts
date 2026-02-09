@@ -130,5 +130,5 @@ export function requireAnyRole(roles: Role[]) {
  * Admin only access
  */
 export function requireAdmin() {
-  return requireRole('ADMIN')
+  return requireRole('ROOT')
 }

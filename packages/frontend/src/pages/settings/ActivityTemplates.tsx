@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { activityTemplatesAPI } from '@/lib/api-client'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -37,8 +37,7 @@ import {
 export function ActivityTemplates() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
-  const canCreate = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const canCreate = usePermission('activities:create')
 
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')

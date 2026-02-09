@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { contractorsAPI, projectsAPI } from '@/lib/api-client'
-import { useAuthStore } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -72,9 +72,8 @@ export function ContractorDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'MANAGER'
-  const canDelete = user?.role === 'ADMIN'
+  const canEdit = usePermission('contractors:edit')
+  const canDelete = usePermission('contractors:delete')
 
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showAssignDialog, setShowAssignDialog] = useState(false)

@@ -44,20 +44,23 @@ enum Plan {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  tenantId  String
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(VIEWER)
-  permissions Json?
-  isActive  Boolean  @default(true)
-  lastLogin DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  tenantId     String
+  email        String   @unique
+  password     String
+  name         String
+  role         Role     @default(VIEWER)
+  permissions  Json?
+  isActive     Boolean  @default(true)
+  isApproved   Boolean  @default(true)
+  contractorId String?  @unique
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contractor        Contractor?         @relation(fields: [contractorId], references: [id])
   auditLogs         AuditLog[]
   projectEvolutions ProjectEvolution[]
   transactions      FinancialTransaction[]
@@ -70,9 +73,11 @@ model User {
 }
 
 enum Role {
-  ADMIN
-  MANAGER
-  VIEWER
+  ROOT          // (antigo ADMIN) acesso total
+  ENGINEER      // (antigo MANAGER) aprova medicoes, gerencia obra
+  ADMIN_STAFF   // financeiro, compras, fornecedores
+  CONTRACTOR    // empreiteiro - acesso restrito
+  VIEWER        // somente leitura
 }
 
 model AuditLog {
@@ -341,6 +346,7 @@ model Contractor {
 
   // Relations
   tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User?
   projects     ContractorProject[]
   contracts    Contract[]
   measurements Measurement[]

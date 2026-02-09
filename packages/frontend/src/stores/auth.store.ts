@@ -1,12 +1,17 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export type Role = 'ROOT' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'VIEWER'
+
 export interface User {
   id: string
   email: string
   name: string
-  role: 'ADMIN' | 'MANAGER' | 'VIEWER'
+  role: Role
   tenantId: string
+  contractorId?: string | null
+  isApproved?: boolean
+  permissions?: string[]
 }
 
 export interface Tenant {
@@ -30,6 +35,7 @@ interface AuthState {
     tokens: { accessToken: string; refreshToken: string }
   }) => void
   setTokens: (accessToken: string, refreshToken: string) => void
+  setPermissions: (permissions: string[]) => void
   clearAuth: () => void
   updateUser: (user: Partial<User>) => void
 }
@@ -57,6 +63,12 @@ export const useAuthStore = create<AuthState>()(
       // Update tokens (refresh)
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
+
+      // Set user permissions (loaded after login)
+      setPermissions: (permissions) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, permissions } : null,
+        })),
 
       // Clear auth (logout)
       clearAuth: () =>

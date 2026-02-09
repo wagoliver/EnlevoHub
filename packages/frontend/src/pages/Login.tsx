@@ -100,6 +100,15 @@ export function Login() {
               )}
             </div>
 
+            <div className="flex justify-end">
+              <Link
+                to="/forgot-password"
+                className="text-sm font-medium text-primary-600 hover:text-primary-700"
+              >
+                Esqueci minha senha
+              </Link>
+            </div>
+
             {/* Submit Button */}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (

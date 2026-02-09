@@ -1,6 +1,8 @@
+import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 import { PrismaClient, User, Tenant } from '@prisma/client'
 import { JWTService, TokenPair } from './jwt.service'
+import { EmailService } from '../email'
 
 const SALT_ROUNDS = 12
 
@@ -51,10 +53,14 @@ export interface AuthResponse {
 }
 
 export class AuthService {
+  private emailService: EmailService
+
   constructor(
     private prisma: PrismaClient,
     private jwtService: JWTService
-  ) {}
+  ) {
+    this.emailService = new EmailService(prisma)
+  }
 
   /**
    * Register new user and tenant
@@ -375,5 +381,101 @@ export class AuthService {
       where: { id: userId },
       data: { password: hashedPassword }
     })
+  }
+
+  /**
+   * Forgot password - sends reset email
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const genericMessage = 'Se o email estiver cadastrado, você receberá um link para redefinir sua senha.'
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { tenant: true },
+    })
+
+    if (!user) {
+      return { message: genericMessage }
+    }
+
+    const smtp = await this.emailService.getSmtpSettings(user.tenantId)
+    if (!smtp) {
+      return { message: genericMessage }
+    }
+
+    // Invalidate previous unused tokens
+    await this.prisma.passwordResetToken.updateMany({
+      where: {
+        userId: user.id,
+        usedAt: null,
+      },
+      data: {
+        usedAt: new Date(),
+      },
+    })
+
+    // Generate token
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt,
+      },
+    })
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`
+
+    try {
+      await this.emailService.sendPasswordResetEmail(
+        user.email,
+        resetLink,
+        user.tenant.name,
+        smtp
+      )
+    } catch (error) {
+      console.error('Failed to send password reset email:', error)
+    }
+
+    return { message: genericMessage }
+  }
+
+  /**
+   * Reset password using token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { token },
+    })
+
+    if (!resetToken) {
+      throw new Error('Token inválido ou expirado')
+    }
+
+    if (resetToken.usedAt) {
+      throw new Error('Este link já foi utilizado')
+    }
+
+    if (resetToken.expiresAt < new Date()) {
+      throw new Error('Este link expirou. Solicite um novo.')
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS)
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: resetToken.id },
+        data: { usedAt: new Date() },
+      }),
+    ])
+
+    return { message: 'Senha redefinida com sucesso' }
   }
 }

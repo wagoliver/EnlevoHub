@@ -12,6 +12,7 @@ import {
   BarChart3,
   ListChecks,
   UsersRound,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EnlevoLogo } from '@/components/EnlevoLogo'
@@ -89,6 +90,12 @@ const navigation: NavItem[] = [
     href: '/settings/templates',
     icon: ListChecks,
     permission: 'activities:create',
+  },
+  {
+    title: 'Email',
+    href: '/settings/email',
+    icon: Mail,
+    permission: 'tenant:edit',
   },
   {
     title: 'Usuários',

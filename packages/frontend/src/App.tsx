@@ -6,6 +6,9 @@ import { PrivateRoute } from './components/auth/PrivateRoute'
 import { MainLayout } from './components/layout/MainLayout'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
+import { ForgotPassword } from './pages/ForgotPassword'
+import { ResetPassword } from './pages/ResetPassword'
+import { EmailSettings } from './pages/settings/EmailSettings'
 import { Dashboard } from './pages/Dashboard'
 import { Projects } from './pages/Projects'
 import { ProjectDetail } from './pages/projects/ProjectDetail'
@@ -35,6 +38,8 @@ function App() {
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
           <Route path="/register-contractor" element={<Navigate to="/register" replace />} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/pending-approval" element={<PendingApproval />} />
 
           {/* Protected Routes */}
@@ -62,6 +67,7 @@ function App() {
             <Route path="settings" element={<ComingSoon title="Configurações" />} />
             <Route path="settings/templates" element={<ActivityTemplates />} />
             <Route path="settings/templates/:id" element={<ActivityTemplateEditor />} />
+            <Route path="settings/email" element={<EmailSettings />} />
             <Route path="users" element={<Users />} />
           </Route>
 

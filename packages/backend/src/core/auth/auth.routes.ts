@@ -8,7 +8,9 @@ import {
   refreshTokenSchema,
   changePasswordSchema,
   registerContractorSchema,
-  updateProfileSchema
+  updateProfileSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema
 } from './auth.schemas'
 
 export async function authRoutes(fastify: FastifyInstance) {
@@ -386,6 +388,81 @@ export async function authRoutes(fastify: FastifyInstance) {
       if (error instanceof Error) {
         return (reply as any).status(400).send({
           error: 'Password change failed',
+          message: error.message
+        })
+      }
+      throw error
+    }
+  })
+
+  // Forgot password (public)
+  fastify.post('/auth/forgot-password', {
+    schema: {
+      description: 'Request password reset email',
+      tags: ['auth'],
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', format: 'email' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const body = forgotPasswordSchema.parse(request.body)
+      const result = await authService.forgotPassword(body.email)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return (reply as any).status(400).send({
+          error: 'Falha na solicitação',
+          message: error.message
+        })
+      }
+      throw error
+    }
+  })
+
+  // Reset password (public)
+  fastify.post('/auth/reset-password', {
+    schema: {
+      description: 'Reset password using token',
+      tags: ['auth'],
+      body: {
+        type: 'object',
+        required: ['token', 'newPassword'],
+        properties: {
+          token: { type: 'string' },
+          newPassword: { type: 'string', minLength: 8 }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const body = resetPasswordSchema.parse(request.body)
+      const result = await authService.resetPassword(body.token, body.newPassword)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return (reply as any).status(400).send({
+          error: 'Falha ao redefinir senha',
           message: error.message
         })
       }

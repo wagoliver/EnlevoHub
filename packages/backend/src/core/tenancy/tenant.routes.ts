@@ -3,6 +3,7 @@ import { TenantService } from './tenant.service'
 import { createAuthMiddleware } from '../auth/auth.middleware'
 import { JWTService } from '../auth/jwt.service'
 import { getTenantId } from './tenant.middleware'
+import { EmailService } from '../email'
 import { z } from 'zod'
 
 const updateSettingsSchema = z.object({
@@ -21,13 +22,27 @@ const updateSettingsSchema = z.object({
     logo: z.string().optional(),
     primaryColor: z.string().optional(),
     secondaryColor: z.string().optional()
+  }).optional(),
+  smtp: z.object({
+    host: z.string().min(1),
+    port: z.number().min(1).max(65535),
+    secure: z.boolean(),
+    user: z.string().min(1),
+    password: z.string().min(1),
+    fromName: z.string().min(1),
+    fromEmail: z.string().email(),
   }).optional()
+})
+
+const testEmailSchema = z.object({
+  to: z.string().email('Email inválido'),
 })
 
 export async function tenantRoutes(fastify: FastifyInstance) {
   const jwtService = new JWTService(fastify)
   const authMiddleware = createAuthMiddleware(jwtService)
   const tenantService = new TenantService(fastify.prisma)
+  const emailService = new EmailService(fastify.prisma)
 
   // Get current tenant info
   fastify.get('/tenant', {
@@ -125,6 +140,18 @@ export async function tenantRoutes(fastify: FastifyInstance) {
               logo: { type: 'string' },
               primaryColor: { type: 'string' },
               secondaryColor: { type: 'string' }
+            }
+          },
+          smtp: {
+            type: 'object',
+            properties: {
+              host: { type: 'string' },
+              port: { type: 'number' },
+              secure: { type: 'boolean' },
+              user: { type: 'string' },
+              password: { type: 'string' },
+              fromName: { type: 'string' },
+              fromEmail: { type: 'string' }
             }
           }
         }
@@ -234,6 +261,64 @@ export async function tenantRoutes(fastify: FastifyInstance) {
       if (error instanceof Error) {
         return (reply as any).status(500).send({
           error: 'Internal server error',
+          message: error.message
+        })
+      }
+      throw error
+    }
+  })
+
+  // Send test email (ROOT only)
+  fastify.post('/tenant/settings/test-email', {
+    preHandler: authMiddleware,
+    schema: {
+      description: 'Send a test email to verify SMTP settings (ROOT only)',
+      tags: ['tenant'],
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['to'],
+        properties: {
+          to: { type: 'string', format: 'email' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      if ((request as any).user.role !== 'ROOT') {
+        return (reply as any).status(403).send({
+          error: 'Forbidden',
+          message: 'Apenas ROOT pode enviar email de teste'
+        })
+      }
+
+      const tenantId = getTenantId(request)
+      const body = testEmailSchema.parse(request.body)
+
+      const smtp = await emailService.getSmtpSettings(tenantId)
+      if (!smtp) {
+        return (reply as any).status(400).send({
+          error: 'SMTP não configurado',
+          message: 'Configure as credenciais SMTP antes de enviar um email de teste'
+        })
+      }
+
+      const tenant = await tenantService.getTenant(tenantId)
+      await emailService.sendTestEmail(body.to, tenant.name, smtp)
+
+      return reply.send({ message: 'Email de teste enviado com sucesso' })
+    } catch (error) {
+      if (error instanceof Error) {
+        return (reply as any).status(400).send({
+          error: 'Falha ao enviar email',
           message: error.message
         })
       }

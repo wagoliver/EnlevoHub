@@ -1,4 +1,5 @@
 import { PrismaClient, Tenant } from '@prisma/client'
+import { SmtpSettings } from '../email'
 
 export interface TenantSettings {
   maxProjects?: number
@@ -17,6 +18,7 @@ export interface TenantSettings {
     primaryColor?: string
     secondaryColor?: string
   }
+  smtp?: SmtpSettings
 }
 
 export class TenantService {
@@ -38,13 +40,29 @@ export class TenantService {
   }
 
   /**
-   * Update tenant settings
+   * Update tenant settings (deep merge)
    */
   async updateSettings(tenantId: string, settings: TenantSettings): Promise<Tenant> {
+    const current = await this.getSettings(tenantId)
+
+    const merged: TenantSettings = {
+      ...current,
+      ...settings,
+      features: { ...current.features, ...settings.features },
+      customization: { ...current.customization, ...settings.customization },
+      smtp: settings.smtp !== undefined
+        ? { ...current.smtp, ...settings.smtp } as SmtpSettings
+        : current.smtp,
+    }
+
+    // Preserve top-level numeric settings
+    if (settings.maxProjects !== undefined) merged.maxProjects = settings.maxProjects
+    if (settings.maxUsers !== undefined) merged.maxUsers = settings.maxUsers
+
     const tenant = await this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
-        settings: settings as any
+        settings: merged as any
       }
     })
 

@@ -61,8 +61,9 @@ model User {
   // Relations
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contractor        Contractor?         @relation(fields: [contractorId], references: [id])
-  auditLogs         AuditLog[]
-  projectEvolutions ProjectEvolution[]
+  auditLogs            AuditLog[]
+  passwordResetTokens  PasswordResetToken[]
+  projectEvolutions    ProjectEvolution[]
   transactions      FinancialTransaction[]
   measurementsReported Measurement[]    @relation("measurementReporter")
   measurementsReviewed Measurement[]    @relation("measurementReviewer")
@@ -98,6 +99,21 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 // ==================== PROJECTS & UNITS ====================

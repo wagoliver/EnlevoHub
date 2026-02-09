@@ -219,6 +219,12 @@ export const authAPI = {
 
   changePassword: (currentPassword: string, newPassword: string) =>
     apiClient.post('/auth/change-password', { currentPassword, newPassword }),
+
+  forgotPassword: (email: string) =>
+    apiClient.post('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    apiClient.post('/auth/reset-password', { token, newPassword }),
 }
 
 export const tenantAPI = {
@@ -227,6 +233,7 @@ export const tenantAPI = {
   updateSettings: (settings: any) => apiClient.patch('/tenant/settings', settings),
   getStatistics: () => apiClient.get('/tenant/statistics'),
   getUsers: () => apiClient.get('/tenant/users'),
+  sendTestEmail: (to: string) => apiClient.post('/tenant/settings/test-email', { to }),
 }
 
 export const rbacAPI = {

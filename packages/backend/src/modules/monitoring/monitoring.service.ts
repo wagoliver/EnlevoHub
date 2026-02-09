@@ -2,12 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
-
-function resolveStorageBasePath(): string {
-  return process.env.STORAGE_PATH
-    ? path.resolve(process.env.STORAGE_PATH)
-    : path.resolve(process.cwd(), 'storage')
-}
+import { getStoragePath } from '../../core/storage/storage-config'
 
 export class MonitoringService {
   constructor(private prisma: PrismaClient) {}
@@ -227,7 +222,7 @@ export class MonitoringService {
   }
 
   async getStorageMetrics() {
-    const storagePath = resolveStorageBasePath()
+    const storagePath = getStoragePath()
     const uploadsDir = path.join(storagePath, 'uploads', 'projects')
 
     // Disk usage

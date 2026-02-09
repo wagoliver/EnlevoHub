@@ -15,6 +15,7 @@ import {
   UsersRound,
   Settings,
   Gauge,
+  HardDrive,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EnlevoLogo } from '@/components/EnlevoLogo'
@@ -110,6 +111,12 @@ const settingsNavigation: NavItem[] = [
     href: '/users',
     icon: UsersRound,
     permission: 'users:view',
+  },
+  {
+    title: 'Armazenamento',
+    href: '/settings/storage',
+    icon: HardDrive,
+    role: 'ROOT',
   },
   {
     title: 'Performance',

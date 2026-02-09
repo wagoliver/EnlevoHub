@@ -1,12 +1,10 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import sharp from 'sharp'
+import { getStoragePath } from '../storage/storage-config'
 
 function resolveStorageDir(): string {
-  const base = process.env.STORAGE_PATH
-    ? path.resolve(process.env.STORAGE_PATH)
-    : path.resolve(process.cwd(), 'storage')
-  return path.join(base, 'uploads', 'projects')
+  return path.join(getStoragePath(), 'uploads', 'projects')
 }
 
 export class UploadService {
@@ -53,9 +51,6 @@ export class UploadService {
   }
 
   getStorageBasePath(): string {
-    const base = process.env.STORAGE_PATH
-      ? path.resolve(process.env.STORAGE_PATH)
-      : path.resolve(process.cwd(), 'storage')
-    return base
+    return getStoragePath()
   }
 }

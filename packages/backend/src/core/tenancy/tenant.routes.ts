@@ -5,6 +5,12 @@ import { JWTService } from '../auth/jwt.service'
 import { getTenantId } from './tenant.middleware'
 import { EmailService } from '../email'
 import { z } from 'zod'
+import {
+  getAvailableDrives,
+  testStoragePath,
+  getStorageConfig,
+  saveStoragePath,
+} from '../storage/storage-config'
 
 const updateSettingsSchema = z.object({
   maxProjects: z.number().optional(),
@@ -324,5 +330,167 @@ export async function tenantRoutes(fastify: FastifyInstance) {
       }
       throw error
     }
+  })
+
+  // Get available drives (ROOT only)
+  fastify.get('/tenant/settings/drives', {
+    preHandler: authMiddleware,
+    schema: {
+      description: 'List available drives/mount points on the server (ROOT only)',
+      tags: ['tenant'],
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              letter: { type: 'string' },
+              label: { type: 'string' },
+              type: { type: 'string' },
+              totalGB: { type: 'number' },
+              freeGB: { type: 'number' },
+              usedPercent: { type: 'number' },
+            }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if ((request as any).user.role !== 'ROOT') {
+      return (reply as any).status(403).send({
+        error: 'Forbidden',
+        message: 'Apenas ROOT pode listar drives'
+      })
+    }
+
+    const drives = getAvailableDrives()
+    return reply.send(drives)
+  })
+
+  // Test storage path (ROOT only)
+  fastify.post('/tenant/settings/storage-test', {
+    preHandler: authMiddleware,
+    schema: {
+      description: 'Test if a storage path is writable (ROOT only)',
+      tags: ['tenant'],
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['path'],
+        properties: {
+          path: { type: 'string' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            message: { type: 'string' },
+            freeGB: { type: 'number' },
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if ((request as any).user.role !== 'ROOT') {
+      return (reply as any).status(403).send({
+        error: 'Forbidden',
+        message: 'Apenas ROOT pode testar caminhos de storage'
+      })
+    }
+
+    const { path: targetPath } = request.body as { path: string }
+    if (!targetPath || targetPath.trim().length === 0) {
+      return reply.send({ success: false, message: 'Caminho nao pode ser vazio' })
+    }
+
+    const result = testStoragePath(targetPath.trim())
+    return reply.send(result)
+  })
+
+  // Get/Update storage config (ROOT only)
+  fastify.get('/tenant/settings/storage-config', {
+    preHandler: authMiddleware,
+    schema: {
+      description: 'Get current storage configuration (ROOT only)',
+      tags: ['tenant'],
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            storagePath: { type: 'string' },
+            source: { type: 'string' },
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if ((request as any).user.role !== 'ROOT') {
+      return (reply as any).status(403).send({
+        error: 'Forbidden',
+        message: 'Apenas ROOT pode ver configuracao de storage'
+      })
+    }
+
+    const config = getStorageConfig()
+    return reply.send(config)
+  })
+
+  fastify.put('/tenant/settings/storage-config', {
+    preHandler: authMiddleware,
+    schema: {
+      description: 'Save storage path configuration (ROOT only)',
+      tags: ['tenant'],
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['storagePath'],
+        properties: {
+          storagePath: { type: 'string' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            storagePath: { type: 'string' },
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if ((request as any).user.role !== 'ROOT') {
+      return (reply as any).status(403).send({
+        error: 'Forbidden',
+        message: 'Apenas ROOT pode alterar configuracao de storage'
+      })
+    }
+
+    const { storagePath } = request.body as { storagePath: string }
+    if (!storagePath || storagePath.trim().length === 0) {
+      return (reply as any).status(400).send({
+        error: 'Bad request',
+        message: 'storagePath e obrigatorio'
+      })
+    }
+
+    // Test before saving
+    const testResult = testStoragePath(storagePath.trim())
+    if (!testResult.success) {
+      return (reply as any).status(400).send({
+        error: 'Caminho invalido',
+        message: testResult.message,
+      })
+    }
+
+    saveStoragePath(storagePath.trim())
+    return reply.send({
+      message: 'Configuracao de storage salva com sucesso',
+      storagePath: storagePath.trim(),
+    })
   })
 }

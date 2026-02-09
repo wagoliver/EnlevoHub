@@ -9,6 +9,7 @@ import { Register } from './pages/Register'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
 import { EmailSettings } from './pages/settings/EmailSettings'
+import { StorageSettings } from './pages/settings/StorageSettings'
 import { Dashboard } from './pages/Dashboard'
 import { Projects } from './pages/Projects'
 import { ProjectDetail } from './pages/projects/ProjectDetail'
@@ -67,6 +68,7 @@ function App() {
             <Route path="reports" element={<ComingSoon title="Relatórios" />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<EmailSettings />} />
+            <Route path="settings/storage" element={<StorageSettings />} />
             <Route path="settings/templates" element={<ActivityTemplates />} />
             <Route path="settings/templates/:id" element={<ActivityTemplateEditor />} />
             <Route path="users" element={<Users />} />

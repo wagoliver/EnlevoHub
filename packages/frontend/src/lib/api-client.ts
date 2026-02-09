@@ -234,6 +234,10 @@ export const tenantAPI = {
   getStatistics: () => apiClient.get('/tenant/statistics'),
   getUsers: () => apiClient.get('/tenant/users'),
   sendTestEmail: (to: string) => apiClient.post('/tenant/settings/test-email', { to }),
+  getDrives: () => apiClient.get<any>('/tenant/settings/drives'),
+  testStoragePath: (path: string) => apiClient.post<any>('/tenant/settings/storage-test', { path }),
+  getStorageConfig: () => apiClient.get<any>('/tenant/settings/storage-config'),
+  saveStorageConfig: (storagePath: string) => apiClient.put<any>('/tenant/settings/storage-config', { storagePath }),
 }
 
 export const rbacAPI = {

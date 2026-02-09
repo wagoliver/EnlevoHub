@@ -13,6 +13,7 @@ import {
   ListChecks,
   UsersRound,
   Mail,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EnlevoLogo } from '@/components/EnlevoLogo'
@@ -25,7 +26,7 @@ interface NavItem {
   permission?: string
 }
 
-const navigation: NavItem[] = [
+const mainNavigation: NavItem[] = [
   {
     title: 'Dashboard',
     href: '/',
@@ -85,6 +86,9 @@ const navigation: NavItem[] = [
     icon: BarChart3,
     permission: 'reports:view',
   },
+]
+
+const settingsNavigation: NavItem[] = [
   {
     title: 'Templates',
     href: '/settings/templates',
@@ -108,8 +112,6 @@ const navigation: NavItem[] = [
 function NavItemComponent({ item }: { item: NavItem }) {
   const hasPermission = usePermission(item.permission || '')
 
-  // Always show items without permission requirement (Dashboard)
-  // Filter by permission for other items
   if (item.permission && !hasPermission) {
     return null
   }
@@ -132,6 +134,31 @@ function NavItemComponent({ item }: { item: NavItem }) {
   )
 }
 
+function SettingsSection() {
+  // Check if user has permission to see at least one settings item
+  const canSeeTemplates = usePermission('activities:create')
+  const canSeeEmail = usePermission('tenant:edit')
+  const canSeeUsers = usePermission('users:view')
+
+  if (!canSeeTemplates && !canSeeEmail && !canSeeUsers) {
+    return null
+  }
+
+  return (
+    <>
+      <div className="mt-4 mb-2 flex items-center gap-2 px-3">
+        <Settings className="h-3.5 w-3.5 text-white/30" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/30">
+          Configurações
+        </span>
+      </div>
+      {settingsNavigation.map((item) => (
+        <NavItemComponent key={item.href} item={item} />
+      ))}
+    </>
+  )
+}
+
 export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-[#21252d]">
@@ -142,9 +169,10 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
-        {navigation.map((item) => (
+        {mainNavigation.map((item) => (
           <NavItemComponent key={item.href} item={item} />
         ))}
+        <SettingsSection />
       </nav>
 
       {/* Footer */}

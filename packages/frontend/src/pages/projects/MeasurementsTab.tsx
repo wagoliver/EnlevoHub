@@ -102,6 +102,7 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
       queryClient.invalidateQueries({ queryKey: ['project-measurements', projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-stats', projectId] })
       setApproveDialog({ open: false, measurementId: null })
     },
     onError: (error: Error) => {
@@ -126,6 +127,7 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
       queryClient.invalidateQueries({ queryKey: ['project-measurements', projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-stats', projectId] })
       setRejectDialog({ open: false, measurementId: null })
       setRejectNotes('')
     },

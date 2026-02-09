@@ -1,4 +1,3 @@
-import { MultipartFile } from '@fastify/multipart'
 import * as fs from 'fs'
 import * as path from 'path'
 import sharp from 'sharp'
@@ -20,7 +19,7 @@ export class UploadService {
     }
   }
 
-  async saveFile(projectId: string, file: MultipartFile): Promise<string> {
+  async saveBuffer(projectId: string, buffer: Buffer): Promise<string> {
     const projectDir = path.join(this.storageDir, projectId)
     if (!fs.existsSync(projectDir)) {
       fs.mkdirSync(projectDir, { recursive: true })
@@ -29,15 +28,8 @@ export class UploadService {
     const safeName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`
     const filePath = path.join(projectDir, safeName)
 
-    // Collect stream into buffer
-    const chunks: Buffer[] = []
-    for await (const chunk of file.file) {
-      chunks.push(chunk)
-    }
-    const inputBuffer = Buffer.concat(chunks)
-
     // Compress with sharp: max 1920px width, JPEG quality 80, strip metadata
-    const compressed = await sharp(inputBuffer)
+    const compressed = await sharp(buffer)
       .resize(1920, undefined, { withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer()
@@ -45,15 +37,6 @@ export class UploadService {
     fs.writeFileSync(filePath, compressed)
 
     return `/api/v1/projects/uploads/${projectId}/${safeName}`
-  }
-
-  async saveFiles(projectId: string, files: MultipartFile[]): Promise<string[]> {
-    const urls: string[] = []
-    for (const file of files) {
-      const url = await this.saveFile(projectId, file)
-      urls.push(url)
-    }
-    return urls
   }
 
   async deleteFile(filePath: string): Promise<void> {

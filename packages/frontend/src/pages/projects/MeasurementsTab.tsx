@@ -40,6 +40,7 @@ import {
   Ruler,
   Check,
   X,
+  ImageIcon,
 } from 'lucide-react'
 
 const statusVariant: Record<string, any> = {
@@ -74,6 +75,11 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
     open: boolean
     measurementId: string | null
   }>({ open: false, measurementId: null })
+  const [photosDialog, setPhotosDialog] = useState<{
+    open: boolean
+    photos: string[]
+    currentIndex: number
+  }>({ open: false, photos: [], currentIndex: 0 })
 
   const { data, isLoading } = useQuery({
     queryKey: [
@@ -224,6 +230,7 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
                     <TableHead>Responsável</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
+                    <TableHead>Fotos</TableHead>
                     {canReview && <TableHead>Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -269,6 +276,31 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
                               'dd/MM/yyyy'
                             )
                           : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {measurement.photos &&
+                          Array.isArray(measurement.photos) &&
+                          measurement.photos.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPhotosDialog({
+                                open: true,
+                                photos: measurement.photos as string[],
+                                currentIndex: 0,
+                              })
+                            }
+                            className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"
+                            title="Ver fotos"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="text-xs font-medium">
+                              {measurement.photos.length}
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="text-neutral-300">-</span>
+                        )}
                       </TableCell>
                       {canReview && (
                         <TableCell>
@@ -378,6 +410,128 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
               Aprovar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Photos Carousel Dialog */}
+      <Dialog
+        open={photosDialog.open}
+        onOpenChange={(open) =>
+          setPhotosDialog({ open, photos: open ? photosDialog.photos : [], currentIndex: 0 })
+        }
+      >
+        <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-3">
+            <DialogTitle className="flex items-center justify-between">
+              <span>Fotos da Medição</span>
+              <span className="text-sm font-normal text-muted-foreground">
+                {photosDialog.photos.length > 0
+                  ? `${photosDialog.currentIndex + 1} / ${photosDialog.photos.length}`
+                  : ''}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Main image area */}
+          {photosDialog.photos.length > 0 && (
+            <div className="relative bg-neutral-950 flex items-center justify-center"
+              style={{ minHeight: '400px' }}
+            >
+              <img
+                src={photosDialog.photos[photosDialog.currentIndex]}
+                alt={`Foto ${photosDialog.currentIndex + 1}`}
+                className="max-h-[60vh] max-w-full object-contain"
+              />
+
+              {/* Previous button */}
+              {photosDialog.photos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPhotosDialog((prev) => ({
+                      ...prev,
+                      currentIndex:
+                        prev.currentIndex === 0
+                          ? prev.photos.length - 1
+                          : prev.currentIndex - 1,
+                    }))
+                  }
+                  className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+              )}
+
+              {/* Next button */}
+              {photosDialog.photos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPhotosDialog((prev) => ({
+                      ...prev,
+                      currentIndex:
+                        prev.currentIndex === prev.photos.length - 1
+                          ? 0
+                          : prev.currentIndex + 1,
+                    }))
+                  }
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Thumbnails + open full */}
+          {photosDialog.photos.length > 1 && (
+            <div className="flex items-center gap-2 px-6 py-4 bg-neutral-50 border-t">
+              {photosDialog.photos.map((photo, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() =>
+                    setPhotosDialog((prev) => ({ ...prev, currentIndex: index }))
+                  }
+                  className={`h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+                    index === photosDialog.currentIndex
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'border-transparent opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <img
+                    src={photo}
+                    alt={`Miniatura ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+              <div className="ml-auto">
+                <a
+                  href={photosDialog.photos[photosDialog.currentIndex]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  Abrir original
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Single photo: show open link */}
+          {photosDialog.photos.length === 1 && (
+            <div className="flex justify-end px-6 py-3 bg-neutral-50 border-t">
+              <a
+                href={photosDialog.photos[0]}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline"
+              >
+                Abrir original
+              </a>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

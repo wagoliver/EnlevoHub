@@ -69,9 +69,6 @@ export class EnlevoHubDaemon {
       // 7. Start health checks
       this.startHealthChecks()
 
-      // 8. Open browser
-      this.openBrowser(`http://localhost:${frontendPort}`)
-
       logger.info('✨ EnlevoHub is running!')
       logger.info(`📱 Frontend: http://localhost:${frontendPort}`)
       logger.info(`🔌 API: http://localhost:${apiPort}`)
@@ -331,21 +328,4 @@ export class EnlevoHubDaemon {
     }
   }
 
-  private openBrowser(url: string) {
-    const platform = process.platform
-    let command: string
-
-    switch (platform) {
-      case 'darwin':
-        command = 'open'
-        break
-      case 'win32':
-        command = 'start'
-        break
-      default:
-        command = 'xdg-open'
-    }
-
-    spawn(command, [url], { detached: true, stdio: 'ignore' }).unref()
-  }
 }

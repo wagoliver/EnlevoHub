@@ -455,19 +455,23 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
       }
 
       const parts = request.parts()
-      const files: any[] = []
+      const buffers: Buffer[] = []
 
       for await (const part of parts) {
         if (part.type === 'file') {
-          files.push(part)
+          buffers.push(await part.toBuffer())
         }
       }
 
-      if (files.length === 0) {
+      if (buffers.length === 0) {
         return reply.status(400).send({ error: 'Bad Request', message: 'Nenhum arquivo enviado' })
       }
 
-      const urls = await uploadService.saveFiles(id, files)
+      const urls: string[] = []
+      for (const buf of buffers) {
+        const url = await uploadService.saveBuffer(id, buf)
+        urls.push(url)
+      }
       return reply.send({ urls })
     } catch (error) {
       if (error instanceof Error) {

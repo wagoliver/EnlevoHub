@@ -40,8 +40,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { useRole } from '@/hooks/usePermission'
-import { monitoringAPI } from '@/lib/api-client'
+import { monitoringAPI, tenantAPI } from '@/lib/api-client'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
@@ -666,6 +667,19 @@ function StorageTab() {
     refetchInterval: 30_000,
   })
 
+  const { data: storageConfig } = useQuery({
+    queryKey: ['storage-config'],
+    queryFn: () => tenantAPI.getStorageConfig() as Promise<{ storagePath: string; source: string }>,
+  })
+
+  const { data: drives } = useQuery({
+    queryKey: ['drives'],
+    queryFn: () => tenantAPI.getDrives() as Promise<Array<{
+      letter: string; label: string; type: string;
+      totalGB: number; freeGB: number; usedPercent: number
+    }>>,
+  })
+
   if (isLoading || !data) {
     return <div className="flex items-center justify-center py-20 text-muted-foreground">Carregando...</div>
   }
@@ -673,6 +687,27 @@ function StorageTab() {
   const { disk, storage, projects, storagePath } = data
   const diskBarColor = disk.warning === 'CRITICAL' ? 'bg-red-500' : disk.warning === 'WARNING' ? 'bg-amber-500' : 'bg-green-500'
   const diskTextColor = disk.warning === 'CRITICAL' ? 'text-red-600' : disk.warning === 'WARNING' ? 'text-amber-600' : 'text-green-600'
+
+  const sourceLabel = storageConfig?.source === 'config'
+    ? 'Arquivo de configuracao'
+    : storageConfig?.source === 'env'
+      ? 'Variavel de ambiente'
+      : 'Padrao do sistema'
+
+  const getDriveTypeBadge = (type: string) => {
+    switch (type) {
+      case 'local': return <Badge variant="planning">Local</Badge>
+      case 'network': return <Badge variant="inProgress">Rede</Badge>
+      case 'removable': return <Badge variant="paused">Removivel</Badge>
+      default: return <Badge variant="outline">Outro</Badge>
+    }
+  }
+
+  const getUsageColor = (percent: number) => {
+    if (percent > 90) return 'text-red-600'
+    if (percent > 75) return 'text-amber-600'
+    return 'text-green-600'
+  }
 
   return (
     <div className="space-y-6">
@@ -703,6 +738,64 @@ function StorageTab() {
           variant={disk.warning === 'CRITICAL' ? 'danger' : disk.warning === 'WARNING' ? 'warning' : 'success'}
         />
       </div>
+
+      {/* Configuracao Atual */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Configuracao de Armazenamento</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Caminho configurado:</span>
+            <code className="rounded bg-neutral-100 px-3 py-1.5 text-sm font-mono">
+              {storageConfig?.storagePath || storagePath}
+            </code>
+            <Badge variant="outline">{sourceLabel}</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Unidades Disponiveis */}
+      {drives && drives.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Unidades Disponiveis no Servidor</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Unidade</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Livre</TableHead>
+                  <TableHead>Uso</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {drives.map((drive) => (
+                  <TableRow key={drive.letter}>
+                    <TableCell className="font-mono font-medium">{drive.letter}</TableCell>
+                    <TableCell>{drive.label}</TableCell>
+                    <TableCell>{getDriveTypeBadge(drive.type)}</TableCell>
+                    <TableCell className="text-right">{drive.totalGB.toFixed(1)} GB</TableCell>
+                    <TableCell className="text-right">{drive.freeGB.toFixed(1)} GB</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 min-w-[120px]">
+                        <Progress value={drive.usedPercent} className="h-2 flex-1" />
+                        <span className={`text-xs font-medium ${getUsageColor(drive.usedPercent)}`}>
+                          {drive.usedPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -735,9 +828,6 @@ function StorageTab() {
             {disk.warning === 'WARNING' && 'ATENÇÃO: Disco acima de 75% de uso.'}
             {disk.warning === 'OK' && 'Espaço em disco dentro do normal.'}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Caminho de armazenamento: <span className="font-mono">{storagePath}</span>
-          </p>
         </CardContent>
       </Card>
 

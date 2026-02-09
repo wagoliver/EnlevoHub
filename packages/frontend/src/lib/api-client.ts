@@ -505,4 +505,5 @@ export const monitoringAPI = {
   getApplication: () => apiClient.get<any>('/monitoring/application'),
   getTenants: () => apiClient.get<any>('/monitoring/tenants'),
   getAudit: (days = 7) => apiClient.get<any>(`/monitoring/audit?days=${days}`),
+  getStorage: () => apiClient.get<any>('/monitoring/storage'),
 }

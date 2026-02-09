@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { projectsAPI, contractorsAPI } from '@/lib/api-client'
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronRight, Camera, X } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
 
 interface MeasurementFormDialogProps {
@@ -130,6 +130,9 @@ export function MeasurementFormDialog({
   const [editableItems, setEditableItems] = useState<EditableItem[]>([])
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set())
   const [initialized, setInitialized] = useState(false)
+  const [photoFiles, setPhotoFiles] = useState<File[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch activities (returns tree if hierarchical)
   const { data: activitiesRaw = [] } = useQuery({
@@ -320,6 +323,7 @@ export function MeasurementFormDialog({
     setSingleProgress(0)
     setSelectedUnitActivityId('')
     setSelectedUnitId('')
+    setPhotoFiles([])
 
     if (defaultActivityId && hasHierarchy) {
       const ancestors = findAncestors(activities, defaultActivityId)
@@ -431,11 +435,11 @@ export function MeasurementFormDialog({
     },
   })
 
-  const isPending = singleMutation.isPending || batchMutation.isPending
+  const isPending = singleMutation.isPending || batchMutation.isPending || isUploading
 
   // --- Submit ---
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const effectiveContractorId = contractorId && contractorId !== 'none' ? contractorId : undefined
@@ -462,6 +466,22 @@ export function MeasurementFormDialog({
         data.unitId = selectedUnitId
       } else if (selectedUnitActivityId) {
         data.unitActivityId = selectedUnitActivityId
+      }
+
+      // Upload photos if any
+      if (photoFiles.length > 0) {
+        setIsUploading(true)
+        try {
+          const formData = new FormData()
+          photoFiles.forEach((file) => formData.append('photos', file))
+          const result = await projectsAPI.uploadMeasurementPhotos(projectId, formData)
+          data.photos = result.urls
+        } catch {
+          toast.error('Erro ao enviar fotos. Tente novamente.')
+          setIsUploading(false)
+          return
+        }
+        setIsUploading(false)
       }
 
       singleMutation.mutate(data)
@@ -878,6 +898,58 @@ export function MeasurementFormDialog({
           {!isSingleMode && !isBatchMode && (
             <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center">
               <p className="text-sm text-neutral-500">{emptyMessage}</p>
+            </div>
+          )}
+
+          {/* === Photo upload (single mode only) === */}
+          {isSingleMode && selectedActivity && (
+            <div className="space-y-2">
+              <Label>Fotos</Label>
+              <div className="flex flex-wrap gap-2">
+                {photoFiles.map((file, index) => (
+                  <div key={index} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-neutral-200">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={`Foto ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPhotoFiles((prev) => prev.filter((_, i) => i !== index))}
+                      className="absolute right-0.5 top-0.5 hidden rounded-full bg-black/60 p-0.5 text-white group-hover:flex items-center justify-center hover:bg-black/80"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {photoFiles.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Camera className="h-6 w-6" />
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || [])
+                  setPhotoFiles((prev) => {
+                    const combined = [...prev, ...files]
+                    return combined.slice(0, 5)
+                  })
+                  e.target.value = ''
+                }}
+              />
+              {photoFiles.length > 0 && (
+                <p className="text-xs text-neutral-500">{photoFiles.length}/5 foto(s)</p>
+              )}
             </div>
           )}
 

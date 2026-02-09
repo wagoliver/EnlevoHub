@@ -10,6 +10,9 @@ import {
   BarChart3,
   Users,
   Shield,
+  HardDrive,
+  FolderOpen,
+  ImageIcon,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -654,6 +657,125 @@ function AuditTab() {
   )
 }
 
+// ─── Aba: Armazenamento ───
+
+function StorageTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['monitoring', 'storage'],
+    queryFn: () => monitoringAPI.getStorage(),
+    refetchInterval: 30_000,
+  })
+
+  if (isLoading || !data) {
+    return <div className="flex items-center justify-center py-20 text-muted-foreground">Carregando...</div>
+  }
+
+  const { disk, storage, projects, storagePath } = data
+  const diskBarColor = disk.warning === 'CRITICAL' ? 'bg-red-500' : disk.warning === 'WARNING' ? 'bg-amber-500' : 'bg-green-500'
+  const diskTextColor = disk.warning === 'CRITICAL' ? 'text-red-600' : disk.warning === 'WARNING' ? 'text-amber-600' : 'text-green-600'
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <KPICard
+          title="Espaço Livre"
+          value={`${disk.freeGB} GB`}
+          subtitle={`de ${disk.totalGB} GB total`}
+          icon={HardDrive}
+          variant={disk.warning === 'CRITICAL' ? 'danger' : disk.warning === 'WARNING' ? 'warning' : 'success'}
+        />
+        <KPICard
+          title="Arquivos Armazenados"
+          value={storage.totalFiles}
+          subtitle={`${storage.totalSizeMB} MB total`}
+          icon={ImageIcon}
+        />
+        <KPICard
+          title="Projetos com Fotos"
+          value={storage.projectCount}
+          icon={FolderOpen}
+        />
+        <KPICard
+          title="Uso do Disco"
+          value={`${disk.usedPercent}%`}
+          subtitle={disk.warning !== 'OK' ? disk.warning : undefined}
+          icon={HardDrive}
+          variant={disk.warning === 'CRITICAL' ? 'danger' : disk.warning === 'WARNING' ? 'warning' : 'success'}
+        />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Uso do Disco</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2 items-center">
+            <div className="flex-1 h-6 rounded-full overflow-hidden bg-gray-100 flex">
+              <div
+                className={`${diskBarColor} h-full transition-all`}
+                style={{ width: `${Math.min(disk.usedPercent, 100)}%` }}
+              />
+            </div>
+          </div>
+          <div className="flex gap-4 text-sm">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded ${diskBarColor}`} />
+              <span>Usado ({disk.usedGB} GB)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-gray-100" />
+              <span>Livre ({disk.freeGB} GB)</span>
+            </div>
+            <div className="ml-auto">
+              <span className="text-muted-foreground">Total: {disk.totalGB} GB</span>
+            </div>
+          </div>
+          <div className={`text-sm font-medium ${diskTextColor}`}>
+            {disk.warning === 'CRITICAL' && 'ALERTA: Disco quase cheio! Libere espaço urgentemente.'}
+            {disk.warning === 'WARNING' && 'ATENÇÃO: Disco acima de 75% de uso.'}
+            {disk.warning === 'OK' && 'Espaço em disco dentro do normal.'}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Caminho de armazenamento: <span className="font-mono">{storagePath}</span>
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Top 20 Projetos por Tamanho</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {projects.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Projeto ID</TableHead>
+                  <TableHead className="text-right">Arquivos</TableHead>
+                  <TableHead className="text-right">Tamanho (MB)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.map((p: any) => (
+                  <TableRow key={p.projectId}>
+                    <TableCell className="font-mono text-sm">{p.projectId}</TableCell>
+                    <TableCell className="text-right">{p.fileCount}</TableCell>
+                    <TableCell className="text-right">{p.sizeMB}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+              Nenhum arquivo armazenado
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Página Principal ───
 
 export function Performance() {
@@ -678,6 +800,7 @@ export function Performance() {
           <TabsTrigger value="application">Aplicação</TabsTrigger>
           <TabsTrigger value="tenants">Tenants</TabsTrigger>
           <TabsTrigger value="audit">Auditoria</TabsTrigger>
+          <TabsTrigger value="storage">Armazenamento</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -697,6 +820,9 @@ export function Performance() {
         </TabsContent>
         <TabsContent value="audit" className="mt-6">
           <AuditTab />
+        </TabsContent>
+        <TabsContent value="storage" className="mt-6">
+          <StorageTab />
         </TabsContent>
       </Tabs>
     </div>

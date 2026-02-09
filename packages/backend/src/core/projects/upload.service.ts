@@ -1,31 +1,49 @@
 import { MultipartFile } from '@fastify/multipart'
 import * as fs from 'fs'
 import * as path from 'path'
-import { pipeline } from 'stream/promises'
+import sharp from 'sharp'
 
-const STORAGE_DIR = path.resolve(process.cwd(), 'storage', 'uploads', 'projects')
+function resolveStorageDir(): string {
+  const base = process.env.STORAGE_PATH
+    ? path.resolve(process.env.STORAGE_PATH)
+    : path.resolve(process.cwd(), 'storage')
+  return path.join(base, 'uploads', 'projects')
+}
 
 export class UploadService {
+  private storageDir: string
+
   constructor() {
-    // Ensure storage directory exists
-    if (!fs.existsSync(STORAGE_DIR)) {
-      fs.mkdirSync(STORAGE_DIR, { recursive: true })
+    this.storageDir = resolveStorageDir()
+    if (!fs.existsSync(this.storageDir)) {
+      fs.mkdirSync(this.storageDir, { recursive: true })
     }
   }
 
   async saveFile(projectId: string, file: MultipartFile): Promise<string> {
-    const projectDir = path.join(STORAGE_DIR, projectId)
+    const projectDir = path.join(this.storageDir, projectId)
     if (!fs.existsSync(projectDir)) {
       fs.mkdirSync(projectDir, { recursive: true })
     }
 
-    const ext = path.extname(file.filename) || '.jpg'
-    const safeName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}${ext}`
+    const safeName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`
     const filePath = path.join(projectDir, safeName)
 
-    await pipeline(file.file, fs.createWriteStream(filePath))
+    // Collect stream into buffer
+    const chunks: Buffer[] = []
+    for await (const chunk of file.file) {
+      chunks.push(chunk)
+    }
+    const inputBuffer = Buffer.concat(chunks)
 
-    // Return relative URL path
+    // Compress with sharp: max 1920px width, JPEG quality 80, strip metadata
+    const compressed = await sharp(inputBuffer)
+      .resize(1920, undefined, { withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer()
+
+    fs.writeFileSync(filePath, compressed)
+
     return `/api/v1/projects/uploads/${projectId}/${safeName}`
   }
 
@@ -39,9 +57,8 @@ export class UploadService {
   }
 
   async deleteFile(filePath: string): Promise<void> {
-    // Extract the relative path from URL
     const relativePath = filePath.replace('/api/v1/projects/uploads/', '')
-    const fullPath = path.join(STORAGE_DIR, relativePath)
+    const fullPath = path.join(this.storageDir, relativePath)
 
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath)
@@ -49,6 +66,13 @@ export class UploadService {
   }
 
   getStorageDir(): string {
-    return STORAGE_DIR
+    return this.storageDir
+  }
+
+  getStorageBasePath(): string {
+    const base = process.env.STORAGE_PATH
+      ? path.resolve(process.env.STORAGE_PATH)
+      : path.resolve(process.cwd(), 'storage')
+    return base
   }
 }

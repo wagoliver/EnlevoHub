@@ -97,4 +97,12 @@ export async function monitoringRoutes(fastify: FastifyInstance) {
     const { days } = auditQuerySchema.parse(request.query)
     return service.getAuditActivity(days)
   })
+
+  // GET /storage
+  fastify.get('/storage', {
+    preHandler: rootOnly,
+    schema: swaggerSchema('Get storage metrics (ROOT only)'),
+  }, async () => {
+    return service.getStorageMetrics()
+  })
 }

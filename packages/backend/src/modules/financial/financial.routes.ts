@@ -399,6 +399,32 @@ export async function financialRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.get('/reconciliation/search-entities', {
+    preHandler: [authMiddleware, requirePermission('financial:view')],
+    schema: {
+      description: 'Search suppliers and contractors for manual reconciliation',
+      tags: ['financial'],
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          search: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { search } = request.query as { search?: string }
+      const results = await reconciliationService.searchEntities(getTenantId(request), search || '')
+      return reply.send(results)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   fastify.post('/reconciliation/ignore/:id', {
     preHandler: [authMiddleware, requirePermission('financial:edit')],
     schema: {

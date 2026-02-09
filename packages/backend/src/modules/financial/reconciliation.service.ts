@@ -194,6 +194,48 @@ export class ReconciliationService {
     return { ...updated, amount: Number(updated.amount) }
   }
 
+  async searchEntities(tenantId: string, search: string) {
+    const results: Array<{ entityType: string; entityId: string; entityName: string; document?: string }> = []
+
+    if (!search || search.length < 2) return results
+
+    const [suppliers, contractors] = await Promise.all([
+      this.prisma.supplier.findMany({
+        where: {
+          tenantId,
+          isActive: true,
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { document: { contains: search } },
+          ],
+        },
+        select: { id: true, name: true, document: true },
+        take: 10,
+      }),
+      this.prisma.contractor.findMany({
+        where: {
+          tenantId,
+          isActive: true,
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { document: { contains: search } },
+          ],
+        },
+        select: { id: true, name: true, document: true },
+        take: 10,
+      }),
+    ])
+
+    for (const s of suppliers) {
+      results.push({ entityType: 'supplier', entityId: s.id, entityName: s.name, document: s.document })
+    }
+    for (const c of contractors) {
+      results.push({ entityType: 'contractor', entityId: c.id, entityName: c.name, document: c.document })
+    }
+
+    return results
+  }
+
   async autoReconcile(tenantId: string, batchId: string): Promise<number> {
     const transactions = await this.prisma.financialTransaction.findMany({
       where: {

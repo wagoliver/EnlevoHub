@@ -10,6 +10,7 @@ import { logger } from './utils/logger'
 import { errorHandler } from './utils/error-handler'
 import { registerRoutes } from './routes'
 import prisma from './lib/prisma'
+import { MetricsCollector } from './modules/monitoring/metrics-collector'
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -83,6 +84,7 @@ async function buildServer() {
         { name: 'brokers', description: 'Broker management' },
         { name: 'financial', description: 'Financial management' },
         { name: 'contracts', description: 'Contract management' },
+        { name: 'monitoring', description: 'System monitoring (ROOT only)' },
       ],
       components: {
         securitySchemes: {
@@ -109,6 +111,27 @@ async function buildServer() {
 
   // Error handler
   server.setErrorHandler(errorHandler)
+
+  // Metrics collection hooks
+  const metricsCollector = MetricsCollector.getInstance()
+
+  server.addHook('onRequest', async (request) => {
+    ;(request as any)._metricsStartTime = process.hrtime.bigint()
+  })
+
+  server.addHook('onResponse', async (request, reply) => {
+    const startTime = (request as any)._metricsStartTime
+    if (startTime) {
+      const responseTimeMs = Number(process.hrtime.bigint() - startTime) / 1e6
+      metricsCollector.recordRequest({
+        timestamp: Date.now(),
+        method: request.method,
+        route: `${request.method} ${request.routeOptions?.url || request.url}`,
+        statusCode: reply.statusCode,
+        responseTimeMs: Math.round(responseTimeMs * 100) / 100,
+      })
+    }
+  })
 
   // Health check
   server.get('/health', async () => {

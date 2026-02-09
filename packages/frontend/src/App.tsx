@@ -19,6 +19,7 @@ import { ActivityTemplateEditor } from './pages/settings/ActivityTemplateEditor'
 import { Users } from './pages/Users'
 import { Profile } from './pages/Profile'
 import { Financial } from './pages/Financial'
+import { Performance } from './pages/Performance'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -69,6 +70,7 @@ function App() {
             <Route path="settings/templates" element={<ActivityTemplates />} />
             <Route path="settings/templates/:id" element={<ActivityTemplateEditor />} />
             <Route path="users" element={<Users />} />
+            <Route path="performance" element={<Performance />} />
           </Route>
 
           {/* Catch all - redirect to home */}

@@ -14,10 +14,11 @@ import {
   ListChecks,
   UsersRound,
   Settings,
+  Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EnlevoLogo } from '@/components/EnlevoLogo'
-import { usePermission } from '@/hooks/usePermission'
+import { usePermission, useRole } from '@/hooks/usePermission'
 import { useSidebarStore } from '@/stores/sidebar.store'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -32,6 +33,7 @@ interface NavItem {
   href: string
   icon: React.ElementType
   permission?: string
+  role?: string
 }
 
 const mainNavigation: NavItem[] = [
@@ -109,6 +111,12 @@ const settingsNavigation: NavItem[] = [
     icon: UsersRound,
     permission: 'users:view',
   },
+  {
+    title: 'Performance',
+    href: '/performance',
+    icon: Gauge,
+    role: 'ROOT',
+  },
 ]
 
 function NavItemComponent({
@@ -119,6 +127,11 @@ function NavItemComponent({
   isCollapsed: boolean
 }) {
   const hasPermission = usePermission(item.permission || '')
+  const userRole = useRole()
+
+  if (item.role && userRole !== item.role) {
+    return null
+  }
 
   if (item.permission && !hasPermission) {
     return null
@@ -161,8 +174,9 @@ function NavItemComponent({
 function SettingsSection({ isCollapsed }: { isCollapsed: boolean }) {
   const canSeeTemplates = usePermission('activities:create')
   const canSeeUsers = usePermission('users:view')
+  const isRoot = useRole() === 'ROOT'
 
-  if (!canSeeTemplates && !canSeeUsers) {
+  if (!canSeeTemplates && !canSeeUsers && !isRoot) {
     return null
   }
 
@@ -214,8 +228,8 @@ function SidebarContent({ isCollapsed }: { isCollapsed: boolean }) {
       {/* Navigation */}
       <nav
         className={cn(
-          'flex flex-1 flex-col gap-1 overflow-y-auto',
-          isCollapsed ? 'p-2' : 'p-4'
+          'flex flex-1 flex-col gap-1 overflow-y-auto p-4',
+          isCollapsed && 'px-2'
         )}
       >
         {mainNavigation.map((item) => (

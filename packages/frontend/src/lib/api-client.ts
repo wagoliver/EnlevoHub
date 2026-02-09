@@ -495,3 +495,14 @@ export const activityTemplatesAPI = {
     holidays?: string[]
   }) => apiClient.post<any>(`/activity-templates/${id}/preview-schedule`, config),
 }
+
+export const monitoringAPI = {
+  getOverview: () => apiClient.get<any>('/monitoring/overview'),
+  getSystem: () => apiClient.get<any>('/monitoring/system'),
+  getHttp: () => apiClient.get<any>('/monitoring/http'),
+  getHttpTimeseries: (minutes = 60) => apiClient.get<any>(`/monitoring/http/timeseries?minutes=${minutes}`),
+  getDatabase: () => apiClient.get<any>('/monitoring/database'),
+  getApplication: () => apiClient.get<any>('/monitoring/application'),
+  getTenants: () => apiClient.get<any>('/monitoring/tenants'),
+  getAudit: (days = 7) => apiClient.get<any>(`/monitoring/audit?days=${days}`),
+}

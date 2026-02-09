@@ -1,7 +1,17 @@
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Settings, User } from 'lucide-react'
+import {
+  LogOut,
+  Settings,
+  User,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react'
 import { useAuthStore, Role } from '@/stores/auth.store'
+import { useSidebarStore } from '@/stores/sidebar.store'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +40,8 @@ const ROLE_COLORS: Record<Role, string> = {
 export function Header() {
   const navigate = useNavigate()
   const { user, tenant, clearAuth } = useAuthStore()
+  const { isCollapsed, toggleCollapsed, setMobileOpen } = useSidebarStore()
+  const isMobile = useIsMobile()
 
   const handleLogout = () => {
     clearAuth()
@@ -55,7 +67,36 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white">
-      <div className="flex h-16 items-center px-6">
+      <div className="flex h-16 items-center px-4 lg:px-6">
+        {/* Mobile: Hamburger / Desktop: Collapse toggle */}
+        {isMobile ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileOpen(true)}
+            className="mr-2"
+          >
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Abrir menu</span>
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleCollapsed}
+            className="mr-2"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+            <span className="sr-only">
+              {isCollapsed ? 'Expandir menu' : 'Recolher menu'}
+            </span>
+          </Button>
+        )}
+
         {/* Tenant name */}
         {tenant && (
           <p className="text-sm text-neutral-500">{tenant.name}</p>
@@ -68,7 +109,7 @@ export function Header() {
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-neutral-50 transition-colors">
-              <div className="text-right">
+              <div className="hidden sm:block text-right">
                 <p className="text-sm font-medium text-neutral-900">
                   {user.name}
                 </p>

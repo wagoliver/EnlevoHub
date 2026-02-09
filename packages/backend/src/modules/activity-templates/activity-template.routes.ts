@@ -7,6 +7,7 @@ import {
   createActivityTemplateSchema,
   updateActivityTemplateSchema,
   listActivityTemplatesQuerySchema,
+  previewScheduleSchema,
 } from './activity-template.schemas'
 
 function requirePermission(permission: string) {
@@ -152,6 +153,33 @@ export async function activityTemplateRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Preview schedule from template
+  fastify.post('/:id/preview-schedule', {
+    preHandler: [authMiddleware, requirePermission('activities:view')],
+    schema: {
+      description: 'Preview schedule calculated from a template',
+      tags: ['activity-templates'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = previewScheduleSchema.parse(request.body)
+      const result = await service.previewSchedule(getTenantId(request), id, body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
       }
       throw error
     }

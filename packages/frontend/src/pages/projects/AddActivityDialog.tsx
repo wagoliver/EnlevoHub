@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { projectsAPI, activityTemplatesAPI } from '@/lib/api-client'
+import { projectsAPI } from '@/lib/api-client'
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -22,7 +21,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, FileText } from 'lucide-react'
+import { Loader2, FileText, Calendar } from 'lucide-react'
+import { ApplyTemplateDialog } from './ApplyTemplateDialog'
 
 interface AddActivityDialogProps {
   projectId: string
@@ -45,20 +45,8 @@ export function AddActivityDialog({
   const [scope, setScope] = useState('ALL_UNITS')
   const [unitIdsText, setUnitIdsText] = useState('')
 
-  // Template state
-  const [selectedTemplateId, setSelectedTemplateId] = useState('')
-
-  const { data: templatesData } = useQuery({
-    queryKey: ['activity-templates-list'],
-    queryFn: () => activityTemplatesAPI.list({ limit: 100 }),
-    enabled: open,
-  })
-
-  const templates = templatesData?.data || []
-
-  const selectedTemplate = templates.find(
-    (t: any) => t.id === selectedTemplateId
-  )
+  // Template wizard state
+  const [showApplyTemplateDialog, setShowApplyTemplateDialog] = useState(false)
 
   const createManualMutation = useMutation({
     mutationFn: (data: any) => projectsAPI.createActivity(projectId, data),
@@ -74,27 +62,11 @@ export function AddActivityDialog({
     },
   })
 
-  const createFromTemplateMutation = useMutation({
-    mutationFn: (templateId: string) =>
-      projectsAPI.createActivitiesFromTemplate(projectId, templateId),
-    onSuccess: () => {
-      toast.success('Atividades importadas do template com sucesso!')
-      queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
-      resetForm()
-      onOpenChange(false)
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao importar template')
-    },
-  })
-
   const resetForm = () => {
     setName('')
     setWeight(1)
     setScope('ALL_UNITS')
     setUnitIdsText('')
-    setSelectedTemplateId('')
   }
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -122,187 +94,54 @@ export function AddActivityDialog({
     createManualMutation.mutate(data)
   }
 
-  const handleTemplateApply = () => {
-    if (!selectedTemplateId) {
-      toast.error('Selecione um template')
-      return
-    }
-    createFromTemplateMutation.mutate(selectedTemplateId)
+  const openTemplateWizard = () => {
+    onOpenChange(false) // Close AddActivityDialog
+    setShowApplyTemplateDialog(true)
   }
 
-  const isPending =
-    createManualMutation.isPending || createFromTemplateMutation.isPending
+  const isPending = createManualMutation.isPending
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) resetForm()
-        onOpenChange(value)
-      }}
-    >
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Adicionar Atividade</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          if (!value) resetForm()
+          onOpenChange(value)
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Adicionar Atividade</DialogTitle>
+          </DialogHeader>
 
-        <Tabs defaultValue="template" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="template">De Template</TabsTrigger>
-            <TabsTrigger value="manual">Manual</TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="template" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="template">De Template</TabsTrigger>
+              <TabsTrigger value="manual">Manual</TabsTrigger>
+            </TabsList>
 
-          {/* From Template */}
-          <TabsContent value="template" className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="template-select">Template</Label>
-              <Select
-                value={selectedTemplateId}
-                onValueChange={setSelectedTemplateId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um template..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((template: any) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {templates.length === 0 && (
-                <p className="mt-2 text-sm text-neutral-500">
-                  Nenhum template disponível. Crie um em Configurações &gt;
-                  Templates de Atividades.
-                </p>
-              )}
-            </div>
-
-            {/* Template Preview */}
-            {selectedTemplate && selectedTemplate.items && (
-              <div className="rounded-lg border bg-neutral-50 p-4 space-y-2">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">
-                    {selectedTemplate.name}
-                  </span>
-                  <Badge variant="secondary">
-                    {selectedTemplate.items.length} itens
-                  </Badge>
+            {/* From Template */}
+            <TabsContent value="template" className="space-y-4 mt-4">
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-neutral-50 p-8 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-8 w-8 text-primary" />
+                  <FileText className="h-8 w-8 text-primary" />
                 </div>
-                {selectedTemplate.description && (
-                  <p className="text-sm text-neutral-500 mb-2">
-                    {selectedTemplate.description}
-                  </p>
-                )}
-                <div className="space-y-1">
-                  {selectedTemplate.items
-                    .sort((a: any, b: any) => a.order - b.order)
-                    .map((item: any, index: number) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between text-sm py-1"
-                      >
-                        <span className="text-neutral-700">
-                          {index + 1}. {item.name}
-                        </span>
-                        <Badge variant="outline" className="text-xs">
-                          Peso: {item.weight}
-                        </Badge>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                disabled={!selectedTemplateId || isPending}
-                onClick={handleTemplateApply}
-              >
-                {createFromTemplateMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Aplicar
-              </Button>
-            </DialogFooter>
-          </TabsContent>
-
-          {/* Manual Creation */}
-          <TabsContent value="manual" className="mt-4">
-            <form onSubmit={handleManualSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="activity-name">Nome da Atividade *</Label>
-                <Input
-                  id="activity-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Fundação, Alvenaria, Pintura..."
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="activity-weight">Peso</Label>
-                  <Input
-                    id="activity-weight"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={weight}
-                    onChange={(e) => setWeight(Number(e.target.value))}
-                  />
-                  <p className="mt-1 text-xs text-neutral-500">
-                    Peso relativo para cálculo de progresso
+                <div className="text-center">
+                  <h4 className="font-medium text-neutral-900">
+                    Importar de Template com Cronograma
+                  </h4>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    Selecione um template hierárquico, configure datas de início e fim,
+                    e o sistema calculará o cronograma automaticamente.
                   </p>
                 </div>
-
-                <div>
-                  <Label htmlFor="activity-scope">Escopo</Label>
-                  <Select value={scope} onValueChange={setScope}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL_UNITS">
-                        Todas as Unidades
-                      </SelectItem>
-                      <SelectItem value="SPECIFIC_UNITS">
-                        Unidades Específicas
-                      </SelectItem>
-                      <SelectItem value="GENERAL">
-                        Geral (sem unidade)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Button onClick={openTemplateWizard}>
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Abrir Assistente de Cronograma
+                </Button>
               </div>
-
-              {scope === 'SPECIFIC_UNITS' && (
-                <div>
-                  <Label htmlFor="activity-units">IDs das Unidades</Label>
-                  <Textarea
-                    id="activity-units"
-                    value={unitIdsText}
-                    onChange={(e) => setUnitIdsText(e.target.value)}
-                    placeholder="Insira os IDs das unidades separados por vírgula ou em linhas separadas"
-                    rows={3}
-                  />
-                  <p className="mt-1 text-xs text-neutral-500">
-                    Seletor de unidades será disponibilizado em breve. Por
-                    enquanto, insira os IDs manualmente.
-                  </p>
-                </div>
-              )}
 
               <DialogFooter>
                 <Button
@@ -312,17 +151,103 @@ export function AddActivityDialog({
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={isPending}>
-                  {createManualMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Criar Atividade
-                </Button>
               </DialogFooter>
-            </form>
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+            </TabsContent>
+
+            {/* Manual Creation */}
+            <TabsContent value="manual" className="mt-4">
+              <form onSubmit={handleManualSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="activity-name">Nome da Atividade *</Label>
+                  <Input
+                    id="activity-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Fundação, Alvenaria, Pintura..."
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="activity-weight">Peso</Label>
+                    <Input
+                      id="activity-weight"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={weight}
+                      onChange={(e) => setWeight(Number(e.target.value))}
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Peso relativo para cálculo de progresso
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="activity-scope">Escopo</Label>
+                    <Select value={scope} onValueChange={setScope}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL_UNITS">
+                          Todas as Unidades
+                        </SelectItem>
+                        <SelectItem value="SPECIFIC_UNITS">
+                          Unidades Específicas
+                        </SelectItem>
+                        <SelectItem value="GENERAL">
+                          Geral (sem unidade)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {scope === 'SPECIFIC_UNITS' && (
+                  <div>
+                    <Label htmlFor="activity-units">IDs das Unidades</Label>
+                    <Textarea
+                      id="activity-units"
+                      value={unitIdsText}
+                      onChange={(e) => setUnitIdsText(e.target.value)}
+                      placeholder="Insira os IDs das unidades separados por vírgula ou em linhas separadas"
+                      rows={3}
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Seletor de unidades será disponibilizado em breve. Por
+                      enquanto, insira os IDs manualmente.
+                    </p>
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={isPending}>
+                    {createManualMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Criar Atividade
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Apply Template Wizard Dialog */}
+      <ApplyTemplateDialog
+        projectId={projectId}
+        open={showApplyTemplateDialog}
+        onOpenChange={setShowApplyTemplateDialog}
+      />
+    </>
   )
 }

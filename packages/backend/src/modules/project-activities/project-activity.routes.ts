@@ -9,6 +9,7 @@ import {
   createProjectActivitySchema,
   updateProjectActivitySchema,
   createFromTemplateSchema,
+  createFromTemplateWithScheduleSchema,
   createMeasurementSchema,
   reviewMeasurementSchema,
   listMeasurementsQuerySchema,
@@ -107,7 +108,21 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
-      const body = createFromTemplateSchema.parse(request.body)
+      const rawBody = request.body as any
+
+      // If body has 'activities' array, use the new hierarchical schedule flow
+      if (rawBody && rawBody.activities) {
+        const body = createFromTemplateWithScheduleSchema.parse(rawBody)
+        const activities = await activityService.createFromTemplateWithSchedule(
+          getTenantId(request),
+          id,
+          body
+        )
+        return reply.status(201).send(activities)
+      }
+
+      // Otherwise use the legacy flat flow
+      const body = createFromTemplateSchema.parse(rawBody)
       const activities = await activityService.createFromTemplate(
         getTenantId(request),
         id,

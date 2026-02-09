@@ -18,6 +18,30 @@ export const createFromTemplateSchema = z.object({
   templateId: z.string().uuid(),
 })
 
+// === Hierarchical schedule-based template application ===
+
+const scheduledActivityChildSchema: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    name: z.string().min(1),
+    level: z.enum(['PHASE', 'STAGE', 'ACTIVITY']),
+    order: z.number().int().min(0),
+    weight: z.number().min(0).default(1),
+    plannedStartDate: z.string().optional(),
+    plannedEndDate: z.string().optional(),
+    dependencies: z.array(z.string()).optional(),
+    color: z.string().optional(),
+    scope: z.enum(['ALL_UNITS', 'SPECIFIC_UNITS', 'GENERAL']).optional(),
+    children: z.array(scheduledActivityChildSchema).optional(),
+  })
+)
+
+export const createFromTemplateWithScheduleSchema = z.object({
+  templateId: z.string().uuid(),
+  schedulingMode: z.enum(['BUSINESS_DAYS', 'CALENDAR_DAYS']).optional(),
+  holidays: z.array(z.string()).optional(),
+  activities: z.array(scheduledActivityChildSchema).min(1),
+})
+
 export const createMeasurementSchema = z.object({
   activityId: z.string().uuid(),
   unitActivityId: z.string().uuid().optional(),
@@ -43,6 +67,7 @@ export const listMeasurementsQuerySchema = z.object({
 export type CreateProjectActivityInput = z.infer<typeof createProjectActivitySchema>
 export type UpdateProjectActivityInput = z.infer<typeof updateProjectActivitySchema>
 export type CreateFromTemplateInput = z.infer<typeof createFromTemplateSchema>
+export type CreateFromTemplateWithScheduleInput = z.infer<typeof createFromTemplateWithScheduleSchema>
 export type CreateMeasurementInput = z.infer<typeof createMeasurementSchema>
 export type ReviewMeasurementInput = z.infer<typeof reviewMeasurementSchema>
 export type ListMeasurementsQuery = z.infer<typeof listMeasurementsQuerySchema>

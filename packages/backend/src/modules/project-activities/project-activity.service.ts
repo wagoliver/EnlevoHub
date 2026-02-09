@@ -1,7 +1,8 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import {
   CreateProjectActivityInput,
   UpdateProjectActivityInput,
+  CreateFromTemplateWithScheduleInput,
 } from './project-activity.schemas'
 
 export class ProjectActivityService {
@@ -27,7 +28,10 @@ export class ProjectActivityService {
       },
     })
 
-    return activities.map(a => {
+    // Check if we have hierarchical data
+    const hasHierarchy = activities.some(a => a.level === 'PHASE' || a.level === 'STAGE')
+
+    const serialized = activities.map(a => {
       const unitActivities = a.unitActivities.map(ua => ({
         ...ua,
         progress: Number(ua.progress),
@@ -44,6 +48,12 @@ export class ProjectActivityService {
         unitActivities,
       }
     })
+
+    if (hasHierarchy) {
+      return this.buildActivityTree(serialized)
+    }
+
+    return serialized
   }
 
   async getById(tenantId: string, projectId: string, activityId: string) {
@@ -212,6 +222,9 @@ export class ProjectActivityService {
     return { message: 'Atividade excluída com sucesso' }
   }
 
+  /**
+   * Legacy flat template import (backward compat).
+   */
   async createFromTemplate(tenantId: string, projectId: string, templateId: string) {
     const [project, template] = await Promise.all([
       this.prisma.project.findFirst({ where: { id: projectId, tenantId } }),
@@ -263,6 +276,121 @@ export class ProjectActivityService {
     })
   }
 
+  /**
+   * Hierarchical template import with schedule data.
+   */
+  async createFromTemplateWithSchedule(
+    tenantId: string,
+    projectId: string,
+    data: CreateFromTemplateWithScheduleInput
+  ) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    // Verify template exists
+    const template = await this.prisma.activityTemplate.findFirst({
+      where: { id: data.templateId, tenantId },
+    })
+    if (!template) throw new Error('Template não encontrado')
+
+    // Update project scheduling config
+    if (data.schedulingMode) {
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: {
+          schedulingMode: data.schedulingMode,
+          holidays: data.holidays || Prisma.JsonNull,
+        },
+      })
+    }
+
+    const units = await this.prisma.unit.findMany({
+      where: { projectId },
+      select: { id: true },
+    })
+
+    return this.prisma.$transaction(async (tx) => {
+      const created = await this.createActivitiesRecursive(
+        tx, projectId, data.activities, null, units
+      )
+      return created
+    })
+  }
+
+  /**
+   * Recursively create ProjectActivities from hierarchical schedule data.
+   */
+  private async createActivitiesRecursive(
+    tx: any,
+    projectId: string,
+    activities: any[],
+    parentId: string | null,
+    units: { id: string }[]
+  ): Promise<any[]> {
+    const results: any[] = []
+
+    for (const act of activities) {
+      const actData: any = {
+        projectId,
+        name: act.name,
+        weight: act.weight || 1,
+        order: act.order,
+        level: act.level,
+        parentId,
+        color: act.color || null,
+        dependencies: act.dependencies || null,
+      }
+
+      if (act.plannedStartDate) {
+        actData.plannedStartDate = new Date(act.plannedStartDate)
+      }
+      if (act.plannedEndDate) {
+        actData.plannedEndDate = new Date(act.plannedEndDate)
+      }
+
+      // Only leaf ACTIVITY level gets scope and unit activities
+      if (act.level === 'ACTIVITY') {
+        actData.scope = act.scope || 'ALL_UNITS'
+      } else {
+        actData.scope = 'GENERAL'
+      }
+
+      const created = await tx.projectActivity.create({ data: actData })
+
+      // Create UnitActivities for leaf activities
+      if (act.level === 'ACTIVITY') {
+        const scope = act.scope || 'ALL_UNITS'
+        if (scope === 'ALL_UNITS' && units.length > 0) {
+          await tx.unitActivity.createMany({
+            data: units.map((u: any) => ({
+              activityId: created.id,
+              unitId: u.id,
+            })),
+          })
+        } else if (scope === 'GENERAL') {
+          await tx.unitActivity.create({
+            data: { activityId: created.id, unitId: null },
+          })
+        }
+      }
+
+      const result: any = { ...created, weight: Number(created.weight) }
+
+      // Recurse for children
+      if (act.children?.length) {
+        result.children = await this.createActivitiesRecursive(
+          tx, projectId, act.children, created.id, units
+        )
+      }
+
+      results.push(result)
+    }
+
+    return results
+  }
+
   async getProjectProgress(tenantId: string, projectId: string) {
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, tenantId },
@@ -278,15 +406,29 @@ export class ProjectActivityService {
       },
     })
 
+    // Separate phases from leaf activities
+    const phases = activities.filter(a => a.level === 'PHASE')
+    const leafActivities = activities.filter(a => a.level === 'ACTIVITY' || (!a.level))
+
+    // If no hierarchy, use flat calculation
+    if (phases.length === 0) {
+      return this.calculateFlatProgress(leafActivities)
+    }
+
+    // Hierarchical progress calculation
+    return this.calculateHierarchicalProgress(activities)
+  }
+
+  private calculateFlatProgress(activities: any[]) {
     let totalWeightedProgress = 0
     let totalWeight = 0
 
     const activityDetails = activities.map(a => {
       const weight = Number(a.weight)
-      const unitActivities = a.unitActivities.map(ua => Number(ua.progress))
+      const unitActivities = a.unitActivities.map((ua: any) => Number(ua.progress))
       const avgProgress =
         unitActivities.length > 0
-          ? unitActivities.reduce((sum, p) => sum + p, 0) / unitActivities.length
+          ? unitActivities.reduce((sum: number, p: number) => sum + p, 0) / unitActivities.length
           : 0
 
       totalWeightedProgress += weight * avgProgress
@@ -311,5 +453,106 @@ export class ProjectActivityService {
       overallProgress,
       activities: activityDetails,
     }
+  }
+
+  private calculateHierarchicalProgress(activities: any[]) {
+    // Build a map id -> activity with progress
+    const actMap = new Map<string, any>()
+    for (const a of activities) {
+      const unitActivities = a.unitActivities.map((ua: any) => Number(ua.progress))
+      const avgProgress =
+        unitActivities.length > 0
+          ? unitActivities.reduce((sum: number, p: number) => sum + p, 0) / unitActivities.length
+          : 0
+
+      actMap.set(a.id, {
+        id: a.id,
+        name: a.name,
+        weight: Number(a.weight),
+        level: a.level,
+        parentId: a.parentId,
+        progress: Math.round(avgProgress * 100) / 100,
+        status: a.status,
+        unitCount: a._count.unitActivities,
+        color: a.color,
+        plannedStartDate: a.plannedStartDate,
+        plannedEndDate: a.plannedEndDate,
+        children: [] as any[],
+      })
+    }
+
+    // Build tree
+    const roots: any[] = []
+    for (const item of actMap.values()) {
+      if (item.parentId && actMap.has(item.parentId)) {
+        actMap.get(item.parentId).children.push(item)
+      } else if (!item.parentId) {
+        roots.push(item)
+      }
+    }
+
+    // Calculate progress bottom-up
+    const calcProgress = (node: any): number => {
+      if (node.children.length === 0) {
+        return node.progress
+      }
+      const totalWeight = node.children.reduce((s: number, c: any) => s + c.weight, 0)
+      if (totalWeight === 0) return 0
+      const weighted = node.children.reduce((s: number, c: any) => {
+        const childProgress = calcProgress(c)
+        c.progress = Math.round(childProgress * 100) / 100
+        return s + c.weight * childProgress
+      }, 0)
+      return weighted / totalWeight
+    }
+
+    let totalWeightedProgress = 0
+    let totalWeight = 0
+    const phaseDetails = roots.map(phase => {
+      const progress = calcProgress(phase)
+      phase.progress = Math.round(progress * 100) / 100
+      totalWeightedProgress += phase.weight * progress
+      totalWeight += phase.weight
+      return phase
+    })
+
+    const overallProgress =
+      totalWeight > 0
+        ? Math.round((totalWeightedProgress / totalWeight) * 100) / 100
+        : 0
+
+    return {
+      overallProgress,
+      activities: phaseDetails,
+    }
+  }
+
+  /**
+   * Build tree from flat activity list for the API response.
+   */
+  private buildActivityTree(activities: any[]): any[] {
+    const actMap = new Map<string, any>()
+    activities.forEach(a => {
+      actMap.set(a.id, { ...a, children: [] })
+    })
+
+    const roots: any[] = []
+    for (const item of actMap.values()) {
+      if (item.parentId && actMap.has(item.parentId)) {
+        actMap.get(item.parentId).children.push(item)
+      } else if (!item.parentId) {
+        roots.push(item)
+      }
+    }
+
+    // Sort children by order
+    const sortChildren = (node: any) => {
+      node.children.sort((a: any, b: any) => a.order - b.order)
+      node.children.forEach(sortChildren)
+    }
+    roots.sort((a: any, b: any) => a.order - b.order)
+    roots.forEach(sortChildren)
+
+    return roots
   }
 }

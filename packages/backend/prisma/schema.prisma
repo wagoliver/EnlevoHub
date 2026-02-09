@@ -108,6 +108,8 @@ model Project {
   expectedEndDate DateTime?
   actualEndDate   DateTime?
   budget          Decimal       @db.Decimal(15, 2)
+  schedulingMode  SchedulingMode?
+  holidays        Json?
   metadata        Json?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -547,6 +549,17 @@ enum ActivityStatus {
   COMPLETED
 }
 
+enum TemplateItemLevel {
+  PHASE
+  STAGE
+  ACTIVITY
+}
+
+enum SchedulingMode {
+  BUSINESS_DAYS
+  CALENDAR_DAYS
+}
+
 enum MeasurementStatus {
   PENDING
   APPROVED
@@ -570,36 +583,56 @@ model ActivityTemplate {
 }
 
 model ActivityTemplateItem {
-  id         String  @id @default(uuid())
-  templateId String
-  name       String
-  order      Int
-  weight     Decimal @db.Decimal(5, 2) @default(1)
+  id                String             @id @default(uuid())
+  templateId        String
+  name              String
+  order             Int
+  weight            Decimal            @db.Decimal(5, 2) @default(1)
+  parentId          String?
+  level             TemplateItemLevel  @default(ACTIVITY)
+  percentageOfTotal Decimal?           @db.Decimal(5, 2)
+  durationDays      Int?
+  dependencies      Json?
+  color             String?
 
   // Relations
-  template ActivityTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template ActivityTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  parent   ActivityTemplateItem?  @relation("ItemHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children ActivityTemplateItem[] @relation("ItemHierarchy")
 
   @@index([templateId])
+  @@index([parentId])
   @@map("activity_template_items")
 }
 
 model ProjectActivity {
-  id        String         @id @default(uuid())
-  projectId String
-  name      String
-  weight    Decimal        @db.Decimal(5, 2) @default(1)
-  order     Int
-  scope     ActivityScope  @default(ALL_UNITS)
-  status    ActivityStatus @default(PENDING)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id               String            @id @default(uuid())
+  projectId        String
+  name             String
+  weight           Decimal           @db.Decimal(5, 2) @default(1)
+  order            Int
+  scope            ActivityScope     @default(ALL_UNITS)
+  status           ActivityStatus    @default(PENDING)
+  parentId         String?
+  level            TemplateItemLevel @default(ACTIVITY)
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+  dependencies     Json?
+  color            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   // Relations
-  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent         ProjectActivity?   @relation("ActivityHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       ProjectActivity[]  @relation("ActivityHierarchy")
   unitActivities UnitActivity[]
   measurements   Measurement[]
 
   @@index([projectId])
+  @@index([parentId])
   @@map("project_activities")
 }
 

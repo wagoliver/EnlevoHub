@@ -269,6 +269,8 @@ export const projectsAPI = {
     apiClient.post<any>(`/projects/${projectId}/activities`, data),
   createActivitiesFromTemplate: (projectId: string, templateId: string) =>
     apiClient.post<any>(`/projects/${projectId}/activities/from-template`, { templateId }),
+  createActivitiesFromTemplateWithSchedule: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/activities/from-template`, data),
   getActivity: (projectId: string, activityId: string) =>
     apiClient.get<any>(`/projects/${projectId}/activities/${activityId}`),
   updateActivity: (projectId: string, activityId: string, data: any) =>
@@ -363,4 +365,10 @@ export const activityTemplatesAPI = {
   create: (data: any) => apiClient.post<any>('/activity-templates', data),
   update: (id: string, data: any) => apiClient.patch<any>(`/activity-templates/${id}`, data),
   delete: (id: string) => apiClient.delete<any>(`/activity-templates/${id}`),
+  previewSchedule: (id: string, config: {
+    startDate: string
+    endDate: string
+    mode: 'BUSINESS_DAYS' | 'CALENDAR_DAYS'
+    holidays?: string[]
+  }) => apiClient.post<any>(`/activity-templates/${id}/preview-schedule`, config),
 }

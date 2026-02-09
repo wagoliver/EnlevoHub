@@ -21,6 +21,74 @@ interface ProgressOverviewProps {
   projectId: string
 }
 
+function ActivityProgressItem({ activity, depth = 0 }: { activity: any; depth?: number }) {
+  const actProgress = activity.progress ?? 0
+  const isPhase = activity.level === 'PHASE'
+  const isStage = activity.level === 'STAGE'
+
+  return (
+    <div style={{ paddingLeft: depth * 16 }}>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {activity.color && (
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: activity.color }}
+              />
+            )}
+            <span className={`text-sm ${isPhase ? 'font-semibold' : isStage ? 'font-medium' : ''} text-neutral-700`}>
+              {activity.name}
+            </span>
+            {isPhase && (
+              <Badge variant="outline" className="text-xs">
+                {activity.weight}%
+              </Badge>
+            )}
+            {!isPhase && !isStage && (
+              <Badge variant="outline" className="text-xs">
+                Peso: {activity.weight}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {activity.status && (
+              <Badge
+                variant={statusVariant[activity.status]}
+                className="text-xs"
+              >
+                {statusLabel[activity.status] || activity.status}
+              </Badge>
+            )}
+            <span className="text-sm font-medium w-10 text-right">
+              {Math.round(actProgress)}%
+            </span>
+          </div>
+        </div>
+        <Progress value={actProgress} className={isPhase ? 'h-2.5' : 'h-2'} />
+        {activity.unitCount != null && !isPhase && !isStage && (
+          <p className="text-xs text-neutral-400">
+            {activity.unitCount} unidade(s)
+          </p>
+        )}
+      </div>
+
+      {/* Render children */}
+      {activity.children?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {activity.children.map((child: any) => (
+            <ActivityProgressItem
+              key={child.id}
+              activity={child}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ProgressOverview({ projectId }: ProgressOverviewProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['project-progress', projectId],
@@ -71,42 +139,12 @@ export function ProgressOverview({ projectId }: ProgressOverviewProps) {
           </p>
         ) : (
           <div className="space-y-3">
-            {activities.map((activity: any) => {
-              const actProgress = activity.progress ?? 0
-              return (
-                <div key={activity.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-neutral-700">
-                        {activity.name}
-                      </span>
-                      <Badge variant="outline" className="text-xs">
-                        Peso: {activity.weight}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {activity.status && (
-                        <Badge
-                          variant={statusVariant[activity.status]}
-                          className="text-xs"
-                        >
-                          {statusLabel[activity.status] || activity.status}
-                        </Badge>
-                      )}
-                      <span className="text-sm font-medium w-10 text-right">
-                        {Math.round(actProgress)}%
-                      </span>
-                    </div>
-                  </div>
-                  <Progress value={actProgress} className="h-2" />
-                  {activity.unitCount != null && (
-                    <p className="text-xs text-neutral-400">
-                      {activity.unitCount} unidade(s)
-                    </p>
-                  )}
-                </div>
-              )
-            })}
+            {activities.map((activity: any) => (
+              <ActivityProgressItem
+                key={activity.id}
+                activity={activity}
+              />
+            ))}
           </div>
         )}
       </CardContent>

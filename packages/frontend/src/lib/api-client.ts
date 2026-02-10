@@ -23,8 +23,13 @@ class APIClient {
       ...(options.headers as Record<string, string>),
     }
 
-    // Add authorization header if token exists
-    if (accessToken && !headers['Authorization']) {
+    // Add authorization header if token exists (skip for public auth routes)
+    const isPublicAuth = endpoint.startsWith('/auth/login')
+      || endpoint.startsWith('/auth/register')
+      || endpoint.startsWith('/auth/forgot-password')
+      || endpoint.startsWith('/auth/reset-password')
+      || endpoint.startsWith('/auth/refresh')
+    if (accessToken && !headers['Authorization'] && !isPublicAuth) {
       headers['Authorization'] = `Bearer ${accessToken}`
     }
 
@@ -33,8 +38,8 @@ class APIClient {
       headers,
     })
 
-    // Handle 401 - try to refresh token
-    if (response.status === 401) {
+    // Handle 401 - try to refresh token (but not for public auth routes)
+    if (response.status === 401 && !isPublicAuth) {
       const refreshed = await this.tryRefreshToken()
       if (refreshed) {
         // Retry original request with new token

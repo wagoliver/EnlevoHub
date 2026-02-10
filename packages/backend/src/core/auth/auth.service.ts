@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import { PrismaClient, User, Tenant } from '@prisma/client'
 import { JWTService, TokenPair } from './jwt.service'
 import { EmailService } from '../email'
+import { seedDefaultTemplate } from '../../modules/activity-templates/default-template.seed'
 
 const SALT_ROUNDS = 12
 
@@ -111,6 +112,13 @@ export class AuthService {
           permissions: {}
         }
       })
+
+      // Seed default activity template for the new tenant
+      try {
+        await seedDefaultTemplate(tx as any, tenant.id)
+      } catch (err) {
+        console.warn('Failed to seed default template (non-blocking):', err)
+      }
 
       return { user, tenant }
     })

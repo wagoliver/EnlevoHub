@@ -12,8 +12,9 @@ mkdir -p $BACKUP_DIR
 
 echo "[$(date)] Starting backup..."
 
-# Backup PostgreSQL
-docker exec enlevohub-postgres-1 pg_dump -U postgres enlevohub | gzip > "$BACKUP_DIR/db_$DATE.sql.gz"
+# Backup PostgreSQL (two-step to avoid pipe errors)
+docker exec enlevohub-postgres-1 pg_dump -U postgres enlevohub > "$BACKUP_DIR/db_$DATE.sql"
+gzip "$BACKUP_DIR/db_$DATE.sql"
 
 # Backup storage config
 cp -f /opt/enlevohub/.env "$BACKUP_DIR/env_$DATE.bak" 2>/dev/null

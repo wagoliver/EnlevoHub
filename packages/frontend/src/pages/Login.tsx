@@ -52,7 +52,7 @@ export function Login() {
       <div className="hidden md:flex md:w-1/2 flex-col items-center justify-center bg-[#21252d] px-12">
         <EnlevoLogo variant="light" size="lg" />
         <p className="mt-6 text-center text-white/60 text-lg font-light max-w-sm">
-          Gestão inteligente de obras com elegância e eficiência
+          Construa com inteligência. Entregue com velocidade.
         </p>
       </div>
 

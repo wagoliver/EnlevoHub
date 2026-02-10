@@ -13,8 +13,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -30,6 +33,7 @@ import {
   ChevronRight,
   Loader2,
   Trash2,
+  Copy,
   FileText,
   LayoutTemplate,
 } from 'lucide-react'
@@ -44,6 +48,10 @@ export function ActivityTemplates() {
   const [searchInput, setSearchInput] = useState('')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [templateToDelete, setTemplateToDelete] = useState<any>(null)
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
+  const [templateToClone, setTemplateToClone] = useState<any>(null)
+  const [cloneName, setCloneName] = useState('')
+  const [cloneDescription, setCloneDescription] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['activity-templates', { page, search }],
@@ -70,6 +78,42 @@ export function ActivityTemplates() {
       toast.error(error.message || 'Erro ao excluir template')
     },
   })
+
+  const cloneMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string; description?: string } }) =>
+      activityTemplatesAPI.clone(id, data),
+    onSuccess: () => {
+      toast.success('Template clonado com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['activity-templates'] })
+      setCloneDialogOpen(false)
+      setTemplateToClone(null)
+      setCloneName('')
+      setCloneDescription('')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao clonar template')
+    },
+  })
+
+  const handleCloneClick = (e: React.MouseEvent, template: any) => {
+    e.stopPropagation()
+    setTemplateToClone(template)
+    setCloneName(`${template.name} (Cópia)`)
+    setCloneDescription(template.description || '')
+    setCloneDialogOpen(true)
+  }
+
+  const confirmClone = () => {
+    if (templateToClone) {
+      cloneMutation.mutate({
+        id: templateToClone.id,
+        data: {
+          name: cloneName,
+          ...(cloneDescription ? { description: cloneDescription } : {}),
+        },
+      })
+    }
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,7 +214,7 @@ export function ActivityTemplates() {
                     </TableHead>
                     <TableHead className="w-[140px]">Criado em</TableHead>
                     {canCreate && (
-                      <TableHead className="w-[80px]">Ações</TableHead>
+                      <TableHead className="w-[100px]">Ações</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
@@ -208,14 +252,24 @@ export function ActivityTemplates() {
                       </TableCell>
                       {canCreate && (
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={(e) => handleDeleteClick(e, template)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-neutral-500 hover:text-primary"
+                              onClick={(e) => handleCloneClick(e, template)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={(e) => handleDeleteClick(e, template)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -289,6 +343,62 @@ export function ActivityTemplates() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clone Dialog */}
+      <Dialog open={cloneDialogOpen} onOpenChange={setCloneDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clonar Template</DialogTitle>
+            <DialogDescription>
+              Crie uma cópia do template <strong>{templateToClone?.name}</strong> com um novo nome.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="clone-name">Nome *</Label>
+              <Input
+                id="clone-name"
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+                placeholder="Nome do novo template"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clone-description">Descrição</Label>
+              <Textarea
+                id="clone-description"
+                value={cloneDescription}
+                onChange={(e) => setCloneDescription(e.target.value)}
+                placeholder="Descrição do novo template (opcional)"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCloneDialogOpen(false)
+                setTemplateToClone(null)
+                setCloneName('')
+                setCloneDescription('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={cloneName.trim().length < 2 || cloneMutation.isPending}
+              onClick={confirmClone}
+            >
+              {cloneMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Clonar
             </Button>
           </DialogFooter>
         </DialogContent>

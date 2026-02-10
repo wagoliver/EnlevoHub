@@ -4,6 +4,7 @@ import {
   UpdateActivityTemplateInput,
   ListActivityTemplatesQuery,
   PreviewScheduleInput,
+  CloneActivityTemplateInput,
 } from './activity-template.schemas'
 import { SchedulingService, SchedulePhaseInput } from './scheduling.service'
 
@@ -154,6 +155,65 @@ export class ActivityTemplateService {
     await this.prisma.activityTemplate.delete({ where: { id } })
 
     return { message: 'Template excluído com sucesso' }
+  }
+
+  async clone(tenantId: string, sourceId: string, data: CloneActivityTemplateInput) {
+    const source = await this.prisma.activityTemplate.findFirst({
+      where: { id: sourceId, tenantId },
+      include: { items: { orderBy: { order: 'asc' } } },
+    })
+
+    if (!source) {
+      throw new Error('Template não encontrado')
+    }
+
+    const template = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.activityTemplate.create({
+        data: {
+          tenantId,
+          name: data.name,
+          description: data.description,
+        },
+      })
+
+      if (source.items.length > 0) {
+        const oldToNewId = new Map<string, string>()
+
+        // Define level priority for processing parents before children
+        const levelOrder: Record<string, number> = { PHASE: 0, STAGE: 1, ACTIVITY: 2 }
+        const sortedItems = [...source.items].sort(
+          (a, b) => (levelOrder[a.level] ?? 99) - (levelOrder[b.level] ?? 99)
+        )
+
+        for (const item of sortedItems) {
+          const newParentId = item.parentId ? oldToNewId.get(item.parentId) || null : null
+
+          const newItem = await tx.activityTemplateItem.create({
+            data: {
+              templateId: created.id,
+              name: item.name,
+              order: item.order,
+              weight: item.weight,
+              level: item.level,
+              parentId: newParentId,
+              percentageOfTotal: item.percentageOfTotal,
+              color: item.color,
+              durationDays: item.durationDays,
+              dependencies: item.dependencies ?? undefined,
+            },
+          })
+
+          oldToNewId.set(item.id, newItem.id)
+        }
+      }
+
+      return tx.activityTemplate.findUnique({
+        where: { id: created.id },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    })
+
+    return this.serializeWithTree(template)
   }
 
   async previewSchedule(tenantId: string, id: string, config: PreviewScheduleInput) {

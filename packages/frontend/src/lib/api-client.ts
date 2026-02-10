@@ -497,6 +497,8 @@ export const activityTemplatesAPI = {
   create: (data: any) => apiClient.post<any>('/activity-templates', data),
   update: (id: string, data: any) => apiClient.patch<any>(`/activity-templates/${id}`, data),
   delete: (id: string) => apiClient.delete<any>(`/activity-templates/${id}`),
+  clone: (id: string, data: { name: string; description?: string }) =>
+    apiClient.post<any>(`/activity-templates/${id}/clone`, data),
   previewSchedule: (id: string, config: {
     startDate: string
     endDate: string

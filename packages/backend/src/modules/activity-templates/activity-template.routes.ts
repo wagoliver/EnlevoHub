@@ -8,6 +8,7 @@ import {
   updateActivityTemplateSchema,
   listActivityTemplatesQuerySchema,
   previewScheduleSchema,
+  cloneActivityTemplateSchema,
 } from './activity-template.schemas'
 
 function requirePermission(permission: string) {
@@ -153,6 +154,33 @@ export async function activityTemplateRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Clone template
+  fastify.post('/:id/clone', {
+    preHandler: [authMiddleware, requirePermission('activities:create')],
+    schema: {
+      description: 'Clone an activity template',
+      tags: ['activity-templates'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = cloneActivityTemplateSchema.parse(request.body)
+      const template = await service.clone(getTenantId(request), id, body)
+      return reply.status(201).send(template)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
       }
       throw error
     }

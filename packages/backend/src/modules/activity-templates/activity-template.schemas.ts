@@ -88,7 +88,13 @@ export const previewScheduleSchema = z.object({
   holidays: z.array(z.string()).optional(),
 })
 
+export const cloneActivityTemplateSchema = z.object({
+  name: z.string().min(2).max(200),
+  description: z.string().optional(),
+})
+
 export type CreateActivityTemplateInput = z.infer<typeof createActivityTemplateSchema>
 export type UpdateActivityTemplateInput = z.infer<typeof updateActivityTemplateSchema>
 export type ListActivityTemplatesQuery = z.infer<typeof listActivityTemplatesQuerySchema>
 export type PreviewScheduleInput = z.infer<typeof previewScheduleSchema>
+export type CloneActivityTemplateInput = z.infer<typeof cloneActivityTemplateSchema>

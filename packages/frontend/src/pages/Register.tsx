@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, CheckCircle, Building2, HardHat } from 'lucide-react'
+import { Loader2, CheckCircle, Building2, HardHat, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,6 +52,7 @@ export function Register() {
   const [isLoading, setIsLoading] = useState(false)
   const [accountType, setAccountType] = useState<AccountType>('company')
   const [contractorSuccess, setContractorSuccess] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const companyForm = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
@@ -207,13 +208,24 @@ export function Register() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="company-password">Senha</Label>
-                <Input
-                  id="company-password"
-                  type="password"
-                  placeholder="Min. 8 caracteres"
-                  {...companyForm.register('password')}
-                  disabled={isLoading}
-                />
+                <div className="relative">
+                  <Input
+                    id="company-password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Min. 8 caracteres"
+                    {...companyForm.register('password')}
+                    disabled={isLoading}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {companyForm.formState.errors.password && (
                   <p className="text-sm text-error-600">{companyForm.formState.errors.password.message}</p>
                 )}
@@ -295,13 +307,24 @@ export function Register() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="contractor-password">Senha</Label>
-                <Input
-                  id="contractor-password"
-                  type="password"
-                  placeholder="Min. 8 caracteres"
-                  {...contractorForm.register('password')}
-                  disabled={isLoading}
-                />
+                <div className="relative">
+                  <Input
+                    id="contractor-password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Min. 8 caracteres"
+                    {...contractorForm.register('password')}
+                    disabled={isLoading}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {contractorForm.formState.errors.password && (
                   <p className="text-sm text-error-600">{contractorForm.formState.errors.password.message}</p>
                 )}

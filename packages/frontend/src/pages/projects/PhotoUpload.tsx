@@ -81,7 +81,7 @@ export function PhotoUpload({
 
   const apiBaseUrl = import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace('/api/v1', '')
-    : 'http://localhost:3001'
+    : ''
 
   return (
     <div className="space-y-4">

@@ -132,7 +132,7 @@ export function EvolutionTimeline({ projectId }: EvolutionTimelineProps) {
 
   const apiBaseUrl = import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace('/api/v1', '')
-    : 'http://localhost:3001'
+    : ''
 
   if (isLoading) {
     return (

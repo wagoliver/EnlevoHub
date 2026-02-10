@@ -1,7 +1,8 @@
 node_modules
 packages/*/node_modules
 packages/*/dist
-packages/daemon
+packages/daemon/src
+packages/daemon/dist
 
 runtime
 logs

@@ -21,7 +21,9 @@ interface StorageConfig {
   storagePath: string
 }
 
-const CONFIG_PATH = path.resolve(process.cwd(), 'data', 'storage-config.json')
+// Resolve relative to the backend package root, regardless of process.cwd()
+const BACKEND_ROOT = path.resolve(__dirname, '..', '..', '..')
+const CONFIG_PATH = path.resolve(BACKEND_ROOT, 'data', 'storage-config.json')
 
 function readConfig(): StorageConfig | null {
   try {
@@ -43,7 +45,7 @@ export function getStoragePath(): string {
   if (process.env.STORAGE_PATH) {
     return path.resolve(process.env.STORAGE_PATH)
   }
-  return path.resolve(process.cwd(), 'storage')
+  return path.resolve(BACKEND_ROOT, 'storage')
 }
 
 export function saveStoragePath(storagePath: string): void {
@@ -63,7 +65,7 @@ export function getStorageConfig(): { storagePath: string; source: string } {
   if (process.env.STORAGE_PATH) {
     return { storagePath: path.resolve(process.env.STORAGE_PATH), source: 'env' }
   }
-  return { storagePath: path.resolve(process.cwd(), 'storage'), source: 'default' }
+  return { storagePath: path.resolve(BACKEND_ROOT, 'storage'), source: 'default' }
 }
 
 export function getAvailableDrives(): Drive[] {

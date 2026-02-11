@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Loader2,
   Upload,
@@ -105,7 +106,8 @@ function generateModelXLSX() {
 }
 
 function parseSpreadsheet(
-  file: File
+  file: File,
+  autoCalcPercentage: boolean
 ): Promise<{ rows: any[][]; errors: ValidationError[] }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -158,7 +160,7 @@ function parseSpreadsheet(
           if (!etapa) errors.push({ row: rowNum, message: 'Etapa não preenchida' })
           if (!atividade) errors.push({ row: rowNum, message: 'Atividade não preenchida' })
           if (!peso || !Number.isInteger(peso) || peso < 1 || peso > 5) errors.push({ row: rowNum, message: 'Peso deve ser um número inteiro de 1 a 5' })
-          if (!percentual || percentual <= 0) errors.push({ row: rowNum, message: 'Percentual deve ser > 0' })
+          if (!autoCalcPercentage && (!percentual || percentual <= 0)) errors.push({ row: rowNum, message: 'Percentual deve ser > 0' })
         }
 
         resolve({ rows: dataRows.map((row) => {
@@ -173,7 +175,7 @@ function parseSpreadsheet(
   })
 }
 
-function rowsToPhases(rows: any[][]): { phases: ParsedPhase[]; errors: ValidationError[] } {
+function rowsToPhases(rows: any[][], autoCalcPercentage: boolean): { phases: ParsedPhase[]; errors: ValidationError[] } {
   const errors: ValidationError[] = []
   const phaseMap = new Map<string, {
     percentageOfTotal: number
@@ -224,13 +226,40 @@ function rowsToPhases(rows: any[][]): { phases: ParsedPhase[]; errors: Validatio
     })
   }
 
-  // Validate percentage sum
-  const percentSum = Array.from(phaseMap.values()).reduce((s, p) => s + p.percentageOfTotal, 0)
-  if (Math.abs(percentSum - 100) >= 0.1) {
-    errors.push({
-      row: 0,
-      message: `Soma dos percentuais das fases é ${percentSum.toFixed(1)}%, deveria ser 100%`,
-    })
+  // Validate or auto-calculate percentage
+  if (autoCalcPercentage) {
+    // Calculate percentage based on sum of weights per phase
+    let totalWeight = 0
+    for (const p of phaseMap.values()) {
+      for (const acts of p.stageMap.values()) {
+        totalWeight += acts.reduce((s, a) => s + a.weight, 0)
+      }
+    }
+
+    if (totalWeight > 0) {
+      for (const p of phaseMap.values()) {
+        let phaseWeight = 0
+        for (const acts of p.stageMap.values()) {
+          phaseWeight += acts.reduce((s, a) => s + a.weight, 0)
+        }
+        p.percentageOfTotal = Math.round((phaseWeight / totalWeight) * 10000) / 100
+      }
+
+      // Adjust rounding so sum = exactly 100
+      const values = Array.from(phaseMap.values())
+      const sum = values.reduce((s, p) => s + p.percentageOfTotal, 0)
+      if (values.length > 0 && Math.abs(sum - 100) > 0.001) {
+        values[values.length - 1].percentageOfTotal += Math.round((100 - sum) * 100) / 100
+      }
+    }
+  } else {
+    const percentSum = Array.from(phaseMap.values()).reduce((s, p) => s + p.percentageOfTotal, 0)
+    if (Math.abs(percentSum - 100) >= 0.1) {
+      errors.push({
+        row: 0,
+        message: `Soma dos percentuais das fases é ${percentSum.toFixed(1)}%, deveria ser 100%`,
+      })
+    }
   }
 
   // Validate dependencies reference existing activities
@@ -275,6 +304,9 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
   const [parseErrors, setParseErrors] = useState<ValidationError[]>([])
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
   const [showHelp, setShowHelp] = useState(false)
+  const [autoCalcPercentage, setAutoCalcPercentage] = useState(true)
+  const [parsedRows, setParsedRows] = useState<any[][]>([])
+  const [rowErrors, setRowErrors] = useState<ValidationError[]>([])
 
   const hasData = phases.length > 0
   const hasErrors = parseErrors.length > 0
@@ -290,6 +322,15 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
     })
   }
 
+  const handleToggleAutoCalc = (checked: boolean) => {
+    setAutoCalcPercentage(checked)
+    if (parsedRows.length > 0) {
+      const { phases: parsed, errors: structErrors } = rowsToPhases(parsedRows, checked)
+      setPhases(parsed)
+      setParseErrors([...rowErrors, ...structErrors])
+    }
+  }
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -298,18 +339,23 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
     setPhases([])
     setParseErrors([])
     setExpandedPhases(new Set())
+    setParsedRows([])
+    setRowErrors([])
 
     try {
-      const { rows, errors: rowErrors } = await parseSpreadsheet(file)
+      const { rows, errors: fileRowErrors } = await parseSpreadsheet(file, autoCalcPercentage)
 
-      if (rowErrors.length > 0 && rows.length === 0) {
-        setParseErrors(rowErrors)
+      if (fileRowErrors.length > 0 && rows.length === 0) {
+        setParseErrors(fileRowErrors)
         return
       }
 
-      const { phases: parsed, errors: structErrors } = rowsToPhases(rows)
+      setParsedRows(rows)
+      setRowErrors(fileRowErrors)
+
+      const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
       setPhases(parsed)
-      setParseErrors([...rowErrors, ...structErrors])
+      setParseErrors([...fileRowErrors, ...structErrors])
 
       // Auto-expand all phases for preview
       setExpandedPhases(new Set(parsed.map((p) => p.name)))
@@ -370,6 +416,9 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
     setPhases([])
     setParseErrors([])
     setExpandedPhases(new Set())
+    setParsedRows([])
+    setRowErrors([])
+    setAutoCalcPercentage(true)
     onOpenChange(false)
   }
 
@@ -517,6 +566,25 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
               </div>
             )}
           </div>
+
+          {/* Auto-calc percentage toggle */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <Checkbox
+              checked={autoCalcPercentage}
+              onChange={(e) => handleToggleAutoCalc(e.target.checked)}
+              className="mt-0.5"
+            />
+            <div>
+              <span className="text-sm font-medium text-neutral-700">
+                Calcular percentual automaticamente
+              </span>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {autoCalcPercentage
+                  ? 'O percentual de cada fase será calculado com base na soma dos pesos das atividades. A coluna "Percentual (%)" da planilha será ignorada.'
+                  : 'O percentual de cada fase será lido da coluna "Percentual (%)" da planilha. A soma deve ser exatamente 100%.'}
+              </p>
+            </div>
+          </label>
 
           {/* Step 2: Upload */}
           <div>

@@ -507,6 +507,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     const filePath = path.join(uploadService.getStorageDir(), projectId, safeName)
 
     if (!fs.existsSync(filePath)) {
+      fastify.log.warn({ filePath, storageDir: uploadService.getStorageDir(), projectId, filename: safeName }, '[UPLOAD] File not found')
       return reply.status(404).send({ error: 'Not Found', message: 'Arquivo não encontrado' })
     }
 

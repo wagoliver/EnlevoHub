@@ -25,6 +25,16 @@ export interface RegisterContractorInput {
   contacts?: any
 }
 
+export interface RegisterBrokerInput {
+  email: string
+  password: string
+  name: string
+  tenantDocument: string
+  document: string
+  creci?: string
+  phone?: string
+}
+
 export interface LoginInput {
   email: string
   password: string
@@ -43,6 +53,7 @@ export interface AuthResponse {
     role: string
     tenantId: string
     contractorId?: string | null
+    brokerId?: string | null
     isApproved: boolean
   }
   tenant: {
@@ -139,6 +150,7 @@ export class AuthService {
         role: result.user.role,
         tenantId: result.tenant.id,
         contractorId: null,
+        brokerId: null,
         isApproved: true
       },
       tenant: {
@@ -208,6 +220,58 @@ export class AuthService {
   }
 
   /**
+   * Register broker (auto-cadastro)
+   */
+  async registerBroker(input: RegisterBrokerInput): Promise<{ message: string }> {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: input.email }
+    })
+
+    if (existingUser) {
+      throw new Error('Já existe um usuário com este email')
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { document: input.tenantDocument }
+    })
+
+    if (!tenant) {
+      throw new Error('Empresa não encontrada. Verifique o CNPJ informado.')
+    }
+
+    const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS)
+
+    await this.prisma.$transaction(async (tx) => {
+      const broker = await tx.broker.create({
+        data: {
+          tenantId: tenant.id,
+          name: input.name,
+          document: input.document,
+          creci: input.creci || null,
+          commissionRate: 0,
+          contacts: input.phone ? { phone: input.phone } : {},
+          isActive: true,
+        }
+      })
+
+      await tx.user.create({
+        data: {
+          email: input.email,
+          password: hashedPassword,
+          name: input.name,
+          role: 'BROKER',
+          tenantId: tenant.id,
+          brokerId: broker.id,
+          isApproved: false,
+          permissions: {}
+        }
+      })
+    })
+
+    return { message: 'Cadastro realizado com sucesso. Aguardando aprovação da empresa.' }
+  }
+
+  /**
    * Login user
    */
   async login(input: LoginInput): Promise<AuthResponse> {
@@ -244,7 +308,8 @@ export class AuthService {
       tenantId: user.tenantId,
       email: user.email,
       role: user.role,
-      contractorId: user.contractorId || undefined
+      contractorId: user.contractorId || undefined,
+      brokerId: user.brokerId || undefined
     })
 
     return {
@@ -255,6 +320,7 @@ export class AuthService {
         role: user.role,
         tenantId: user.tenantId,
         contractorId: user.contractorId,
+        brokerId: user.brokerId,
         isApproved: user.isApproved
       },
       tenant: {
@@ -288,7 +354,8 @@ export class AuthService {
       tenantId: user.tenantId,
       email: user.email,
       role: user.role,
-      contractorId: user.contractorId || undefined
+      contractorId: user.contractorId || undefined,
+      brokerId: user.brokerId || undefined
     })
 
     return tokens
@@ -315,6 +382,14 @@ export class AuthService {
             document: true,
             specialty: true
           }
+        },
+        broker: {
+          select: {
+            id: true,
+            name: true,
+            document: true,
+            creci: true
+          }
         }
       }
     })
@@ -330,10 +405,12 @@ export class AuthService {
       role: user.role,
       tenantId: user.tenantId,
       contractorId: user.contractorId,
+      brokerId: user.brokerId,
       isApproved: user.isApproved,
       createdAt: user.createdAt,
       tenant: user.tenant,
-      contractor: user.contractor || null
+      contractor: user.contractor || null,
+      broker: user.broker || null
     }
   }
 

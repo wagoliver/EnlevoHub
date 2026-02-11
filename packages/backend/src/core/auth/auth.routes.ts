@@ -8,6 +8,7 @@ import {
   refreshTokenSchema,
   changePasswordSchema,
   registerContractorSchema,
+  registerBrokerSchema,
   updateProfileSchema,
   forgotPasswordSchema,
   resetPasswordSchema
@@ -47,6 +48,7 @@ export async function authRoutes(fastify: FastifyInstance) {
                 role: { type: 'string' },
                 tenantId: { type: 'string' },
                 contractorId: { type: ['string', 'null'] },
+                brokerId: { type: ['string', 'null'] },
                 isApproved: { type: 'boolean' }
               }
             },
@@ -128,6 +130,49 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // Register Broker (auto-cadastro)
+  fastify.post('/auth/register-broker', {
+    schema: {
+      description: 'Register broker with auto-signup (pending approval)',
+      tags: ['auth'],
+      body: {
+        type: 'object',
+        required: ['email', 'password', 'name', 'tenantDocument', 'document'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 },
+          name: { type: 'string', minLength: 2 },
+          tenantDocument: { type: 'string', minLength: 11 },
+          document: { type: 'string', minLength: 11 },
+          creci: { type: 'string' },
+          phone: { type: 'string' },
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const body = registerBrokerSchema.parse(request.body)
+      const result = await authService.registerBroker(body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return (reply as any).status(400).send({
+          error: 'Falha no cadastro',
+          message: error.message
+        })
+      }
+      throw error
+    }
+  })
+
   // Login
   fastify.post('/auth/login', {
     schema: {
@@ -154,6 +199,7 @@ export async function authRoutes(fastify: FastifyInstance) {
                 role: { type: 'string' },
                 tenantId: { type: 'string' },
                 contractorId: { type: ['string', 'null'] },
+                brokerId: { type: ['string', 'null'] },
                 isApproved: { type: 'boolean' }
               }
             },

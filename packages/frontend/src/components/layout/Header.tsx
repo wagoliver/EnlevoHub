@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<Role, string> = {
   ENGINEER: 'Engenheiro',
   ADMIN_STAFF: 'Administrativo',
   CONTRACTOR: 'Empreiteiro',
+  BROKER: 'Corretor',
   VIEWER: 'Visualizador',
 }
 
@@ -37,6 +38,7 @@ const ROLE_COLORS: Record<Role, string> = {
   ENGINEER: 'bg-blue-100 text-blue-700',
   ADMIN_STAFF: 'bg-amber-100 text-amber-700',
   CONTRACTOR: 'bg-green-100 text-green-700',
+  BROKER: 'bg-teal-100 text-teal-700',
   VIEWER: 'bg-neutral-100 text-neutral-700',
 }
 

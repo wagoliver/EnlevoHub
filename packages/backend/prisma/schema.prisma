@@ -55,6 +55,7 @@ model User {
   isActive     Boolean  @default(true)
   isApproved   Boolean  @default(true)
   contractorId String?  @unique
+  brokerId     String?  @unique
   lastLogin    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -62,6 +63,7 @@ model User {
   // Relations
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contractor        Contractor?         @relation(fields: [contractorId], references: [id])
+  broker            Broker?             @relation(fields: [brokerId], references: [id])
   auditLogs            AuditLog[]
   passwordResetTokens  PasswordResetToken[]
   projectEvolutions    ProjectEvolution[]
@@ -81,6 +83,7 @@ enum Role {
   ENGINEER      // (antigo MANAGER) aprova medicoes, gerencia obra
   ADMIN_STAFF   // financeiro, compras, fornecedores
   CONTRACTOR    // empreiteiro - acesso restrito
+  BROKER        // corretor - acesso restrito a unidades/vendas
   VIEWER        // somente leitura
 }
 
@@ -494,6 +497,7 @@ model Broker {
 
   // Relations
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?
   sales  Sale[]
 
   @@index([tenantId])

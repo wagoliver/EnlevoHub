@@ -217,6 +217,16 @@ export const authAPI = {
     contacts: any
   }) => apiClient.post('/auth/register-contractor', data),
 
+  registerBroker: (data: {
+    email: string
+    password: string
+    name: string
+    tenantDocument: string
+    document: string
+    creci?: string
+    phone?: string
+  }) => apiClient.post('/auth/register-broker', data),
+
   getMe: () => apiClient.get('/auth/me'),
 
   updateProfile: (data: { name?: string; email?: string }) =>
@@ -441,6 +451,30 @@ export const contractorsAPI = {
     apiClient.post<any>(`/contractors/${contractorId}/projects/${projectId}/units`, { unitIds }),
   listUnitsByProject: (contractorId: string, projectId: string) =>
     apiClient.get<any>(`/contractors/${contractorId}/projects/${projectId}/units`),
+}
+
+export const brokersAPI = {
+  list: (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    isActive?: boolean
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.set(key, String(value))
+        }
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/brokers${qs ? `?${qs}` : ''}`)
+  },
+  getById: (id: string) => apiClient.get<any>(`/brokers/${id}`),
+  create: (data: any) => apiClient.post<any>('/brokers', data),
+  update: (id: string, data: any) => apiClient.patch<any>(`/brokers/${id}`, data),
+  delete: (id: string) => apiClient.delete<any>(`/brokers/${id}`),
 }
 
 export const usersAPI = {

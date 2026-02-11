@@ -15,6 +15,9 @@ import { Projects } from './pages/Projects'
 import { ProjectDetail } from './pages/projects/ProjectDetail'
 import { Contractors } from './pages/Contractors'
 import { ContractorDetail } from './pages/contractors/ContractorDetail'
+import { Brokers } from './pages/Brokers'
+import { BrokerDetail } from './pages/brokers/BrokerDetail'
+import { RegisterBroker } from './pages/RegisterBroker'
 import { ActivityTemplates } from './pages/settings/ActivityTemplates'
 import { ActivityTemplateEditor } from './pages/settings/ActivityTemplateEditor'
 import { Users } from './pages/Users'
@@ -45,6 +48,7 @@ function App() {
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
           <Route path="/register-contractor" element={<Navigate to="/register" replace />} />
+          <Route path="/register-broker" element={<RegisterBroker />} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/pending-approval" element={<PendingApproval />} />
@@ -66,7 +70,8 @@ function App() {
             <Route path="suppliers/:id" element={<SupplierDetail />} />
             <Route path="contractors" element={<Contractors />} />
             <Route path="contractors/:id" element={<ContractorDetail />} />
-            <Route path="brokers" element={<ComingSoon title="Corretores" />} />
+            <Route path="brokers" element={<Brokers />} />
+            <Route path="brokers/:id" element={<BrokerDetail />} />
             <Route path="purchases" element={<PurchaseOrders />} />
             <Route path="financial" element={<Financial />} />
             <Route path="contracts" element={<ComingSoon title="Contratos" />} />

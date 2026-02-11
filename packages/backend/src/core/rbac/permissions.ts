@@ -238,6 +238,23 @@ export const Roles = {
       Permissions.CONTRACTS_VIEW,
     ] as Permission[]
   },
+  BROKER: {
+    name: 'BROKER',
+    description: 'Corretor - acesso restrito a unidades e vendas',
+    permissions: [
+      // Projects (view)
+      Permissions.PROJECTS_VIEW,
+
+      // Units (view - quadro de disponibilidade)
+      Permissions.UNITS_VIEW,
+
+      // Brokers (view - próprio perfil)
+      Permissions.BROKERS_VIEW,
+
+      // Contracts (view - futuros contratos)
+      Permissions.CONTRACTS_VIEW,
+    ] as Permission[]
+  },
   VIEWER: {
     name: 'VIEWER',
     description: 'Somente leitura',

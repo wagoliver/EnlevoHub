@@ -4,8 +4,9 @@ export interface JWTPayload {
   userId: string
   tenantId: string
   email: string
-  role: 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'VIEWER'
+  role: 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'BROKER' | 'VIEWER'
   contractorId?: string
+  brokerId?: string
 }
 
 export interface TokenPair {

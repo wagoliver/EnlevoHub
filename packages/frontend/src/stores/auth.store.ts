@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type Role = 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'VIEWER'
+export type Role = 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'BROKER' | 'VIEWER'
 
 export interface User {
   id: string
@@ -10,6 +10,7 @@ export interface User {
   role: Role
   tenantId: string
   contractorId?: string | null
+  brokerId?: string | null
   isApproved?: boolean
   permissions?: string[]
 }

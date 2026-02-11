@@ -62,6 +62,24 @@ export const registerContractorSchema = z.object({
 
 export type RegisterContractorSchema = z.infer<typeof registerContractorSchema>
 
+// Register broker schema
+export const registerBrokerSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z
+    .string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres')
+    .regex(/[A-Z]/, 'Senha deve conter pelo menos uma letra maiúscula')
+    .regex(/[a-z]/, 'Senha deve conter pelo menos uma letra minúscula')
+    .regex(/[0-9]/, 'Senha deve conter pelo menos um número'),
+  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
+  tenantDocument: z.string().min(11, 'CNPJ da empresa é obrigatório'),
+  document: z.string().min(11, 'CPF do corretor é obrigatório'),
+  creci: z.string().optional(),
+  phone: z.string().optional(),
+})
+
+export type RegisterBrokerSchema = z.infer<typeof registerBrokerSchema>
+
 // Update profile schema
 export const updateProfileSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').optional(),

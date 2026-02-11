@@ -36,7 +36,9 @@ import {
   Copy,
   FileText,
   LayoutTemplate,
+  Upload,
 } from 'lucide-react'
+import { ImportTemplateDialog } from './ImportTemplateDialog'
 
 export function ActivityTemplates() {
   const navigate = useNavigate()
@@ -52,6 +54,7 @@ export function ActivityTemplates() {
   const [templateToClone, setTemplateToClone] = useState<any>(null)
   const [cloneName, setCloneName] = useState('')
   const [cloneDescription, setCloneDescription] = useState('')
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['activity-templates', { page, search }],
@@ -146,10 +149,16 @@ export function ActivityTemplates() {
           </p>
         </div>
         {canCreate && (
-          <Button onClick={() => navigate('/settings/templates/new')}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Template
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar Planilha
+            </Button>
+            <Button onClick={() => navigate('/settings/templates/new')}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Template
+            </Button>
+          </div>
         )}
       </div>
 
@@ -347,6 +356,12 @@ export function ActivityTemplates() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Dialog */}
+      <ImportTemplateDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+      />
 
       {/* Clone Dialog */}
       <Dialog open={cloneDialogOpen} onOpenChange={setCloneDialogOpen}>

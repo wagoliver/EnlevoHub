@@ -61,6 +61,11 @@ export class ProjectActivityService {
         unitActivities: {
           include: {
             unit: { select: { id: true, code: true, type: true } },
+            measurements: {
+              select: { id: true, status: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -75,6 +80,7 @@ export class ProjectActivityService {
       const unitActivities = a.unitActivities.map(ua => ({
         ...ua,
         progress: Number(ua.progress),
+        lastMeasurementStatus: ua.measurements?.[0]?.status || null,
       }))
       const avgProgress =
         unitActivities.length > 0

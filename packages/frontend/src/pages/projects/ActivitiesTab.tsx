@@ -221,15 +221,25 @@ function ActivityRow({
           </TableCell>
           {canEdit && (
             <TableCell>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={(e) => onMeasure(e, activity.id, ua.id)}
-              >
-                <Ruler className="mr-1 h-3 w-3" />
-                Medir
-              </Button>
+              {ua.lastMeasurementStatus === 'PENDING' ? (
+                <Badge variant="reserved" className="text-xs">
+                  Pendente
+                </Badge>
+              ) : ua.lastMeasurementStatus === 'APPROVED' ? (
+                <Badge variant="completed" className="text-xs">
+                  Aprovada
+                </Badge>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => onMeasure(e, activity.id, ua.id)}
+                >
+                  <Ruler className="mr-1 h-3 w-3" />
+                  Medir
+                </Button>
+              )}
             </TableCell>
           )}
         </TableRow>

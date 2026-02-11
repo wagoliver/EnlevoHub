@@ -800,6 +800,19 @@ export function MeasurementFormDialog({
                 </Badge>
               </div>
 
+              {/* Unit code info (read-only) */}
+              {(() => {
+                const unitCode =
+                  (selectedUnitId && projectUnits.find((u) => u.id === selectedUnitId)?.code) ||
+                  (selectedUnitActivityId && unitActivities.find((u) => u.id === selectedUnitActivityId)?.unit?.code)
+                return unitCode ? (
+                  <div className="flex items-center gap-2 rounded-md bg-neutral-50 px-3 py-2">
+                    <span className="text-xs text-neutral-500">Unidade:</span>
+                    <span className="text-sm font-medium">{unitCode}</span>
+                  </div>
+                ) : null
+              })()}
+
               {/* Unit selector (for non-GENERAL activities when project has units) */}
               {selectedActivity?.scope !== 'GENERAL' && projectUnits.length > 0 && (
                 <div>

@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/select'
 import { usersAPI } from '@/lib/api-client'
 import { Role } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 
 const ROLE_LABELS: Record<Role, string> = {
   ROOT: 'Root',
@@ -65,6 +66,7 @@ interface UserData {
 
 export function Users() {
   const queryClient = useQueryClient()
+  const canManageUsers = usePermission('users:create')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -134,10 +136,12 @@ export function Users() {
             Gerencie os usuários do sistema
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Novo Usuário
-        </Button>
+        {canManageUsers && (
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Novo Usuário
+          </Button>
+        )}
       </div>
 
       {/* Pending Approvals */}
@@ -165,26 +169,30 @@ export function Users() {
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
                     Pendente
                   </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-green-600 border-green-300 hover:bg-green-50"
-                    onClick={() => approveMutation.mutate(user.id)}
-                    disabled={approveMutation.isPending}
-                  >
-                    <Check className="mr-1 h-4 w-4" />
-                    Aprovar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-red-600 border-red-300 hover:bg-red-50"
-                    onClick={() => rejectMutation.mutate(user.id)}
-                    disabled={rejectMutation.isPending}
-                  >
-                    <X className="mr-1 h-4 w-4" />
-                    Rejeitar
-                  </Button>
+                  {canManageUsers && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-green-600 border-green-300 hover:bg-green-50"
+                        onClick={() => approveMutation.mutate(user.id)}
+                        disabled={approveMutation.isPending}
+                      >
+                        <Check className="mr-1 h-4 w-4" />
+                        Aprovar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 border-red-300 hover:bg-red-50"
+                        onClick={() => rejectMutation.mutate(user.id)}
+                        disabled={rejectMutation.isPending}
+                      >
+                        <X className="mr-1 h-4 w-4" />
+                        Rejeitar
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

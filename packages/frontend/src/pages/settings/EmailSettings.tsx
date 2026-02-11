@@ -25,6 +25,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { tenantAPI } from '@/lib/api-client'
+import { Navigate } from 'react-router-dom'
+import { usePermission } from '@/hooks/usePermission'
 
 const smtpSchema = z.object({
   host: z.string().min(1, 'Host e obrigatorio'),
@@ -39,6 +41,12 @@ const smtpSchema = z.object({
 type SmtpFormData = z.infer<typeof smtpSchema>
 
 export function EmailSettings() {
+  const canEditTenant = usePermission('tenant:edit')
+
+  if (!canEditTenant) {
+    return <Navigate to="/" replace />
+  }
+
   const queryClient = useQueryClient()
   const [showPassword, setShowPassword] = useState(false)
   const [testDialogOpen, setTestDialogOpen] = useState(false)

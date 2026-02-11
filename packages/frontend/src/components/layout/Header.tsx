@@ -8,6 +8,7 @@ import {
   PanelLeftOpen,
 } from 'lucide-react'
 import { useAuthStore, Role } from '@/stores/auth.store'
+import { usePermission } from '@/hooks/usePermission'
 import { useSidebarStore } from '@/stores/sidebar.store'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -44,6 +45,7 @@ export function Header() {
   const { user, tenant, clearAuth } = useAuthStore()
   const { isCollapsed, toggleCollapsed, setMobileOpen } = useSidebarStore()
   const isMobile = useIsMobile()
+  const canEditTenant = usePermission('tenant:edit')
 
   const handleLogout = () => {
     clearAuth()
@@ -143,10 +145,12 @@ export function Header() {
                 <User className="mr-2 h-4 w-4" />
                 Meu Perfil
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                Configurações
-              </DropdownMenuItem>
+              {canEditTenant && (
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Configurações
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}

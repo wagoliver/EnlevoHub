@@ -137,14 +137,8 @@ export const Roles = {
       Permissions.MEASUREMENTS_CREATE,
       Permissions.MEASUREMENTS_APPROVE,
 
-      // Brokers (view only)
-      Permissions.BROKERS_VIEW,
-
       // Purchases (view only)
       Permissions.PURCHASES_VIEW,
-
-      // Financial (view only)
-      Permissions.FINANCIAL_VIEW,
 
       // Contracts
       Permissions.CONTRACTS_VIEW,

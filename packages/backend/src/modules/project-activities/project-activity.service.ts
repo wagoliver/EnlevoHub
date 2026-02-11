@@ -634,6 +634,22 @@ export class ProjectActivityService {
     roots.sort((a: any, b: any) => a.order - b.order)
     roots.forEach(sortChildren)
 
+    // Recalculate progress bottom-up (weighted average of children)
+    const recalcProgress = (node: any): number => {
+      if (!node.children || node.children.length === 0) {
+        return node.averageProgress || 0
+      }
+      const totalWeight = node.children.reduce((sum: number, c: any) => sum + (c.weight || 1), 0)
+      if (totalWeight === 0) return 0
+      const weightedSum = node.children.reduce((sum: number, c: any) => {
+        const childProgress = recalcProgress(c)
+        return sum + (c.weight || 1) * childProgress
+      }, 0)
+      node.averageProgress = Math.round((weightedSum / totalWeight) * 100) / 100
+      return node.averageProgress
+    }
+    roots.forEach(recalcProgress)
+
     return roots
   }
 }

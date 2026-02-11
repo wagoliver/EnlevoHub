@@ -476,6 +476,31 @@ export async function financialRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.post('/reconciliation/unlink/:id', {
+    preHandler: [authMiddleware, requirePermission('financial:edit')],
+    schema: {
+      description: 'Unlink a reconciled transaction (set back to PENDING)',
+      tags: ['financial'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await reconciliationService.unlinkTransaction(getTenantId(request), id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   fastify.post('/reconciliation/ignore/:id', {
     preHandler: [authMiddleware, requirePermission('financial:edit')],
     schema: {

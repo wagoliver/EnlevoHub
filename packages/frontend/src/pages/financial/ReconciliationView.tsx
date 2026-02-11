@@ -120,6 +120,15 @@ export function ReconciliationView() {
     onError: (error: Error) => toast.error(error.message),
   })
 
+  const unlinkMutation = useMutation({
+    mutationFn: (id: string) => financialAPI.unlinkTransaction(id),
+    onSuccess: () => {
+      toast.success('Transação desvinculada. Agora pode re-conciliar.')
+      queryClient.invalidateQueries({ queryKey: ['financial'] })
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
   const rerunMutation = useMutation({
     mutationFn: () => financialAPI.rerunReconciliation(),
     onSuccess: (data: any) => {
@@ -312,16 +321,43 @@ export function ReconciliationView() {
                       : 'bg-green-50 border-green-200'
                   }`}>
                     {selectedTx.reconciliationStatus === 'IGNORED' ? (
-                      <p className="text-sm text-neutral-600">
-                        Esta transação foi <strong>ignorada</strong>.
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-neutral-600">
+                          Esta transação foi <strong>ignorada</strong>.
+                        </p>
+                        {canEdit && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => unlinkMutation.mutate(selectedTx.id)}
+                            disabled={unlinkMutation.isPending}
+                          >
+                            {unlinkMutation.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                            Restaurar
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <div>
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          <p className="text-sm font-medium text-green-800">
-                            Vinculada ({selectedTx.reconciliationStatus === 'AUTO_MATCHED' ? 'automático' : 'manual'})
-                          </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <p className="text-sm font-medium text-green-800">
+                              Vinculada ({selectedTx.reconciliationStatus === 'AUTO_MATCHED' ? 'automático' : 'manual'})
+                            </p>
+                          </div>
+                          {canEdit && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={() => unlinkMutation.mutate(selectedTx.id)}
+                              disabled={unlinkMutation.isPending}
+                            >
+                              {unlinkMutation.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                              Desvincular
+                            </Button>
+                          )}
                         </div>
                         {selectedTx.linkedEntityName && (
                           <p className="text-sm text-green-700 mt-1">

@@ -208,6 +208,24 @@ export class ReconciliationService {
     return { ...updated, amount: Number(updated.amount) }
   }
 
+  async unlinkTransaction(tenantId: string, transactionId: string) {
+    const transaction = await this.prisma.financialTransaction.findFirst({
+      where: { id: transactionId, user: { tenantId } },
+    })
+    if (!transaction) throw new Error('Transação não encontrada')
+
+    const updated = await this.prisma.financialTransaction.update({
+      where: { id: transactionId },
+      data: {
+        reconciliationStatus: 'PENDING',
+        linkedEntityType: null,
+        linkedEntityId: null,
+        linkedEntityName: null,
+      },
+    })
+    return { ...updated, amount: Number(updated.amount) }
+  }
+
   async ignoreTransaction(tenantId: string, transactionId: string) {
     const transaction = await this.prisma.financialTransaction.findFirst({
       where: { id: transactionId, user: { tenantId } },

@@ -244,74 +244,145 @@ export function ProjectDetail() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6 mt-6">
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-6">
             {/* Project Info */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Informações do Projeto</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <MapPin className="mt-0.5 h-4 w-4 text-neutral-500" />
-                  <div>
-                    <p className="text-sm font-medium">Endereço</p>
-                    <p className="text-sm text-neutral-600">
-                      {project.address?.street}, {project.address?.number}
-                      {project.address?.complement
-                        ? ` - ${project.address.complement}`
-                        : ''}
-                    </p>
-                    <p className="text-sm text-neutral-600">
-                      {project.address?.neighborhood} - {project.address?.city}/
-                      {project.address?.state}
-                    </p>
-                    <p className="text-sm text-neutral-600">
-                      CEP: {project.address?.zipCode}
-                    </p>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="flex items-start gap-3">
-                  <Calendar className="mt-0.5 h-4 w-4 text-neutral-500" />
-                  <div>
-                    <p className="text-sm font-medium">Datas</p>
-                    <div className="mt-1 space-y-1">
+              <CardContent>
+                {/* Mobile: stacked layout */}
+                <div className="space-y-4 md:hidden">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-4 w-4 text-neutral-500" />
+                    <div>
+                      <p className="text-sm font-medium">Endereço</p>
                       <p className="text-sm text-neutral-600">
-                        Início:{' '}
-                        {project.startDate
-                          ? format(new Date(project.startDate), 'dd/MM/yyyy')
-                          : 'Não definido'}
+                        {project.address?.street}, {project.address?.number}
+                        {project.address?.complement
+                          ? ` - ${project.address.complement}`
+                          : ''}
                       </p>
                       <p className="text-sm text-neutral-600">
-                        Previsão:{' '}
-                        {project.expectedEndDate
-                          ? format(
-                              new Date(project.expectedEndDate),
-                              'dd/MM/yyyy'
-                            )
-                          : 'Não definida'}
+                        {project.address?.neighborhood} - {project.address?.city}/
+                        {project.address?.state}
                       </p>
-                      {project.actualEndDate && (
-                        <p className="text-sm text-neutral-600">
-                          Conclusão:{' '}
-                          {format(
-                            new Date(project.actualEndDate),
-                            'dd/MM/yyyy'
-                          )}
-                        </p>
-                      )}
+                      <p className="text-sm text-neutral-600">
+                        CEP: {project.address?.zipCode}
+                      </p>
                     </div>
                   </div>
+
+                  <Separator />
+
+                  <div className="flex items-start gap-3">
+                    <Calendar className="mt-0.5 h-4 w-4 text-neutral-500" />
+                    <div>
+                      <p className="text-sm font-medium">Datas</p>
+                      <div className="mt-1 space-y-1">
+                        <p className="text-sm text-neutral-600">
+                          Início:{' '}
+                          {project.startDate
+                            ? format(new Date(project.startDate), 'dd/MM/yyyy')
+                            : 'Não definido'}
+                        </p>
+                        <p className="text-sm text-neutral-600">
+                          Previsão:{' '}
+                          {project.expectedEndDate
+                            ? format(
+                                new Date(project.expectedEndDate),
+                                'dd/MM/yyyy'
+                              )
+                            : 'Não definida'}
+                        </p>
+                        {project.actualEndDate && (
+                          <p className="text-sm text-neutral-600">
+                            Conclusão:{' '}
+                            {format(
+                              new Date(project.actualEndDate),
+                              'dd/MM/yyyy'
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isContractor && (
+                    <>
+                      <Separator />
+
+                      <div className="flex items-start gap-3">
+                        <DollarSign className="mt-0.5 h-4 w-4 text-neutral-500" />
+                        <div>
+                          <p className="text-sm font-medium">Orçamento</p>
+                          <p className="text-lg font-bold text-neutral-900">
+                            {formatCurrency(project.budget)}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {!isContractor && (
-                  <>
-                    <Separator />
+                {/* Desktop: horizontal columns */}
+                <div className={`hidden md:grid gap-6 ${isContractor ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-4 w-4 text-neutral-500 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Endereço</p>
+                      <p className="text-sm text-neutral-600">
+                        {project.address?.street}, {project.address?.number}
+                        {project.address?.complement
+                          ? ` - ${project.address.complement}`
+                          : ''}
+                      </p>
+                      <p className="text-sm text-neutral-600">
+                        {project.address?.neighborhood} - {project.address?.city}/
+                        {project.address?.state}
+                      </p>
+                      <p className="text-sm text-neutral-600">
+                        CEP: {project.address?.zipCode}
+                      </p>
+                    </div>
+                  </div>
 
-                    <div className="flex items-start gap-3">
-                      <DollarSign className="mt-0.5 h-4 w-4 text-neutral-500" />
+                  <div className="flex items-start gap-3 border-l pl-6">
+                    <Calendar className="mt-0.5 h-4 w-4 text-neutral-500 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Datas</p>
+                      <div className="mt-1 space-y-1">
+                        <p className="text-sm text-neutral-600">
+                          Início:{' '}
+                          {project.startDate
+                            ? format(new Date(project.startDate), 'dd/MM/yyyy')
+                            : 'Não definido'}
+                        </p>
+                        <p className="text-sm text-neutral-600">
+                          Previsão:{' '}
+                          {project.expectedEndDate
+                            ? format(
+                                new Date(project.expectedEndDate),
+                                'dd/MM/yyyy'
+                              )
+                            : 'Não definida'}
+                        </p>
+                        {project.actualEndDate && (
+                          <p className="text-sm text-neutral-600">
+                            Conclusão:{' '}
+                            {format(
+                              new Date(project.actualEndDate),
+                              'dd/MM/yyyy'
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isContractor && (
+                    <div className="flex items-start gap-3 border-l pl-6">
+                      <DollarSign className="mt-0.5 h-4 w-4 text-neutral-500 shrink-0" />
                       <div>
                         <p className="text-sm font-medium">Orçamento</p>
                         <p className="text-lg font-bold text-neutral-900">
@@ -319,8 +390,8 @@ export function ProjectDetail() {
                         </p>
                       </div>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </CardContent>
             </Card>
 

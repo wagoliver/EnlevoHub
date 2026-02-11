@@ -1,22 +1,25 @@
 import { useAuthStore, Role } from '@/stores/auth.store'
 
 // Permissions matrix mirroring backend
+const ALL_PERMISSIONS = [
+  'projects:view', 'projects:create', 'projects:edit', 'projects:delete',
+  'units:view', 'units:create', 'units:edit', 'units:delete',
+  'suppliers:view', 'suppliers:create', 'suppliers:edit', 'suppliers:delete',
+  'contractors:view', 'contractors:create', 'contractors:edit', 'contractors:delete',
+  'activities:view', 'activities:create', 'activities:edit', 'activities:delete',
+  'measurements:view', 'measurements:create', 'measurements:approve',
+  'brokers:view', 'brokers:create', 'brokers:edit', 'brokers:delete',
+  'purchases:view', 'purchases:create', 'purchases:edit', 'purchases:delete', 'purchases:approve',
+  'financial:view', 'financial:create', 'financial:edit', 'financial:delete', 'financial:reports',
+  'contracts:view', 'contracts:create', 'contracts:edit', 'contracts:delete', 'contracts:sign',
+  'users:view', 'users:create', 'users:edit', 'users:delete',
+  'tenant:view', 'tenant:edit',
+  'reports:view', 'reports:export',
+]
+
 const ROLE_PERMISSIONS: Record<Role, string[]> = {
-  ROOT: [
-    'projects:view', 'projects:create', 'projects:edit', 'projects:delete',
-    'units:view', 'units:create', 'units:edit', 'units:delete',
-    'suppliers:view', 'suppliers:create', 'suppliers:edit', 'suppliers:delete',
-    'contractors:view', 'contractors:create', 'contractors:edit', 'contractors:delete',
-    'activities:view', 'activities:create', 'activities:edit', 'activities:delete',
-    'measurements:view', 'measurements:create', 'measurements:approve',
-    'brokers:view', 'brokers:create', 'brokers:edit', 'brokers:delete',
-    'purchases:view', 'purchases:create', 'purchases:edit', 'purchases:delete', 'purchases:approve',
-    'financial:view', 'financial:create', 'financial:edit', 'financial:delete', 'financial:reports',
-    'contracts:view', 'contracts:create', 'contracts:edit', 'contracts:delete', 'contracts:sign',
-    'users:view', 'users:create', 'users:edit', 'users:delete',
-    'tenant:view', 'tenant:edit',
-    'reports:view', 'reports:export',
-  ],
+  ROOT: ALL_PERMISSIONS,
+  MASTER: ALL_PERMISSIONS,
   ENGINEER: [
     'projects:view', 'projects:create', 'projects:edit',
     'units:view', 'units:create', 'units:edit',

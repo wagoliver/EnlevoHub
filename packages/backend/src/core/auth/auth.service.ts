@@ -100,13 +100,13 @@ export class AuthService {
         }
       })
 
-      // Create user (ROOT of the tenant)
+      // Create user (MASTER of the tenant)
       const user = await tx.user.create({
         data: {
           email: input.email,
           password: hashedPassword,
           name: input.name,
-          role: 'ROOT',
+          role: 'MASTER',
           tenantId: tenant.id,
           isApproved: true,
           permissions: {}

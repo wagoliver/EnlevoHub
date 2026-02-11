@@ -76,7 +76,8 @@ model User {
 }
 
 enum Role {
-  ROOT          // (antigo ADMIN) acesso total
+  ROOT          // super admin - acesso total + sistema (armazenamento, performance)
+  MASTER        // admin do tenant - acesso total ao tenant (sem telas de sistema)
   ENGINEER      // (antigo MANAGER) aprova medicoes, gerencia obra
   ADMIN_STAFF   // financeiro, compras, fornecedores
   CONTRACTOR    // empreiteiro - acesso restrito

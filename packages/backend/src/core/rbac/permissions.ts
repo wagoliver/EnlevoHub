@@ -86,7 +86,8 @@ export type Permission = typeof Permissions[keyof typeof Permissions]
 /**
  * Role definitions with their permissions
  *
- * ROOT = admin total (antigo ADMIN)
+ * ROOT = super admin - acesso total + telas de sistema (armazenamento, performance)
+ * MASTER = admin do tenant - acesso total ao tenant (sem telas de sistema)
  * ENGINEER = gerencia obra, aprova medicoes (antigo MANAGER)
  * ADMIN_STAFF = financeiro, compras, fornecedores (sem aprovar medicoes)
  * CONTRACTOR = login proprio, ve apenas atividades atribuidas
@@ -95,7 +96,12 @@ export type Permission = typeof Permissions[keyof typeof Permissions]
 export const Roles = {
   ROOT: {
     name: 'ROOT',
-    description: 'Acesso total ao sistema',
+    description: 'Super admin - acesso total ao sistema',
+    permissions: Object.values(Permissions) as Permission[]
+  },
+  MASTER: {
+    name: 'MASTER',
+    description: 'Admin do tenant - acesso total ao tenant',
     permissions: Object.values(Permissions) as Permission[]
   },
   ENGINEER: {

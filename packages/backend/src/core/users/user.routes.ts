@@ -45,7 +45,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           email: { type: 'string', format: 'email' },
           password: { type: 'string', minLength: 8 },
           name: { type: 'string', minLength: 2 },
-          role: { type: 'string', enum: ['ROOT', 'ENGINEER', 'ADMIN_STAFF', 'VIEWER'] }
+          role: { type: 'string', enum: ['ROOT', 'MASTER', 'ENGINEER', 'ADMIN_STAFF', 'VIEWER'] }
         }
       }
     }
@@ -78,7 +78,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         type: 'object',
         properties: {
           name: { type: 'string', minLength: 2 },
-          role: { type: 'string', enum: ['ROOT', 'ENGINEER', 'ADMIN_STAFF', 'VIEWER'] },
+          role: { type: 'string', enum: ['ROOT', 'MASTER', 'ENGINEER', 'ADMIN_STAFF', 'VIEWER'] },
           isActive: { type: 'boolean' }
         }
       }

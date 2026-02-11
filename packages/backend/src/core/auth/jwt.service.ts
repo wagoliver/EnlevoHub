@@ -4,7 +4,7 @@ export interface JWTPayload {
   userId: string
   tenantId: string
   email: string
-  role: 'ROOT' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'VIEWER'
+  role: 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'CONTRACTOR' | 'VIEWER'
   contractorId?: string
 }
 

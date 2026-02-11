@@ -158,7 +158,7 @@ export function Register() {
               )}
             >
               <Building2 className="h-6 w-6" />
-              <span className="text-sm font-medium">Empresa</span>
+              <span className="text-sm font-medium">Gestor</span>
             </button>
             <button
               type="button"

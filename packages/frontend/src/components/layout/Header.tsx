@@ -23,6 +23,7 @@ import {
 
 const ROLE_LABELS: Record<Role, string> = {
   ROOT: 'Root',
+  MASTER: 'Gestor',
   ENGINEER: 'Engenheiro',
   ADMIN_STAFF: 'Administrativo',
   CONTRACTOR: 'Empreiteiro',
@@ -31,6 +32,7 @@ const ROLE_LABELS: Record<Role, string> = {
 
 const ROLE_COLORS: Record<Role, string> = {
   ROOT: 'bg-red-100 text-red-700',
+  MASTER: 'bg-purple-100 text-purple-700',
   ENGINEER: 'bg-blue-100 text-blue-700',
   ADMIN_STAFF: 'bg-amber-100 text-amber-700',
   CONTRACTOR: 'bg-green-100 text-green-700',

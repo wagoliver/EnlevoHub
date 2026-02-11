@@ -30,6 +30,7 @@ import { Role } from '@/stores/auth.store'
 
 const ROLE_LABELS: Record<Role, string> = {
   ROOT: 'Root',
+  MASTER: 'Gestor',
   ENGINEER: 'Engenheiro',
   ADMIN_STAFF: 'Administrativo',
   CONTRACTOR: 'Empreiteiro',
@@ -38,6 +39,7 @@ const ROLE_LABELS: Record<Role, string> = {
 
 const ROLE_COLORS: Record<Role, string> = {
   ROOT: 'bg-red-100 text-red-700',
+  MASTER: 'bg-purple-100 text-purple-700',
   ENGINEER: 'bg-blue-100 text-blue-700',
   ADMIN_STAFF: 'bg-amber-100 text-amber-700',
   CONTRACTOR: 'bg-green-100 text-green-700',
@@ -68,7 +70,7 @@ export function Users() {
     name: '',
     email: '',
     password: '',
-    role: 'VIEWER' as 'ROOT' | 'ENGINEER' | 'ADMIN_STAFF' | 'VIEWER',
+    role: 'VIEWER' as 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'VIEWER',
   })
 
   const { data, isLoading } = useQuery({
@@ -283,6 +285,7 @@ export function Users() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ROOT">Root (Admin Total)</SelectItem>
+                  <SelectItem value="MASTER">Gestor</SelectItem>
                   <SelectItem value="ENGINEER">Engenheiro</SelectItem>
                   <SelectItem value="ADMIN_STAFF">Administrativo</SelectItem>
                   <SelectItem value="VIEWER">Visualizador</SelectItem>

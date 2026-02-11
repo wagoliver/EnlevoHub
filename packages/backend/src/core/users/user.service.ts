@@ -7,12 +7,12 @@ export interface CreateUserInput {
   email: string
   password: string
   name: string
-  role: 'ROOT' | 'ENGINEER' | 'ADMIN_STAFF' | 'VIEWER'
+  role: 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'VIEWER'
 }
 
 export interface UpdateUserInput {
   name?: string
-  role?: 'ROOT' | 'ENGINEER' | 'ADMIN_STAFF' | 'VIEWER'
+  role?: 'ROOT' | 'MASTER' | 'ENGINEER' | 'ADMIN_STAFF' | 'VIEWER'
   isActive?: boolean
 }
 

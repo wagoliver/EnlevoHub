@@ -5,7 +5,7 @@ import { z } from 'zod'
 export const templateActivitySchema = z.object({
   name: z.string().min(2).max(200),
   order: z.number().int().min(0),
-  weight: z.number().min(0.01).max(999.99).default(1),
+  weight: z.number().int().min(1).max(5).default(1),
   durationDays: z.number().int().min(1).nullable().optional(),
   dependencies: z.array(z.string()).nullable().optional(),
 })
@@ -29,7 +29,7 @@ export const templatePhaseSchema = z.object({
 export const templateItemSchema = z.object({
   name: z.string().min(2).max(200),
   order: z.number().int().min(0),
-  weight: z.number().min(0.01).max(999.99).default(1),
+  weight: z.number().int().min(1).max(5).default(1),
 })
 
 // === Create / Update ===

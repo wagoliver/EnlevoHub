@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const createProjectActivitySchema = z.object({
   name: z.string().min(2).max(200),
-  weight: z.number().min(0.01).max(999.99).default(1),
+  weight: z.number().int().min(1).max(5).default(1),
   order: z.number().int().min(0),
   scope: z.enum(['ALL_UNITS', 'SPECIFIC_UNITS', 'GENERAL']).default('ALL_UNITS'),
   unitIds: z.array(z.string()).optional(), // required when scope = SPECIFIC_UNITS
@@ -10,7 +10,7 @@ export const createProjectActivitySchema = z.object({
 
 export const updateProjectActivitySchema = z.object({
   name: z.string().min(2).max(200).optional(),
-  weight: z.number().min(0.01).max(999.99).optional(),
+  weight: z.number().int().min(1).max(5).optional(),
   order: z.number().int().min(0).optional(),
 })
 
@@ -25,7 +25,7 @@ const scheduledActivityChildSchema: z.ZodType<any> = z.lazy(() =>
     name: z.string().min(1),
     level: z.enum(['PHASE', 'STAGE', 'ACTIVITY']),
     order: z.number().int().min(0),
-    weight: z.number().min(0).default(1),
+    weight: z.number().int().min(1).max(5).default(1),
     plannedStartDate: z.string().optional(),
     plannedEndDate: z.string().optional(),
     dependencies: z.array(z.string()).optional(),

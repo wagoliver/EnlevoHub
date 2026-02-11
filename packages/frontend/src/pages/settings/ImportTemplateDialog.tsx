@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  HelpCircle,
 } from 'lucide-react'
 
 interface ImportTemplateDialogProps {
@@ -63,7 +64,7 @@ const HEADERS = [
   'Cor',
   'Etapa',
   'Atividade',
-  'Peso',
+  'Peso (1-5)',
   'Duração (dias)',
   'Dependências',
 ]
@@ -72,16 +73,16 @@ function generateModelXLSX() {
   const data = [
     HEADERS,
     ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Escavação', 2, 5, ''],
-    ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Estacas', 3, 10, 'Escavação'],
+    ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Estacas', 4, 10, 'Escavação'],
     ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Blocos', 3, 8, 'Estacas'],
     ['Estrutura', 30, '#3498DB', 'Pilares', 'Formas', 2, 7, ''],
-    ['Estrutura', 30, '#3498DB', 'Pilares', 'Armação', 3, 5, 'Formas'],
+    ['Estrutura', 30, '#3498DB', 'Pilares', 'Armação', 4, 5, 'Formas'],
     ['Estrutura', 30, '#3498DB', 'Lajes', 'Escoramento', 2, 4, ''],
-    ['Estrutura', 30, '#3498DB', 'Lajes', 'Concretagem', 3, 3, 'Escoramento'],
+    ['Estrutura', 30, '#3498DB', 'Lajes', 'Concretagem', 5, 3, 'Escoramento'],
     ['Acabamento', 50, '#2ECC71', 'Revestimento', 'Chapisco', 1, 3, ''],
-    ['Acabamento', 50, '#2ECC71', 'Revestimento', 'Reboco', 2, 5, 'Chapisco'],
+    ['Acabamento', 50, '#2ECC71', 'Revestimento', 'Reboco', 4, 5, 'Chapisco'],
     ['Acabamento', 50, '#2ECC71', 'Pintura', 'Massa corrida', 1, 4, ''],
-    ['Acabamento', 50, '#2ECC71', 'Pintura', 'Pintura final', 2, 3, 'Massa corrida'],
+    ['Acabamento', 50, '#2ECC71', 'Pintura', 'Pintura final', 3, 3, 'Massa corrida'],
   ]
 
   const ws = XLSX.utils.aoa_to_sheet(data)
@@ -150,13 +151,13 @@ function parseSpreadsheet(
           const fase = String(row[idx['Fase']] ?? '').trim()
           const etapa = String(row[idx['Etapa']] ?? '').trim()
           const atividade = String(row[idx['Atividade']] ?? '').trim()
-          const peso = Number(row[idx['Peso']])
+          const peso = Number(row[idx['Peso (1-5)']])
           const percentual = Number(row[idx['Percentual (%)']])
 
           if (!fase) errors.push({ row: rowNum, message: 'Fase não preenchida' })
           if (!etapa) errors.push({ row: rowNum, message: 'Etapa não preenchida' })
           if (!atividade) errors.push({ row: rowNum, message: 'Atividade não preenchida' })
-          if (!peso || peso <= 0) errors.push({ row: rowNum, message: 'Peso deve ser > 0' })
+          if (!peso || !Number.isInteger(peso) || peso < 1 || peso > 5) errors.push({ row: rowNum, message: 'Peso deve ser um número inteiro de 1 a 5' })
           if (!percentual || percentual <= 0) errors.push({ row: rowNum, message: 'Percentual deve ser > 0' })
         }
 
@@ -218,7 +219,7 @@ function rowsToPhases(rows: any[][]): { phases: ParsedPhase[]; errors: Validatio
       name: atividadeName,
       order: activities.length,
       weight: Number(peso) || 1,
-      durationDays: duracao ? Number(duracao) : null,
+      durationDays: duracao && !isNaN(Number(duracao)) ? Number(duracao) : null,
       dependencies: depsList,
     })
   }
@@ -273,6 +274,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
   const [phases, setPhases] = useState<ParsedPhase[]>([])
   const [parseErrors, setParseErrors] = useState<ValidationError[]>([])
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
+  const [showHelp, setShowHelp] = useState(false)
 
   const hasData = phases.length > 0
   const hasErrors = parseErrors.length > 0
@@ -401,6 +403,119 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
               <Download className="mr-2 h-4 w-4" />
               Baixar Modelo
             </Button>
+          </div>
+
+          {/* Field descriptions */}
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50">
+            <button
+              type="button"
+              onClick={() => setShowHelp(!showHelp)}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-neutral-100 rounded-lg transition-colors"
+            >
+              <HelpCircle className="h-4 w-4 text-neutral-500" />
+              <span className="flex-1 text-sm font-medium text-neutral-700">
+                Entenda os campos da planilha
+              </span>
+              {showHelp ? (
+                <ChevronDown className="h-4 w-4 text-neutral-400" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-neutral-400" />
+              )}
+            </button>
+
+            {showHelp && (
+              <div className="border-t border-neutral-200 px-4 py-3 space-y-3 text-sm text-neutral-600">
+                <div>
+                  <span className="font-medium text-neutral-800">Fase</span>
+                  <span className="text-red-500"> *</span>
+                  <p className="text-xs mt-0.5">
+                    Agrupamento principal da obra. Ex: Fundação, Estrutura, Acabamento.
+                    Atividades com o mesmo nome de fase são agrupadas automaticamente.
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Percentual (%)</span>
+                  <span className="text-red-500"> *</span>
+                  <p className="text-xs mt-0.5">
+                    Quanto essa fase representa do total da obra. A soma de todas as fases
+                    deve ser exatamente 100%. Ex: Fundação 20%, Estrutura 30%, Acabamento 50%.
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Cor</span>
+                  <p className="text-xs mt-0.5">
+                    Cor da fase no painel de progresso. Use código hexadecimal (ex: #FF5733).
+                    Opcional — se não informar, o sistema usa a cor padrão.
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Etapa</span>
+                  <span className="text-red-500"> *</span>
+                  <p className="text-xs mt-0.5">
+                    Subdivisão dentro da fase. Ex: dentro de "Estrutura", as etapas
+                    podem ser "Pilares", "Vigas", "Lajes". Etapas com o mesmo nome dentro
+                    da mesma fase são agrupadas.
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Atividade</span>
+                  <span className="text-red-500"> *</span>
+                  <p className="text-xs mt-0.5">
+                    A tarefa específica a ser executada e medida. Ex: "Concretagem",
+                    "Chapisco", "Pintura final". Cada linha da planilha representa uma atividade.
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Peso (1-5)</span>
+                  <span className="text-red-500"> *</span>
+                  <p className="text-xs mt-0.5">
+                    Grau de importância da atividade dentro da etapa, de <strong>1 a 5</strong>.
+                    Quanto maior o peso, mais essa atividade influencia no progresso da etapa.
+                    <strong> Não sabe o que colocar? Use 1 em todas.</strong>
+                  </p>
+                  <div className="mt-2 rounded border border-neutral-200 bg-white text-xs">
+                    <div className="px-3 py-1.5 space-y-0.5 text-neutral-500">
+                      <p><strong className="text-neutral-700">1</strong> — Atividade simples, rápida, pouco impacto</p>
+                      <p><strong className="text-neutral-700">2</strong> — Importância baixa-média</p>
+                      <p><strong className="text-neutral-700">3</strong> — Importância média</p>
+                      <p><strong className="text-neutral-700">4</strong> — Importância alta</p>
+                      <p><strong className="text-neutral-700">5</strong> — Atividade crítica, complexa, maior impacto</p>
+                    </div>
+                    <div className="px-3 py-2 border-t border-neutral-100 text-neutral-500">
+                      <p className="font-medium text-neutral-600 mb-1">Como isso afeta o progresso?</p>
+                      <p>
+                        Ex: Chapisco (peso 1) concluído e Reboco (peso 4) pendente →
+                        etapa em <strong className="text-neutral-700">20%</strong>.
+                      </p>
+                      <p>
+                        Se fosse tudo peso 1 → etapa em <strong className="text-neutral-700">50%</strong>.
+                      </p>
+                      <p className="mt-1 text-neutral-400">
+                        O peso maior do Reboco reflete que a maior parte do trabalho ainda não foi feita.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Duração (dias)</span>
+                  <p className="text-xs mt-0.5">
+                    Estimativa de dias úteis para executar a atividade. Opcional — usado para
+                    planejamento de cronograma.
+                  </p>
+                </div>
+                <div>
+                  <span className="font-medium text-neutral-800">Dependências</span>
+                  <p className="text-xs mt-0.5">
+                    Nome de atividades que precisam ser concluídas antes desta iniciar.
+                    Separe múltiplas com ponto e vírgula (;). Opcional.
+                  </p>
+                  <p className="text-xs mt-1 text-neutral-500 italic">
+                    Exemplo: "Escavação; Estacas" — significa que esta atividade
+                    só inicia após Escavação e Estacas serem concluídas.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Step 2: Upload */}

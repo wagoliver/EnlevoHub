@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { projectsAPI } from '@/lib/api-client'
+import { useRole } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -49,6 +50,24 @@ const unitStatusVariant: Record<string, any> = {
   BLOCKED: 'blocked',
 }
 
+const activityStatusLabel: Record<string, string> = {
+  PENDING: 'Pendente',
+  IN_PROGRESS: 'Em Andamento',
+  COMPLETED: 'Concluído',
+}
+
+const activityStatusVariant: Record<string, string> = {
+  PENDING: 'secondary',
+  IN_PROGRESS: 'inProgress',
+  COMPLETED: 'completed',
+}
+
+const activityLevelLabel: Record<string, string> = {
+  PHASE: 'Fase',
+  STAGE: 'Etapa',
+  ACTIVITY: 'Atividade',
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -62,6 +81,8 @@ interface UnitsTabProps {
 
 export function UnitsTab({ projectId }: UnitsTabProps) {
   const navigate = useNavigate()
+  const role = useRole()
+  const isContractor = role === 'CONTRACTOR'
 
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -204,9 +225,18 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
                   <TableHead>Planta</TableHead>
                   <TableHead>Andar</TableHead>
                   <TableHead>Área (m²)</TableHead>
-                  <TableHead>Quartos</TableHead>
-                  <TableHead>Preço</TableHead>
-                  <TableHead>Status</TableHead>
+                  {isContractor ? (
+                    <>
+                      <TableHead>Tipo de Atividade</TableHead>
+                      <TableHead>Status</TableHead>
+                    </>
+                  ) : (
+                    <>
+                      <TableHead>Quartos</TableHead>
+                      <TableHead>Preço</TableHead>
+                      <TableHead>Status</TableHead>
+                    </>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -218,13 +248,43 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
                     <TableCell>{unit.floorPlan?.name || '-'}</TableCell>
                     <TableCell>{unit.floor ?? '-'}</TableCell>
                     <TableCell>{unit.area}</TableCell>
-                    <TableCell>{unit.bedrooms ?? '-'}</TableCell>
-                    <TableCell>{formatCurrency(unit.price)}</TableCell>
-                    <TableCell>
-                      <Badge variant={unitStatusVariant[unit.status]}>
-                        {unitStatusLabel[unit.status]}
-                      </Badge>
-                    </TableCell>
+                    {isContractor ? (
+                      <>
+                        <TableCell>
+                          {unit.unitActivities?.length > 0
+                            ? unit.unitActivities.map((ua: any) => (
+                                <span key={ua.id} className="block text-sm">
+                                  {ua.activity?.name}
+                                  <span className="ml-1 text-xs text-neutral-400">
+                                    ({activityLevelLabel[ua.activity?.level] || ua.activity?.level})
+                                  </span>
+                                </span>
+                              ))
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {unit.unitActivities?.length > 0
+                            ? unit.unitActivities.map((ua: any) => (
+                                <span key={ua.id} className="block">
+                                  <Badge variant={activityStatusVariant[ua.status] as any}>
+                                    {activityStatusLabel[ua.status] || ua.status}
+                                  </Badge>
+                                </span>
+                              ))
+                            : '-'}
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell>{unit.bedrooms ?? '-'}</TableCell>
+                        <TableCell>{formatCurrency(unit.price)}</TableCell>
+                        <TableCell>
+                          <Badge variant={unitStatusVariant[unit.status]}>
+                            {unitStatusLabel[unit.status]}
+                          </Badge>
+                        </TableCell>
+                      </>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

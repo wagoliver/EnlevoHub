@@ -6,6 +6,10 @@ function serializeUnit(unit: any) {
     ...unit,
     area: Number(unit.area),
     price: Number(unit.price),
+    unitActivities: unit.unitActivities?.map((ua: any) => ({
+      ...ua,
+      progress: Number(ua.progress),
+    })),
   }
 }
 
@@ -53,6 +57,16 @@ export class UnitService {
         include: {
           block: { select: { id: true, name: true } },
           floorPlan: { select: { id: true, name: true } },
+          unitActivities: {
+            select: {
+              id: true,
+              status: true,
+              progress: true,
+              activity: {
+                select: { id: true, name: true, level: true },
+              },
+            },
+          },
         },
       }),
       this.prisma.unit.count({ where }),

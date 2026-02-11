@@ -149,18 +149,21 @@ function NavItemComponent({
       to={item.href}
       className={({ isActive }) =>
         cn(
-          'flex items-center rounded-lg text-sm font-medium transition-colors',
-          isCollapsed
-            ? 'justify-center px-2 py-2.5'
-            : 'gap-3 px-3 py-2.5',
+          'flex items-center h-9 rounded-md text-sm font-medium transition-colors',
           isActive
-            ? 'bg-white/10 text-[#b8a378] [&_svg]:text-[#b8a378]'
+            ? 'sidebar-item-active text-[#b8a378] [&_svg]:text-[#b8a378]'
             : 'text-white/70 hover:bg-white/5 hover:text-white [&_svg]:text-white/70 [&_svg]:hover:text-white'
         )
       }
     >
-      <item.icon className="h-5 w-5 shrink-0" />
-      {!isCollapsed && item.title}
+      <div className="w-12 flex items-center justify-center shrink-0">
+        <item.icon className="h-[18px] w-[18px] shrink-0" />
+      </div>
+      {!isCollapsed && (
+        <span className="animate-in fade-in-50 duration-200">
+          {item.title}
+        </span>
+      )}
     </NavLink>
   )
 
@@ -190,13 +193,19 @@ function SettingsSection({ isCollapsed }: { isCollapsed: boolean }) {
   return (
     <>
       {isCollapsed ? (
-        <div className="my-3 mx-2 border-t border-white/10" />
+        <div className="my-3 mx-2 flex items-center">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.12] to-transparent" />
+        </div>
       ) : (
-        <div className="mt-4 mb-2 flex items-center gap-2 px-3">
-          <Settings className="h-3.5 w-3.5 text-white/30" />
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/30">
-            Configurações
-          </span>
+        <div className="mt-4 mb-2 flex items-center gap-3 px-2">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-white/[0.08]" />
+          <div className="flex items-center gap-1.5">
+            <Settings className="h-3 w-3 text-white/30" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-white/30">
+              Configurações
+            </span>
+          </div>
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-white/[0.08]" />
         </div>
       )}
       {settingsNavigation.map((item) => (
@@ -212,11 +221,11 @@ function SettingsSection({ isCollapsed }: { isCollapsed: boolean }) {
 
 function SidebarContent({ isCollapsed }: { isCollapsed: boolean }) {
   return (
-    <div className="flex h-full flex-col bg-[#21252d]">
+    <div className="flex h-full flex-col sidebar-texture">
       {/* Logo */}
       <div
         className={cn(
-          'flex h-16 items-center border-b border-white/10',
+          'flex h-16 items-center',
           isCollapsed ? 'justify-center px-2' : 'px-6'
         )}
       >
@@ -232,13 +241,11 @@ function SidebarContent({ isCollapsed }: { isCollapsed: boolean }) {
         )}
       </div>
 
+      {/* Gradient border under logo */}
+      <div className="h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+
       {/* Navigation */}
-      <nav
-        className={cn(
-          'flex flex-1 flex-col gap-0.5 overflow-y-auto p-3 sidebar-scroll',
-          isCollapsed && 'px-2'
-        )}
-      >
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3 sidebar-scroll">
         {mainNavigation.map((item) => (
           <NavItemComponent
             key={item.href}
@@ -281,7 +288,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-300',
+        'fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.15)]',
         isCollapsed ? 'w-16' : 'w-64'
       )}
     >

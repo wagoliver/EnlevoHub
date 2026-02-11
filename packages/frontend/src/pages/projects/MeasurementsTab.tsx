@@ -62,6 +62,7 @@ interface MeasurementsTabProps {
 export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
   const queryClient = useQueryClient()
   const canReview = usePermission('measurements:approve')
+  const canCreate = usePermission('measurements:create')
 
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -196,10 +197,12 @@ export function MeasurementsTab({ projectId }: MeasurementsTabProps) {
               <SelectItem value="REJECTED">Rejeitada</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Medição
-          </Button>
+          {canCreate && (
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Medição
+            </Button>
+          )}
         </div>
       </div>
 

@@ -73,6 +73,7 @@ function ActivityRow({
   expandedRows,
   toggleRow,
   canEdit,
+  canMeasure,
   onDelete,
   onMeasure,
 }: {
@@ -81,6 +82,7 @@ function ActivityRow({
   expandedRows: Set<string>
   toggleRow: (id: string) => void
   canEdit: boolean
+  canMeasure: boolean
   onDelete: (e: React.MouseEvent, activity: any) => void
   onMeasure: (e: React.MouseEvent, activityId: string, unitActivityId?: string) => void
 }) {
@@ -162,9 +164,9 @@ function ActivityRow({
             {statusLabel[activity.status] || activity.status}
           </Badge>
         </TableCell>
-        {canEdit && (
+        {(canEdit || canMeasure) && (
           <TableCell>
-            {isLeaf && (
+            {canEdit && isLeaf && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -187,6 +189,7 @@ function ActivityRow({
           expandedRows={expandedRows}
           toggleRow={toggleRow}
           canEdit={canEdit}
+          canMeasure={canMeasure}
           onDelete={onDelete}
           onMeasure={onMeasure}
         />
@@ -219,7 +222,7 @@ function ActivityRow({
               {statusLabel[ua.status] || ua.status}
             </Badge>
           </TableCell>
-          {canEdit && (
+          {(canEdit || canMeasure) && (
             <TableCell>
               {ua.lastMeasurementStatus === 'PENDING' ? (
                 <Badge variant="reserved" className="text-xs">
@@ -251,6 +254,7 @@ function ActivityRow({
 export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
   const queryClient = useQueryClient()
   const canEdit = usePermission('activities:edit')
+  const canMeasure = usePermission('measurements:create')
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [showAddDialog, setShowAddDialog] = useState(false)
@@ -425,7 +429,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                   <TableHead className="w-[140px]">Período</TableHead>
                   <TableHead className="w-[180px]">Progresso</TableHead>
                   <TableHead className="w-[120px]">Status</TableHead>
-                  {canEdit && (
+                  {(canEdit || canMeasure) && (
                     <TableHead className="w-[80px]">Ações</TableHead>
                   )}
                 </TableRow>
@@ -439,6 +443,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                     expandedRows={expandedRows}
                     toggleRow={toggleRow}
                     canEdit={canEdit}
+                    canMeasure={canMeasure}
                     onDelete={handleDeleteClick}
                     onMeasure={openMeasurementDialog}
                   />

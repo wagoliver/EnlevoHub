@@ -457,6 +457,25 @@ export async function financialRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.post('/reconciliation/rerun', {
+    preHandler: [authMiddleware, requirePermission('financial:edit')],
+    schema: {
+      description: 'Re-run auto reconciliation on all pending transactions',
+      tags: ['financial'],
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    try {
+      const matched = await reconciliationService.rerunAutoReconcile(getTenantId(request))
+      return reply.send({ matched, message: `${matched} transação(ões) conciliada(s) automaticamente` })
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   fastify.post('/reconciliation/ignore/:id', {
     preHandler: [authMiddleware, requirePermission('financial:edit')],
     schema: {

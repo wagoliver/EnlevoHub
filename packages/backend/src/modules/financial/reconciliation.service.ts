@@ -11,6 +11,11 @@ interface ReconciliationSuggestion {
 export class ReconciliationService {
   constructor(private prisma: PrismaClient) {}
 
+  /** Remove pontuação de CNPJ/CPF para comparação normalizada */
+  private normalizeCnpj(doc: string): string {
+    return doc.replace(/[.\/-]/g, '')
+  }
+
   async getImportedTransactions(tenantId: string, filter?: string) {
     const where: any = {
       user: { tenantId },
@@ -53,11 +58,17 @@ export class ReconciliationService {
     const cnpjMatch = description.match(/(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/g)
     if (cnpjMatch) {
       for (const rawCnpj of cnpjMatch) {
-        const cleanCnpj = rawCnpj.replace(/[.\/-]/g, '')
+        const cleanCnpj = this.normalizeCnpj(rawCnpj)
 
-        // Check suppliers
+        // Check suppliers (busca tanto formato limpo quanto formatado)
         const suppliers = await this.prisma.supplier.findMany({
-          where: { tenantId, document: { contains: cleanCnpj } },
+          where: {
+            tenantId,
+            OR: [
+              { document: { contains: cleanCnpj } },
+              { document: { contains: rawCnpj } },
+            ],
+          },
           select: { id: true, name: true, document: true },
         })
         for (const supplier of suppliers) {
@@ -70,9 +81,15 @@ export class ReconciliationService {
           })
         }
 
-        // Check contractors
+        // Check contractors (busca tanto formato limpo quanto formatado)
         const contractors = await this.prisma.contractor.findMany({
-          where: { tenantId, document: { contains: cleanCnpj } },
+          where: {
+            tenantId,
+            OR: [
+              { document: { contains: cleanCnpj } },
+              { document: { contains: rawCnpj } },
+            ],
+          },
           select: { id: true, name: true, document: true },
         })
         for (const contractor of contractors) {
@@ -254,6 +271,23 @@ export class ReconciliationService {
       },
     })
 
+    return this.reconcileTransactions(tenantId, transactions)
+  }
+
+  /** Re-executa conciliação automática em TODAS as transações pendentes do tenant */
+  async rerunAutoReconcile(tenantId: string): Promise<number> {
+    const transactions = await this.prisma.financialTransaction.findMany({
+      where: {
+        user: { tenantId },
+        importBatchId: { not: null },
+        reconciliationStatus: 'PENDING',
+      },
+    })
+
+    return this.reconcileTransactions(tenantId, transactions)
+  }
+
+  private async reconcileTransactions(tenantId: string, transactions: any[]): Promise<number> {
     let matched = 0
 
     for (const tx of transactions) {
@@ -262,11 +296,18 @@ export class ReconciliationService {
       // Try CNPJ match
       const cnpjMatch = description.match(/(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/g)
       if (cnpjMatch) {
+        let found = false
         for (const rawCnpj of cnpjMatch) {
-          const cleanCnpj = rawCnpj.replace(/[.\/-]/g, '')
+          const cleanCnpj = this.normalizeCnpj(rawCnpj)
 
           const supplier = await this.prisma.supplier.findFirst({
-            where: { tenantId, document: { contains: cleanCnpj } },
+            where: {
+              tenantId,
+              OR: [
+                { document: { contains: cleanCnpj } },
+                { document: { contains: rawCnpj } },
+              ],
+            },
             select: { id: true, name: true },
           })
 
@@ -281,11 +322,18 @@ export class ReconciliationService {
               },
             })
             matched++
+            found = true
             break
           }
 
           const contractor = await this.prisma.contractor.findFirst({
-            where: { tenantId, document: { contains: cleanCnpj } },
+            where: {
+              tenantId,
+              OR: [
+                { document: { contains: cleanCnpj } },
+                { document: { contains: rawCnpj } },
+              ],
+            },
             select: { id: true, name: true },
           })
 
@@ -300,8 +348,63 @@ export class ReconciliationService {
               },
             })
             matched++
+            found = true
             break
           }
+        }
+        if (found) continue
+      }
+
+      // Try name match (same logic as getSuggestions, strategy 3)
+      const [suppliers, contractors] = await Promise.all([
+        this.prisma.supplier.findMany({
+          where: { tenantId, isActive: true },
+          select: { id: true, name: true },
+        }),
+        this.prisma.contractor.findMany({
+          where: { tenantId, isActive: true },
+          select: { id: true, name: true },
+        }),
+      ])
+
+      let nameMatched = false
+
+      for (const supplier of suppliers) {
+        const nameWords = supplier.name.toUpperCase().split(/\s+/).filter(w => w.length > 3)
+        const matchCount = nameWords.filter(w => description.includes(w)).length
+        if (matchCount >= 2 || (nameWords.length === 1 && matchCount === 1 && nameWords[0].length > 5)) {
+          await this.prisma.financialTransaction.update({
+            where: { id: tx.id },
+            data: {
+              reconciliationStatus: 'AUTO_MATCHED',
+              linkedEntityType: 'supplier',
+              linkedEntityId: supplier.id,
+              linkedEntityName: supplier.name,
+            },
+          })
+          matched++
+          nameMatched = true
+          break
+        }
+      }
+
+      if (nameMatched) continue
+
+      for (const contractor of contractors) {
+        const nameWords = contractor.name.toUpperCase().split(/\s+/).filter(w => w.length > 3)
+        const matchCount = nameWords.filter(w => description.includes(w)).length
+        if (matchCount >= 2 || (nameWords.length === 1 && matchCount === 1 && nameWords[0].length > 5)) {
+          await this.prisma.financialTransaction.update({
+            where: { id: tx.id },
+            data: {
+              reconciliationStatus: 'AUTO_MATCHED',
+              linkedEntityType: 'contractor',
+              linkedEntityId: contractor.id,
+              linkedEntityName: contractor.name,
+            },
+          })
+          matched++
+          break
         }
       }
     }

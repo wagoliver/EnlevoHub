@@ -507,6 +507,7 @@ export const financialAPI = {
   matchTransaction: (data: { transactionId: string; linkedEntityType: string; linkedEntityId: string; linkedEntityName: string }) =>
     apiClient.post<any>('/financial/reconciliation/match', data),
   ignoreTransaction: (id: string) => apiClient.post<any>(`/financial/reconciliation/ignore/${id}`),
+  rerunReconciliation: () => apiClient.post<any>('/financial/reconciliation/rerun'),
   searchEntities: (search: string) => apiClient.get<any>(`/financial/reconciliation/search-entities?search=${encodeURIComponent(search)}`),
 }
 

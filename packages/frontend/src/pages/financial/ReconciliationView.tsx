@@ -24,6 +24,7 @@ import {
   CheckCircle,
   ChevronRight,
   Search,
+  RefreshCw,
 } from 'lucide-react'
 
 function formatCurrency(value: number) {
@@ -119,6 +120,20 @@ export function ReconciliationView() {
     onError: (error: Error) => toast.error(error.message),
   })
 
+  const rerunMutation = useMutation({
+    mutationFn: () => financialAPI.rerunReconciliation(),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['financial'] })
+      setSelectedTxId(null)
+      if (data.matched > 0) {
+        toast.success(data.message)
+      } else {
+        toast.info('Nenhuma nova conciliação encontrada.')
+      }
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
   const transactions = (allTx as any[]) || []
   const suggestionList = (suggestions as any[]) || []
   const entityResults = (searchResults as any[]) || []
@@ -148,7 +163,7 @@ export function ReconciliationView() {
         </p>
       </div>
 
-      {/* Filter */}
+      {/* Filter + Rerun */}
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-neutral-600">Filtrar:</span>
         <Select value={filter} onValueChange={(v) => { setFilter(v); setSelectedTxId(null) }}>
@@ -165,6 +180,22 @@ export function ReconciliationView() {
         <span className="text-sm text-neutral-400">
           {transactions.length} transação(ões)
         </span>
+        <div className="flex-1" />
+        {canEdit && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => rerunMutation.mutate()}
+            disabled={rerunMutation.isPending}
+          >
+            {rerunMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Re-conciliar
+          </Button>
+        )}
       </div>
 
       {transactions.length === 0 ? (

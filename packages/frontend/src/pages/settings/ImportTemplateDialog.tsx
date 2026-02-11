@@ -17,6 +17,15 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Loader2,
   Upload,
   Download,
@@ -26,6 +35,8 @@ import {
   ChevronRight,
   HelpCircle,
 } from 'lucide-react'
+import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from './template-models'
+import type { TemplateModel } from './template-models'
 
 interface ImportTemplateDialogProps {
   open: boolean
@@ -70,21 +81,8 @@ const HEADERS = [
   'Dependências',
 ]
 
-function generateModelXLSX() {
-  const data = [
-    HEADERS,
-    ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Escavação', 2, 5, ''],
-    ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Estacas', 4, 10, 'Escavação'],
-    ['Fundação', 20, '#FF5733', 'Infraestrutura', 'Blocos', 3, 8, 'Estacas'],
-    ['Estrutura', 30, '#3498DB', 'Pilares', 'Formas', 2, 7, ''],
-    ['Estrutura', 30, '#3498DB', 'Pilares', 'Armação', 4, 5, 'Formas'],
-    ['Estrutura', 30, '#3498DB', 'Lajes', 'Escoramento', 2, 4, ''],
-    ['Estrutura', 30, '#3498DB', 'Lajes', 'Concretagem', 5, 3, 'Escoramento'],
-    ['Acabamento', 50, '#2ECC71', 'Revestimento', 'Chapisco', 1, 3, ''],
-    ['Acabamento', 50, '#2ECC71', 'Revestimento', 'Reboco', 4, 5, 'Chapisco'],
-    ['Acabamento', 50, '#2ECC71', 'Pintura', 'Massa corrida', 1, 4, ''],
-    ['Acabamento', 50, '#2ECC71', 'Pintura', 'Pintura final', 3, 3, 'Massa corrida'],
-  ]
+function generateModelXLSX(template: TemplateModel) {
+  const data = [HEADERS, ...template.rows]
 
   const ws = XLSX.utils.aoa_to_sheet(data)
 
@@ -102,7 +100,7 @@ function generateModelXLSX() {
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Template')
-  XLSX.writeFile(wb, 'modelo-template-atividades.xlsx')
+  XLSX.writeFile(wb, `modelo-${template.key}.xlsx`)
 }
 
 function parseSpreadsheet(
@@ -307,6 +305,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
   const [autoCalcPercentage, setAutoCalcPercentage] = useState(true)
   const [parsedRows, setParsedRows] = useState<any[][]>([])
   const [rowErrors, setRowErrors] = useState<ValidationError[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
 
   const hasData = phases.length > 0
   const hasErrors = parseErrors.length > 0
@@ -419,6 +418,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
     setParsedRows([])
     setRowErrors([])
     setAutoCalcPercentage(true)
+    setSelectedTemplate('')
     onOpenChange(false)
   }
 
@@ -441,17 +441,51 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
 
         <div className="space-y-5">
           {/* Step 1: Download model */}
-          <div className="flex items-center justify-between rounded-lg border border-dashed border-neutral-300 p-4">
+          <div className="rounded-lg border border-dashed border-neutral-300 p-4 space-y-3">
             <div>
               <p className="text-sm font-medium">Modelo de planilha</p>
               <p className="text-xs text-neutral-500">
-                Baixe o modelo, preencha e envie de volta.
+                Escolha um modelo por tipo de obra, baixe, preencha e envie de volta.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={generateModelXLSX}>
-              <Download className="mr-2 h-4 w-4" />
-              Baixar Modelo
-            </Button>
+            <div className="flex items-center gap-2">
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Selecione o tipo de obra..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEMPLATE_CATEGORIES.map((category) => (
+                    <SelectGroup key={category}>
+                      <SelectLabel>{category}</SelectLabel>
+                      {TEMPLATE_MODELS
+                        .filter((t) => t.category === category)
+                        .map((t) => (
+                          <SelectItem key={t.key} value={t.key}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!selectedTemplate}
+                onClick={() => {
+                  const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
+                  if (tpl) generateModelXLSX(tpl)
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar
+              </Button>
+            </div>
+            {selectedTemplate && (
+              <p className="text-xs text-neutral-500 italic">
+                {TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)?.description}
+              </p>
+            )}
           </div>
 
           {/* Field descriptions */}

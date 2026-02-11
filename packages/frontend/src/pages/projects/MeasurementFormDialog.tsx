@@ -113,7 +113,7 @@ export function MeasurementFormDialog({
   open,
   onOpenChange,
   defaultActivityId,
-  defaultUnitActivityId: _defaultUnitActivityId,
+  defaultUnitActivityId,
 }: MeasurementFormDialogProps) {
   const queryClient = useQueryClient()
   const authUser = useAuthStore((s) => s.user)
@@ -133,6 +133,7 @@ export function MeasurementFormDialog({
   const [photoFiles, setPhotoFiles] = useState<File[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const defaultUAConsumedRef = useRef(false)
 
   // Fetch activities (returns tree if hierarchical)
   const { data: activitiesRaw = [] } = useQuery({
@@ -237,6 +238,19 @@ export function MeasurementFormDialog({
   // Auto-select unitActivity when activity changes (single mode)
   useEffect(() => {
     if (!isSingleMode || !selectedActivity) return
+
+    // If we have a default unitActivityId from the caller, apply it once
+    if (defaultUnitActivityId && !defaultUAConsumedRef.current) {
+      const ua = unitActivities.find((u) => u.id === defaultUnitActivityId)
+      if (ua) {
+        setSelectedUnitActivityId(ua.id)
+        setSingleProgress(ua.progress)
+        setSelectedUnitId(ua.unit?.id || '')
+        defaultUAConsumedRef.current = true
+        return
+      }
+    }
+
     setSelectedUnitId('')
     if (unitActivities.length === 1) {
       setSelectedUnitActivityId(unitActivities[0].id)
@@ -248,7 +262,7 @@ export function MeasurementFormDialog({
       setSelectedUnitActivityId('')
       setSingleProgress(0)
     }
-  }, [isSingleMode, selectedActivity, unitActivities])
+  }, [isSingleMode, selectedActivity, unitActivities, defaultUnitActivityId])
 
   // Update singleProgress when unitActivity selection changes
   useEffect(() => {
@@ -314,6 +328,7 @@ export function MeasurementFormDialog({
   useEffect(() => {
     if (!open) {
       setInitialized(false)
+      defaultUAConsumedRef.current = false
       return
     }
     if (initialized || activities.length === 0) return
@@ -321,7 +336,7 @@ export function MeasurementFormDialog({
     setContractorId(isContractorUser ? authUser!.contractorId! : '')
     setNotes('')
     setSingleProgress(0)
-    setSelectedUnitActivityId('')
+    setSelectedUnitActivityId(defaultUnitActivityId || '')
     setSelectedUnitId('')
     setPhotoFiles([])
 
@@ -346,7 +361,7 @@ export function MeasurementFormDialog({
       setSelectedActivityId('')
     }
     setInitialized(true)
-  }, [open, activities, defaultActivityId, hasHierarchy, initialized, isContractorUser, authUser])
+  }, [open, activities, defaultActivityId, defaultUnitActivityId, hasHierarchy, initialized, isContractorUser, authUser])
 
   // Batch progress calculations
   const stageProgress = useMemo(() => {

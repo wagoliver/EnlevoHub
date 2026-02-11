@@ -6,6 +6,8 @@ import { getContractorScope } from '../rbac/contractor-filter'
 import { ProjectService } from './project.service'
 import { EvolutionService } from './evolution.service'
 import { UnitService } from './unit.service'
+import { FloorPlanService } from './floor-plan.service'
+import { BlockService } from './block.service'
 import { UploadService } from './upload.service'
 import {
   createProjectSchema,
@@ -16,6 +18,12 @@ import {
   createUnitSchema,
   updateUnitSchema,
   listUnitsQuerySchema,
+  createFloorPlanSchema,
+  updateFloorPlanSchema,
+  createBlockSchema,
+  updateBlockSchema,
+  bulkGenerateSchema,
+  bulkDeleteUnitsSchema,
 } from './project.schemas'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -38,6 +46,8 @@ export async function projectRoutes(fastify: FastifyInstance) {
   const projectService = new ProjectService(fastify.prisma)
   const evolutionService = new EvolutionService(fastify.prisma)
   const unitService = new UnitService(fastify.prisma)
+  const floorPlanService = new FloorPlanService(fastify.prisma)
+  const blockService = new BlockService(fastify.prisma)
   const uploadService = new UploadService()
 
   // Helper to get tenantId from request
@@ -693,6 +703,322 @@ export async function projectRoutes(fastify: FastifyInstance) {
     try {
       const { id, unitId } = request.params as { id: string; unitId: string }
       const result = await unitService.delete(getTenantId(request), id, unitId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Preview bulk generate
+  fastify.post('/:id/units/preview-generate', {
+    preHandler: [authMiddleware, requirePermission('units:create')],
+    schema: {
+      description: 'Preview bulk unit generation (does not persist)',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = bulkGenerateSchema.parse(request.body)
+      const result = await unitService.previewGenerate(getTenantId(request), id, body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Bulk generate units
+  fastify.post('/:id/units/bulk-generate', {
+    preHandler: [authMiddleware, requirePermission('units:create')],
+    schema: {
+      description: 'Generate units in bulk (atomic transaction)',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = bulkGenerateSchema.parse(request.body)
+      const result = await unitService.bulkGenerate(getTenantId(request), id, body)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Bulk delete units
+  fastify.post('/:id/units/bulk-delete', {
+    preHandler: [authMiddleware, requirePermission('units:delete')],
+    schema: {
+      description: 'Delete multiple units at once',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: {
+        type: 'object',
+        required: ['unitIds'],
+        properties: {
+          unitIds: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = bulkDeleteUnitsSchema.parse(request.body)
+      const result = await unitService.bulkDelete(getTenantId(request), id, body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ==================== FLOOR PLANS CRUD ====================
+
+  // List floor plans
+  fastify.get('/:id/floor-plans', {
+    preHandler: [authMiddleware, requirePermission('units:view')],
+    schema: {
+      description: 'List project floor plans',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await floorPlanService.list(getTenantId(request), id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Create floor plan
+  fastify.post('/:id/floor-plans', {
+    preHandler: [authMiddleware, requirePermission('units:create')],
+    schema: {
+      description: 'Create a floor plan',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = createFloorPlanSchema.parse(request.body)
+      const result = await floorPlanService.create(getTenantId(request), id, body)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Update floor plan
+  fastify.patch('/:id/floor-plans/:fpId', {
+    preHandler: [authMiddleware, requirePermission('units:edit')],
+    schema: {
+      description: 'Update a floor plan',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'fpId'],
+        properties: {
+          id: { type: 'string' },
+          fpId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, fpId } = request.params as { id: string; fpId: string }
+      const body = updateFloorPlanSchema.parse(request.body)
+      const result = await floorPlanService.update(getTenantId(request), id, fpId, body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Delete floor plan
+  fastify.delete('/:id/floor-plans/:fpId', {
+    preHandler: [authMiddleware, requirePermission('units:delete')],
+    schema: {
+      description: 'Delete a floor plan',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'fpId'],
+        properties: {
+          id: { type: 'string' },
+          fpId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, fpId } = request.params as { id: string; fpId: string }
+      const result = await floorPlanService.delete(getTenantId(request), id, fpId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ==================== BLOCKS CRUD ====================
+
+  // List blocks
+  fastify.get('/:id/blocks', {
+    preHandler: [authMiddleware, requirePermission('units:view')],
+    schema: {
+      description: 'List project blocks',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await blockService.list(getTenantId(request), id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Create block
+  fastify.post('/:id/blocks', {
+    preHandler: [authMiddleware, requirePermission('units:create')],
+    schema: {
+      description: 'Create a block',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = createBlockSchema.parse(request.body)
+      const result = await blockService.create(getTenantId(request), id, body)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Update block
+  fastify.patch('/:id/blocks/:blockId', {
+    preHandler: [authMiddleware, requirePermission('units:edit')],
+    schema: {
+      description: 'Update a block',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'blockId'],
+        properties: {
+          id: { type: 'string' },
+          blockId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, blockId } = request.params as { id: string; blockId: string }
+      const body = updateBlockSchema.parse(request.body)
+      const result = await blockService.update(getTenantId(request), id, blockId, body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Delete block
+  fastify.delete('/:id/blocks/:blockId', {
+    preHandler: [authMiddleware, requirePermission('units:delete')],
+    schema: {
+      description: 'Delete a block',
+      tags: ['projects'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'blockId'],
+        properties: {
+          id: { type: 'string' },
+          blockId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, blockId } = request.params as { id: string; blockId: string }
+      const result = await blockService.delete(getTenantId(request), id, blockId)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

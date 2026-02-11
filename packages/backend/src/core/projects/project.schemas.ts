@@ -67,6 +67,8 @@ export const createUnitSchema = z.object({
   bathrooms: z.number().int().min(0).optional(),
   price: z.number().positive(),
   status: z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).optional(),
+  blockId: z.string().uuid().optional().nullable(),
+  floorPlanId: z.string().uuid().optional().nullable(),
   metadata: z.record(z.any()).optional(),
 })
 
@@ -78,6 +80,49 @@ export const listUnitsQuerySchema = z.object({
   search: z.string().optional(),
   status: z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).optional(),
   type: z.enum(['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND']).optional(),
+  blockId: z.string().optional(),
+  floorPlanId: z.string().optional(),
+})
+
+// ==================== FLOOR PLANS ====================
+
+export const createFloorPlanSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+  type: z.enum(['APARTMENT', 'HOUSE', 'COMMERCIAL', 'LAND']),
+  area: z.number().positive(),
+  bedrooms: z.number().int().min(0).optional(),
+  bathrooms: z.number().int().min(0).optional(),
+  defaultPrice: z.number().positive(),
+  metadata: z.record(z.any()).optional(),
+})
+
+export const updateFloorPlanSchema = createFloorPlanSchema.partial()
+
+// ==================== BLOCKS ====================
+
+export const createBlockSchema = z.object({
+  name: z.string().min(1).max(100),
+  floors: z.number().int().positive().optional(),
+  metadata: z.record(z.any()).optional(),
+})
+
+export const updateBlockSchema = createBlockSchema.partial()
+
+// ==================== BULK GENERATE ====================
+
+export const bulkGenerateItemSchema = z.object({
+  floorPlanId: z.string().uuid(),
+  unitsPerFloor: z.number().int().positive(),
+})
+
+export const bulkGenerateSchema = z.object({
+  blockIds: z.array(z.string().uuid()).optional(),
+  floors: z.number().int().positive(),
+  startFloor: z.number().int().min(0).default(1),
+  items: z.array(bulkGenerateItemSchema).min(1),
+  codePattern: z.enum(['BLOCO_ANDAR_SEQ', 'SEQUENCIAL', 'PERSONALIZADO']),
+  codePrefix: z.string().max(20).optional(),
 })
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
@@ -88,3 +133,15 @@ export type UpdateEvolutionInput = z.infer<typeof updateEvolutionSchema>
 export type CreateUnitInput = z.infer<typeof createUnitSchema>
 export type UpdateUnitInput = z.infer<typeof updateUnitSchema>
 export type ListUnitsQuery = z.infer<typeof listUnitsQuerySchema>
+export type CreateFloorPlanInput = z.infer<typeof createFloorPlanSchema>
+export type UpdateFloorPlanInput = z.infer<typeof updateFloorPlanSchema>
+export type CreateBlockInput = z.infer<typeof createBlockSchema>
+export type UpdateBlockInput = z.infer<typeof updateBlockSchema>
+// ==================== BULK DELETE ====================
+
+export const bulkDeleteUnitsSchema = z.object({
+  unitIds: z.array(z.string().uuid()).min(1),
+})
+
+export type BulkGenerateInput = z.infer<typeof bulkGenerateSchema>
+export type BulkDeleteUnitsInput = z.infer<typeof bulkDeleteUnitsSchema>

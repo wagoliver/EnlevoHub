@@ -346,6 +346,8 @@ export const projectsAPI = {
     search?: string
     status?: string
     type?: string
+    blockId?: string
+    floorPlanId?: string
   }) => {
     const searchParams = new URLSearchParams()
     if (params) {
@@ -364,6 +366,32 @@ export const projectsAPI = {
     apiClient.patch<any>(`/projects/${projectId}/units/${unitId}`, data),
   deleteUnit: (projectId: string, unitId: string) =>
     apiClient.delete<any>(`/projects/${projectId}/units/${unitId}`),
+  previewGenerate: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/units/preview-generate`, data),
+  bulkGenerate: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/units/bulk-generate`, data),
+  bulkDeleteUnits: (projectId: string, unitIds: string[]) =>
+    apiClient.post<any>(`/projects/${projectId}/units/bulk-delete`, { unitIds }),
+
+  // Floor Plans
+  listFloorPlans: (projectId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/floor-plans`),
+  createFloorPlan: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/floor-plans`, data),
+  updateFloorPlan: (projectId: string, fpId: string, data: any) =>
+    apiClient.patch<any>(`/projects/${projectId}/floor-plans/${fpId}`, data),
+  deleteFloorPlan: (projectId: string, fpId: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/floor-plans/${fpId}`),
+
+  // Blocks
+  listBlocks: (projectId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/blocks`),
+  createBlock: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/blocks`, data),
+  updateBlock: (projectId: string, blockId: string, data: any) =>
+    apiClient.patch<any>(`/projects/${projectId}/blocks/${blockId}`, data),
+  deleteBlock: (projectId: string, blockId: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/blocks/${blockId}`),
 
   // Upload (legacy)
   uploadPhotos: (projectId: string, formData: FormData) =>

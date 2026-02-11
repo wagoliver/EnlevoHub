@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { projectsAPI } from '@/lib/api-client'
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { FormTooltip } from '@/components/ui/FormTooltip'
 import {
   Select,
   SelectContent,
@@ -29,7 +31,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { UnitFormDialog } from './UnitFormDialog'
+import { FloorPlanManager } from './FloorPlanManager'
+import { BlockManager } from './BlockManager'
+import { BulkGenerateWizard } from './BulkGenerateWizard'
 import {
   Plus,
   Edit,
@@ -37,6 +43,8 @@ import {
   Home,
   Loader2,
   Search,
+  Layers,
+  X,
 } from 'lucide-react'
 
 const unitTypeLabel: Record<string, string> = {
@@ -81,19 +89,41 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [blockFilter, setBlockFilter] = useState('')
+  const [floorPlanFilter, setFloorPlanFilter] = useState('')
   const [showFormDialog, setShowFormDialog] = useState(false)
   const [editingUnit, setEditingUnit] = useState<any>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [unitToDelete, setUnitToDelete] = useState<any>(null)
+  const [showWizard, setShowWizard] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+
+  // Clear selection when filters or page change
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [page, search, statusFilter, typeFilter, blockFilter, floorPlanFilter])
 
   const params: any = { page, limit: 50 }
   if (search) params.search = search
   if (statusFilter) params.status = statusFilter
   if (typeFilter) params.type = typeFilter
+  if (blockFilter) params.blockId = blockFilter
+  if (floorPlanFilter) params.floorPlanId = floorPlanFilter
 
   const { data, isLoading } = useQuery({
-    queryKey: ['project-units', projectId, page, search, statusFilter, typeFilter],
+    queryKey: ['project-units', projectId, page, search, statusFilter, typeFilter, blockFilter, floorPlanFilter],
     queryFn: () => projectsAPI.listUnits(projectId, params),
+  })
+
+  const { data: blocks = [] } = useQuery({
+    queryKey: ['project-blocks', projectId],
+    queryFn: () => projectsAPI.listBlocks(projectId),
+  })
+
+  const { data: floorPlans = [] } = useQuery({
+    queryKey: ['project-floor-plans', projectId],
+    queryFn: () => projectsAPI.listFloorPlans(projectId),
   })
 
   const deleteMutation = useMutation({
@@ -110,6 +140,45 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
       toast.error(error.message || 'Erro ao excluir unidade')
     },
   })
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (unitIds: string[]) => projectsAPI.bulkDeleteUnits(projectId, unitIds),
+    onSuccess: (result: any) => {
+      toast.success(result.message || 'Unidades excluídas com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['project-units', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project'] })
+      queryClient.invalidateQueries({ queryKey: ['project-stats'] })
+      setSelectedIds(new Set())
+      setBulkDeleteDialogOpen(false)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao excluir unidades')
+    },
+  })
+
+  const toggleSelectUnit = (unitId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(unitId)) {
+        next.delete(unitId)
+      } else {
+        next.add(unitId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === units.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(units.map((u: any) => u.id)))
+    }
+  }
+
+  const confirmBulkDelete = () => {
+    bulkDeleteMutation.mutate(Array.from(selectedIds))
+  }
 
   const handleEdit = (unit: any) => {
     setEditingUnit(unit)
@@ -146,166 +215,278 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-neutral-900">
-          Unidades {pagination ? `(${pagination.total})` : ''}
-        </h3>
-        {canCreate && (
-          <Button onClick={() => { setEditingUnit(null); setShowFormDialog(true) }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Adicionar Unidade
-          </Button>
-        )}
-      </div>
+    <Tabs defaultValue="units" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="floor-plans">Plantas</TabsTrigger>
+        <TabsTrigger value="blocks">Blocos</TabsTrigger>
+        <TabsTrigger value="units">Unidades</TabsTrigger>
+      </TabsList>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-          <Input
-            placeholder="Buscar por código..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="pl-9"
-          />
+      <TabsContent value="floor-plans">
+        <FloorPlanManager projectId={projectId} />
+      </TabsContent>
+
+      <TabsContent value="blocks">
+        <BlockManager projectId={projectId} />
+      </TabsContent>
+
+      <TabsContent value="units" className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <h3 className="text-lg font-medium text-neutral-900">
+              Unidades {pagination ? `(${pagination.total})` : ''}
+            </h3>
+            <FormTooltip text="Código único da unidade dentro do projeto" />
+          </div>
+          <div className="flex gap-2">
+            {canCreate && (
+              <>
+                <Button variant="outline" onClick={() => setShowWizard(true)}>
+                  <Layers className="mr-2 h-4 w-4" />
+                  Gerar em Lote
+                </Button>
+                <Button onClick={() => { setEditingUnit(null); setShowFormDialog(true) }}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Adicionar Unidade
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'ALL' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos os Status</SelectItem>
-            {Object.entries(unitStatusLabel).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v === 'ALL' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Todos os Tipos</SelectItem>
-            {Object.entries(unitTypeLabel).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
-      {/* Table or Empty State */}
-      {units.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
-          <Home className="h-12 w-12 text-neutral-300" />
-          <h3 className="mt-4 text-lg font-medium text-neutral-900">
-            Nenhuma unidade cadastrada
-          </h3>
-          <p className="mt-2 text-sm text-neutral-500">
-            Adicione unidades para gerenciar os imóveis deste projeto.
-          </p>
-          {canCreate && (
-            <Button className="mt-6" onClick={() => { setEditingUnit(null); setShowFormDialog(true) }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Adicionar Primeira Unidade
-            </Button>
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <Input
+              placeholder="Buscar por código..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="pl-9"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'ALL' ? '' : v); setPage(1) }}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos os Status</SelectItem>
+              {Object.entries(unitStatusLabel).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v === 'ALL' ? '' : v); setPage(1) }}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos os Tipos</SelectItem>
+              {Object.entries(unitTypeLabel).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {blocks.length > 0 && (
+            <Select value={blockFilter} onValueChange={(v) => { setBlockFilter(v === 'ALL' ? '' : v); setPage(1) }}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Bloco" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos os Blocos</SelectItem>
+                {blocks.map((block: any) => (
+                  <SelectItem key={block.id} value={block.id}>{block.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {floorPlans.length > 0 && (
+            <Select value={floorPlanFilter} onValueChange={(v) => { setFloorPlanFilter(v === 'ALL' ? '' : v); setPage(1) }}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Planta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas as Plantas</SelectItem>
+                {floorPlans.map((fp: any) => (
+                  <SelectItem key={fp.id} value={fp.id}>{fp.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
-      ) : (
-        <>
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Andar</TableHead>
-                  <TableHead>Área (m²)</TableHead>
-                  <TableHead>Quartos</TableHead>
-                  <TableHead>Banheiros</TableHead>
-                  <TableHead>Preço</TableHead>
-                  <TableHead>Status</TableHead>
-                  {(canEdit || canDelete) && <TableHead>Ações</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {units.map((unit: any) => (
-                  <TableRow key={unit.id}>
-                    <TableCell className="font-medium">{unit.code}</TableCell>
-                    <TableCell>{unitTypeLabel[unit.type] || unit.type}</TableCell>
-                    <TableCell>{unit.floor ?? '-'}</TableCell>
-                    <TableCell>{unit.area}</TableCell>
-                    <TableCell>{unit.bedrooms ?? '-'}</TableCell>
-                    <TableCell>{unit.bathrooms ?? '-'}</TableCell>
-                    <TableCell>{formatCurrency(unit.price)}</TableCell>
-                    <TableCell>
-                      <Badge variant={unitStatusVariant[unit.status]}>
-                        {unitStatusLabel[unit.status]}
-                      </Badge>
-                    </TableCell>
-                    {(canEdit || canDelete) && (
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {canEdit && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEdit(unit)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-neutral-400 hover:text-destructive"
-                              onClick={() => handleDeleteClick(unit)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
 
-          {/* Pagination */}
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-neutral-500">
-                Mostrando {((pagination.page - 1) * pagination.limit) + 1} a{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
-                {pagination.total} unidades
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  Anterior
+        {/* Bulk Selection Action Bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2">
+            <span className="text-sm font-medium text-neutral-700">
+              {selectedIds.size} unidade(s) selecionada(s)
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir Selecionados
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Limpar Seleção
+            </Button>
+          </div>
+        )}
+
+        {/* Table or Empty State */}
+        {units.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
+            <Home className="h-12 w-12 text-neutral-300" />
+            <h3 className="mt-4 text-lg font-medium text-neutral-900">
+              Nenhuma unidade cadastrada
+            </h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              Nenhuma unidade cadastrada. Use 'Gerar em Lote' para criar várias unidades de uma vez.
+            </p>
+            {canCreate && (
+              <div className="mt-6 flex gap-3">
+                <Button variant="outline" onClick={() => setShowWizard(true)}>
+                  <Layers className="mr-2 h-4 w-4" />
+                  Gerar em Lote
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page >= pagination.totalPages}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Próxima
+                <Button onClick={() => { setEditingUnit(null); setShowFormDialog(true) }}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Adicionar Unidade
                 </Button>
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </div>
+        ) : (
+          <>
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {canDelete && (
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={units.length > 0 && selectedIds.size === units.length}
+                          onChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                    )}
+                    <TableHead>
+                      <div className="flex items-center gap-1">
+                        Código
+                        <FormTooltip text="Código único da unidade dentro do projeto" />
+                      </div>
+                    </TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Bloco</TableHead>
+                    <TableHead>Planta</TableHead>
+                    <TableHead>Andar</TableHead>
+                    <TableHead>Área (m²)</TableHead>
+                    <TableHead>Quartos</TableHead>
+                    <TableHead>Preço</TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-1">
+                        Status
+                        <FormTooltip text="Disponível = à venda · Reservado = com proposta · Vendido = contrato assinado · Bloqueado = indisponível" />
+                      </div>
+                    </TableHead>
+                    {(canEdit || canDelete) && <TableHead>Ações</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {units.map((unit: any) => (
+                    <TableRow key={unit.id}>
+                      {canDelete && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(unit.id)}
+                            onChange={() => toggleSelectUnit(unit.id)}
+                          />
+                        </TableCell>
+                      )}
+                      <TableCell className="font-medium">{unit.code}</TableCell>
+                      <TableCell>{unitTypeLabel[unit.type] || unit.type}</TableCell>
+                      <TableCell>{unit.block?.name || '-'}</TableCell>
+                      <TableCell>{unit.floorPlan?.name || '-'}</TableCell>
+                      <TableCell>{unit.floor ?? '-'}</TableCell>
+                      <TableCell>{unit.area}</TableCell>
+                      <TableCell>{unit.bedrooms ?? '-'}</TableCell>
+                      <TableCell>{formatCurrency(unit.price)}</TableCell>
+                      <TableCell>
+                        <Badge variant={unitStatusVariant[unit.status]}>
+                          {unitStatusLabel[unit.status]}
+                        </Badge>
+                      </TableCell>
+                      {(canEdit || canDelete) && (
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEdit(unit)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-neutral-400 hover:text-destructive"
+                                onClick={() => handleDeleteClick(unit)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+
+            {/* Pagination */}
+            {pagination && pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-neutral-500">
+                  Mostrando {((pagination.page - 1) * pagination.limit) + 1} a{' '}
+                  {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
+                  {pagination.total} unidades
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pagination.page <= 1}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pagination.page >= pagination.totalPages}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </TabsContent>
 
       {/* Form Dialog */}
       <UnitFormDialog
@@ -313,6 +494,13 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
         open={showFormDialog}
         onOpenChange={handleFormClose}
         unit={editingUnit}
+      />
+
+      {/* Bulk Generate Wizard */}
+      <BulkGenerateWizard
+        projectId={projectId}
+        open={showWizard}
+        onOpenChange={setShowWizard}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -348,6 +536,38 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Unidades em Lote</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-neutral-600">
+            Tem certeza que deseja excluir{' '}
+            <strong>{selectedIds.size} unidade(s)</strong>? Esta ação é irreversível
+            e não pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkDeleteMutation.isPending}
+              onClick={confirmBulkDelete}
+            >
+              {bulkDeleteMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Excluir {selectedIds.size} unidade(s)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Tabs>
   )
 }

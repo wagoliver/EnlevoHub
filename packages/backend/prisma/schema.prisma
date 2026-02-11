@@ -140,6 +140,8 @@ model Project {
   // Relations
   tenant              Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   units               Unit[]
+  floorPlans          FloorPlan[]
+  blocks              Block[]
   evolutions          ProjectEvolution[]
   purchaseOrders      PurchaseOrder[]
   financialTransactions FinancialTransaction[]
@@ -149,6 +151,47 @@ model Project {
   @@index([tenantId])
   @@index([status])
   @@map("projects")
+}
+
+model FloorPlan {
+  id           String   @id @default(uuid())
+  projectId    String
+  name         String
+  description  String?  @db.Text
+  type         UnitType
+  area         Decimal  @db.Decimal(10, 2)
+  bedrooms     Int?
+  bathrooms    Int?
+  defaultPrice Decimal  @db.Decimal(15, 2)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units   Unit[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("floor_plans")
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  floors    Int?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units   Unit[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("blocks")
 }
 
 enum ProjectStatus {
@@ -181,28 +224,34 @@ model ProjectEvolution {
 }
 
 model Unit {
-  id        String     @id @default(uuid())
-  projectId String
-  code      String
-  type      UnitType
-  floor     Int?
-  area      Decimal    @db.Decimal(10, 2)
-  bedrooms  Int?
-  bathrooms Int?
-  price     Decimal    @db.Decimal(15, 2)
-  status    UnitStatus @default(AVAILABLE)
-  metadata  Json?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id          String     @id @default(uuid())
+  projectId   String
+  code        String
+  type        UnitType
+  floor       Int?
+  area        Decimal    @db.Decimal(10, 2)
+  bedrooms    Int?
+  bathrooms   Int?
+  price       Decimal    @db.Decimal(15, 2)
+  status      UnitStatus @default(AVAILABLE)
+  blockId     String?
+  floorPlanId String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   // Relations
   project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  block          Block?         @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  floorPlan      FloorPlan?     @relation(fields: [floorPlanId], references: [id], onDelete: SetNull)
   sales          Sale[]
   unitActivities UnitActivity[]
 
   @@unique([projectId, code])
   @@index([projectId])
   @@index([status])
+  @@index([blockId])
+  @@index([floorPlanId])
   @@map("units")
 }
 

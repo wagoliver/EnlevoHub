@@ -20,6 +20,7 @@ import { ActivityTemplateEditor } from './pages/settings/ActivityTemplateEditor'
 import { Users } from './pages/Users'
 import { Profile } from './pages/Profile'
 import { Financial } from './pages/Financial'
+import { Units } from './pages/Units'
 import { Performance } from './pages/Performance'
 
 // Create a client
@@ -57,7 +58,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />} />
-            <Route path="units" element={<ComingSoon title="Unidades" />} />
+            <Route path="units" element={<Units />} />
             <Route path="suppliers" element={<ComingSoon title="Fornecedores" />} />
             <Route path="contractors" element={<Contractors />} />
             <Route path="contractors/:id" element={<ContractorDetail />} />

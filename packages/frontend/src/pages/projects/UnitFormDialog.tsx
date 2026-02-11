@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { projectsAPI } from '@/lib/api-client'
 import {
@@ -55,7 +55,21 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
   const [bathrooms, setBathrooms] = useState('')
   const [price, setPrice] = useState('')
   const [status, setStatus] = useState('AVAILABLE')
+  const [blockId, setBlockId] = useState('')
+  const [floorPlanId, setFloorPlanId] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const { data: blocks = [] } = useQuery({
+    queryKey: ['project-blocks', projectId],
+    queryFn: () => projectsAPI.listBlocks(projectId),
+    enabled: open,
+  })
+
+  const { data: floorPlans = [] } = useQuery({
+    queryKey: ['project-floor-plans', projectId],
+    queryFn: () => projectsAPI.listFloorPlans(projectId),
+    enabled: open,
+  })
 
   useEffect(() => {
     if (unit) {
@@ -67,6 +81,8 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
       setBathrooms(unit.bathrooms != null ? String(unit.bathrooms) : '')
       setPrice(unit.price != null ? String(unit.price) : '')
       setStatus(unit.status || 'AVAILABLE')
+      setBlockId(unit.blockId || unit.block?.id || '')
+      setFloorPlanId(unit.floorPlanId || unit.floorPlan?.id || '')
     } else {
       setCode('')
       setType('APARTMENT')
@@ -76,9 +92,26 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
       setBathrooms('')
       setPrice('')
       setStatus('AVAILABLE')
+      setBlockId('')
+      setFloorPlanId('')
     }
     setErrors({})
   }, [unit, open])
+
+  // Auto-fill when selecting a floor plan (only when creating, not editing)
+  const handleFloorPlanChange = (fpId: string) => {
+    setFloorPlanId(fpId)
+    if (fpId && fpId !== 'NONE' && !isEdit) {
+      const fp = floorPlans.find((p: any) => p.id === fpId)
+      if (fp) {
+        setType(fp.type)
+        setArea(String(fp.area))
+        if (fp.bedrooms != null) setBedrooms(String(fp.bedrooms))
+        if (fp.bathrooms != null) setBathrooms(String(fp.bathrooms))
+        setPrice(String(fp.defaultPrice))
+      }
+    }
+  }
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -88,6 +121,8 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
         area: parseFloat(area),
         price: parseFloat(price),
         status,
+        blockId: blockId && blockId !== 'NONE' ? blockId : null,
+        floorPlanId: floorPlanId && floorPlanId !== 'NONE' ? floorPlanId : null,
       }
 
       if (floor !== '') payload.floor = parseInt(floor, 10)
@@ -180,6 +215,44 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
                 </SelectContent>
               </Select>
             </div>
+
+            {floorPlans.length > 0 && (
+              <div>
+                <Label htmlFor="unit-floor-plan">Planta</Label>
+                <Select value={floorPlanId || 'NONE'} onValueChange={handleFloorPlanChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a planta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">Nenhuma</SelectItem>
+                    {floorPlans.map((fp: any) => (
+                      <SelectItem key={fp.id} value={fp.id}>
+                        {fp.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {blocks.length > 0 && (
+              <div>
+                <Label htmlFor="unit-block">Bloco</Label>
+                <Select value={blockId || 'NONE'} onValueChange={(v) => setBlockId(v === 'NONE' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o bloco" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">Nenhum</SelectItem>
+                    {blocks.map((block: any) => (
+                      <SelectItem key={block.id} value={block.id}>
+                        {block.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div>
               <Label htmlFor="unit-floor">Andar</Label>

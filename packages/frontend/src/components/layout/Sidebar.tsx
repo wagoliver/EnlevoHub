@@ -235,7 +235,7 @@ function SidebarContent({ isCollapsed }: { isCollapsed: boolean }) {
       {/* Navigation */}
       <nav
         className={cn(
-          'flex flex-1 flex-col gap-1 overflow-y-auto p-4',
+          'flex flex-1 flex-col gap-0.5 overflow-y-auto p-3 sidebar-scroll',
           isCollapsed && 'px-2'
         )}
       >
@@ -248,20 +248,6 @@ function SidebarContent({ isCollapsed }: { isCollapsed: boolean }) {
         ))}
         <SettingsSection isCollapsed={isCollapsed} />
       </nav>
-
-      {/* Footer */}
-      <div className="border-t border-white/10 p-4">
-        <div className="text-xs text-white/40 text-center">
-          {isCollapsed ? (
-            <p>v1.0</p>
-          ) : (
-            <>
-              <p>EnlevoHub v1.0.0</p>
-              <p className="mt-1">&copy; 2026 EnlevoHub</p>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   )
 }

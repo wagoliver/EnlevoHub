@@ -554,3 +554,89 @@ export const monitoringAPI = {
   getAudit: (days = 7) => apiClient.get<any>(`/monitoring/audit?days=${days}`),
   getStorage: () => apiClient.get<any>('/monitoring/storage'),
 }
+
+export const suppliersAPI = {
+  // Suppliers
+  list: (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    type?: string
+    isActive?: boolean
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.set(key, String(value))
+        }
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/suppliers${qs ? `?${qs}` : ''}`)
+  },
+  getById: (id: string) => apiClient.get<any>(`/suppliers/${id}`),
+  create: (data: any) => apiClient.post<any>('/suppliers', data),
+  update: (id: string, data: any) => apiClient.patch<any>(`/suppliers/${id}`, data),
+  delete: (id: string) => apiClient.delete<any>(`/suppliers/${id}`),
+  getFinancialSummary: (id: string) => apiClient.get<any>(`/suppliers/${id}/financial-summary`),
+
+  // Supplier Materials
+  listSupplierMaterials: (supplierId: string) =>
+    apiClient.get<any>(`/suppliers/${supplierId}/materials`),
+  linkMaterial: (supplierId: string, data: { materialId: string; price: number }) =>
+    apiClient.post<any>(`/suppliers/${supplierId}/materials`, data),
+  unlinkMaterial: (supplierId: string, materialId: string) =>
+    apiClient.delete<any>(`/suppliers/${supplierId}/materials/${materialId}`),
+
+  // Materials catalog
+  listMaterials: (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    category?: string
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.set(key, String(value))
+        }
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/suppliers/materials${qs ? `?${qs}` : ''}`)
+  },
+  getMaterial: (id: string) => apiClient.get<any>(`/suppliers/materials/${id}`),
+  createMaterial: (data: any) => apiClient.post<any>('/suppliers/materials', data),
+  updateMaterial: (id: string, data: any) => apiClient.patch<any>(`/suppliers/materials/${id}`, data),
+  deleteMaterial: (id: string) => apiClient.delete<any>(`/suppliers/materials/${id}`),
+  getMaterialSuppliers: (materialId: string) =>
+    apiClient.get<any>(`/suppliers/materials/${materialId}/suppliers`),
+
+  // Purchase Orders
+  listPurchaseOrders: (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    status?: string
+    projectId?: string
+    supplierId?: string
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.set(key, String(value))
+        }
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/suppliers/purchase-orders${qs ? `?${qs}` : ''}`)
+  },
+  getPurchaseOrder: (id: string) => apiClient.get<any>(`/suppliers/purchase-orders/${id}`),
+  createPurchaseOrder: (data: any) => apiClient.post<any>('/suppliers/purchase-orders', data),
+  updatePurchaseOrderStatus: (id: string, data: { status: string; createExpense?: boolean; bankAccountId?: string }) =>
+    apiClient.patch<any>(`/suppliers/purchase-orders/${id}/status`, data),
+  deletePurchaseOrder: (id: string) => apiClient.delete<any>(`/suppliers/purchase-orders/${id}`),
+}

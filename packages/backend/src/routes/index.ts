@@ -9,6 +9,7 @@ import { activityTemplateRoutes } from '../modules/activity-templates'
 import { projectActivityRoutes } from '../modules/project-activities'
 import { financialRoutes } from '../modules/financial'
 import { monitoringRoutes } from '../modules/monitoring'
+import { supplierRoutes } from '../modules/suppliers'
 
 export function registerRoutes(server: FastifyInstance) {
   // API v1 routes
@@ -35,6 +36,7 @@ export function registerRoutes(server: FastifyInstance) {
       api.register(projectActivityRoutes, { prefix: '/projects' })
       api.register(financialRoutes, { prefix: '/financial' })
       api.register(monitoringRoutes, { prefix: '/monitoring' })
+      api.register(supplierRoutes, { prefix: '/suppliers' })
 
       // Placeholder route
       api.get('/', async () => {

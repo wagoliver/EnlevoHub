@@ -22,6 +22,9 @@ import { Profile } from './pages/Profile'
 import { Financial } from './pages/Financial'
 import { Units } from './pages/Units'
 import { Performance } from './pages/Performance'
+import { Suppliers } from './pages/Suppliers'
+import { SupplierDetail } from './pages/suppliers/SupplierDetail'
+import { PurchaseOrders } from './pages/PurchaseOrders'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -59,11 +62,12 @@ function App() {
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="units" element={<Units />} />
-            <Route path="suppliers" element={<ComingSoon title="Fornecedores" />} />
+            <Route path="suppliers" element={<Suppliers />} />
+            <Route path="suppliers/:id" element={<SupplierDetail />} />
             <Route path="contractors" element={<Contractors />} />
             <Route path="contractors/:id" element={<ContractorDetail />} />
             <Route path="brokers" element={<ComingSoon title="Corretores" />} />
-            <Route path="purchases" element={<ComingSoon title="Compras" />} />
+            <Route path="purchases" element={<PurchaseOrders />} />
             <Route path="financial" element={<Financial />} />
             <Route path="contracts" element={<ComingSoon title="Contratos" />} />
             <Route path="reports" element={<ComingSoon title="Relatórios" />} />

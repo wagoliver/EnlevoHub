@@ -40,7 +40,7 @@ interface ApplyTemplateDialogProps {
 type Step = 1 | 2 | 3 | 4
 
 const STEP_LABELS: Record<Step, string> = {
-  1: 'Selecionar Template',
+  1: 'Selecionar Planejamento',
   2: 'Configurar Datas',
   3: 'Preview Cronograma',
   4: 'Confirmar',
@@ -113,13 +113,13 @@ export function ApplyTemplateDialog({
       })
     },
     onSuccess: () => {
-      toast.success('Template aplicado com sucesso!')
+      toast.success('Planejamento aplicado com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
       resetAndClose()
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao aplicar template')
+      toast.error(error.message || 'Erro ao aplicar planejamento')
     },
   })
 
@@ -177,7 +177,7 @@ export function ApplyTemplateDialog({
     <Dialog open={open} onOpenChange={(val) => { if (!val) resetAndClose() }}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Aplicar Template com Cronograma</DialogTitle>
+          <DialogTitle>Aplicar Planejamento com Cronograma</DialogTitle>
         </DialogHeader>
 
         {/* Step indicator */}
@@ -207,10 +207,10 @@ export function ApplyTemplateDialog({
         {step === 1 && (
           <div className="space-y-4">
             <div>
-              <Label>Template</Label>
+              <Label>Planejamento</Label>
               <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione um template..." />
+                  <SelectValue placeholder="Selecione um planejamento..." />
                 </SelectTrigger>
                 <SelectContent>
                   {templates.map((template: any) => (
@@ -222,7 +222,7 @@ export function ApplyTemplateDialog({
               </Select>
               {templates.length === 0 && (
                 <p className="mt-2 text-sm text-neutral-500">
-                  Nenhum template disponível. Crie um template hierárquico em Configurações.
+                  Nenhum planejamento disponível. Crie um planejamento em Configurações.
                 </p>
               )}
             </div>
@@ -334,7 +334,7 @@ export function ApplyTemplateDialog({
             <div className="rounded-lg border bg-green-50 p-4 space-y-2">
               <h4 className="font-medium text-green-800">Resumo</h4>
               <div className="text-sm text-green-700 space-y-1">
-                <p>Template: <strong>{selectedTemplate?.name}</strong></p>
+                <p>Planejamento: <strong>{selectedTemplate?.name}</strong></p>
                 <p>Período: <strong>{formatDate(startDate)}</strong> a <strong>{formatDate(endDate)}</strong></p>
                 <p>Modo: <strong>{schedulingMode === 'BUSINESS_DAYS' ? 'Dias Úteis' : 'Dias Corridos'}</strong></p>
                 <p>Fases: <strong>{schedule.length}</strong></p>

@@ -402,7 +402,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
             Nenhuma atividade cadastrada
           </h3>
           <p className="mt-2 text-sm text-neutral-500">
-            Adicione atividades manualmente ou importe de um template.
+            Adicione atividades manualmente ou importe de um planejamento.
           </p>
           {canEdit && (
             <Button className="mt-6" onClick={() => setShowAddDialog(true)}>

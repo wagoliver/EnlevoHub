@@ -9,24 +9,128 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   ArrowLeft,
   Save,
   Loader2,
+  LayoutTemplate,
+  Upload,
+  FilePlus,
+  Download,
 } from 'lucide-react'
 import {
   HierarchicalItemEditor,
   type TemplatePhase,
 } from './HierarchicalItemEditor'
+import { ImportTemplateDialog, type ParsedPhase } from './ImportTemplateDialog'
+import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from './template-models'
+
+type StartingPoint = null | 'model' | 'import' | 'blank'
+
+function modelRowsToPhases(rows: any[][]): TemplatePhase[] {
+  const phaseMap = new Map<string, {
+    percentageOfTotal: number
+    color: string | null
+    stageMap: Map<string, { name: string; order: number; weight: number; durationDays: number | null; dependencies: string[] | undefined }[]>
+  }>()
+  const phaseOrder: string[] = []
+
+  for (const row of rows) {
+    const [fase, percentual, cor, etapa, atividade, peso, duracao, deps] = row
+    const faseName = String(fase ?? '').trim()
+    const etapaName = String(etapa ?? '').trim()
+    const atividadeName = String(atividade ?? '').trim()
+    if (!faseName || !etapaName || !atividadeName) continue
+
+    if (!phaseMap.has(faseName)) {
+      phaseMap.set(faseName, {
+        percentageOfTotal: Number(percentual) || 0,
+        color: cor ? String(cor).trim() : null,
+        stageMap: new Map(),
+      })
+      phaseOrder.push(faseName)
+    }
+
+    const phase = phaseMap.get(faseName)!
+    if (!phase.stageMap.has(etapaName)) {
+      phase.stageMap.set(etapaName, [])
+    }
+
+    const activities = phase.stageMap.get(etapaName)!
+    const depsStr = String(deps ?? '').trim()
+    const depsList = depsStr
+      ? depsStr.split(';').map((d) => d.trim()).filter((d) => d.length > 0)
+      : undefined
+
+    activities.push({
+      name: atividadeName,
+      order: activities.length,
+      weight: Number(peso) || 1,
+      durationDays: duracao && !isNaN(Number(duracao)) ? Number(duracao) : null,
+      dependencies: depsList,
+    })
+  }
+
+  return phaseOrder.map((phaseName, pIdx) => {
+    const p = phaseMap.get(phaseName)!
+    const stageNames = Array.from(p.stageMap.keys())
+    return {
+      name: phaseName,
+      order: pIdx,
+      percentageOfTotal: p.percentageOfTotal,
+      color: p.color,
+      stages: stageNames.map((sName, sIdx) => ({
+        name: sName,
+        order: sIdx,
+        activities: p.stageMap.get(sName)!,
+      })),
+    }
+  })
+}
+
+function parsedToTemplatePhases(parsed: ParsedPhase[]): TemplatePhase[] {
+  return parsed.map((p, pIdx) => ({
+    name: p.name,
+    order: pIdx,
+    percentageOfTotal: p.percentageOfTotal,
+    color: p.color,
+    stages: p.stages.map((s, sIdx) => ({
+      name: s.name,
+      order: sIdx,
+      activities: s.activities.map((a, aIdx) => ({
+        name: a.name,
+        order: aIdx,
+        weight: a.weight,
+        durationDays: a.durationDays,
+        dependencies: a.dependencies ?? undefined,
+      })),
+    })),
+  }))
+}
 
 export function ActivityTemplateEditor() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const isEditing = !!id && id !== 'new'
+  const isNew = id === 'new'
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [phases, setPhases] = useState<TemplatePhase[]>([])
+  const [startingPoint, setStartingPoint] = useState<StartingPoint>(null)
+  const [selectedModel, setSelectedModel] = useState('')
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+
+  const showStartingPoint = isNew && startingPoint === null
 
   // Fetch existing template when editing
   const { data: template, isLoading } = useQuery({
@@ -41,7 +145,6 @@ export function ActivityTemplateEditor() {
       setName(template.name || '')
       setDescription(template.description || '')
 
-      // If template has hierarchical phases, use them
       if (template.phases && template.phases.length > 0) {
         setPhases(
           template.phases.map((phase: any, pIdx: number) => ({
@@ -63,10 +166,8 @@ export function ActivityTemplateEditor() {
           }))
         )
       } else if (template.items && template.items.length > 0) {
-        // Legacy flat items - convert to single phase
         const hasPhases = template.items.some((i: any) => i.level === 'PHASE')
         if (!hasPhases) {
-          // Create a single phase with a single stage containing all items as activities
           setPhases([{
             name: 'Fase Única',
             order: 0,
@@ -94,12 +195,12 @@ export function ActivityTemplateEditor() {
   const createMutation = useMutation({
     mutationFn: (data: any) => activityTemplatesAPI.create(data),
     onSuccess: (result: any) => {
-      toast.success('Template criado com sucesso!')
+      toast.success('Planejamento criado com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['activity-templates'] })
-      navigate(`/settings/templates/${result.id}`, { replace: true })
+      navigate(`/settings/planejamentos/${result.id}`, { replace: true })
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao criar template')
+      toast.error(error.message || 'Erro ao criar planejamento')
     },
   })
 
@@ -107,12 +208,12 @@ export function ActivityTemplateEditor() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => activityTemplatesAPI.update(id!, data),
     onSuccess: () => {
-      toast.success('Template atualizado com sucesso!')
+      toast.success('Planejamento atualizado com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['activity-templates'] })
       queryClient.invalidateQueries({ queryKey: ['activity-template', id] })
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao atualizar template')
+      toast.error(error.message || 'Erro ao atualizar planejamento')
     },
   })
 
@@ -120,7 +221,7 @@ export function ActivityTemplateEditor() {
 
   const handleSave = () => {
     if (!name.trim()) {
-      toast.error('O nome do template é obrigatório')
+      toast.error('O nome do planejamento é obrigatório')
       return
     }
 
@@ -129,14 +230,12 @@ export function ActivityTemplateEditor() {
       return
     }
 
-    // Validate percentages sum to 100
     const totalPct = phases.reduce((sum, p) => sum + (p.percentageOfTotal || 0), 0)
     if (Math.abs(totalPct - 100) >= 0.1) {
       toast.error('Os percentuais das fases devem somar 100%')
       return
     }
 
-    // Validate all names are filled
     for (const phase of phases) {
       if (!phase.name.trim()) {
         toast.error('Todas as fases devem ter um nome')
@@ -185,10 +284,142 @@ export function ActivityTemplateEditor() {
     }
   }
 
+  const handleLoadModel = () => {
+    const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedModel)
+    if (!tpl) return
+    const parsed = modelRowsToPhases(tpl.rows.map((r) => [...r]))
+    setPhases(parsed)
+    if (!name) setName(tpl.label)
+  }
+
+  const handleDownloadModel = () => {
+    const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedModel)
+    if (!tpl) return
+    // Dynamic import to avoid bundling XLSX in the editor
+    import('xlsx').then((XLSX) => {
+      const HEADERS = ['Fase', 'Percentual (%)', 'Cor', 'Etapa', 'Atividade', 'Peso (1-5)', 'Duração (dias)', 'Dependências']
+      const data = [HEADERS, ...tpl.rows]
+      const ws = XLSX.utils.aoa_to_sheet(data)
+      ws['!cols'] = [
+        { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 20 },
+        { wch: 22 }, { wch: 8 }, { wch: 16 }, { wch: 22 },
+      ]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Template')
+      XLSX.writeFile(wb, `modelo-${tpl.key}.xlsx`)
+    })
+  }
+
+  const handleImportLoad = (data: { name: string; phases: ParsedPhase[] }) => {
+    setPhases(parsedToTemplatePhases(data.phases))
+    if (!name) setName(data.name)
+    setImportDialogOpen(false)
+  }
+
+  const handleBackToCards = () => {
+    setStartingPoint(null)
+    setName('')
+    setDescription('')
+    setPhases([])
+    setSelectedModel('')
+  }
+
   if (isEditing && isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Starting point selection for new templates
+  if (showStartingPoint) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/settings/planejamentos')}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-neutral-900">
+              Novo Planejamento
+            </h1>
+            <p className="mt-1 text-neutral-600">
+              Como deseja começar?
+            </p>
+          </div>
+        </div>
+
+        {/* Cards */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setStartingPoint('model')}
+            className="group flex flex-col items-center gap-3 rounded-xl border-2 border-neutral-200 bg-white p-8 text-center transition-all hover:border-primary hover:shadow-md"
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+              <LayoutTemplate className="h-7 w-7" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900">
+              A partir de modelo
+            </h3>
+            <p className="text-sm text-neutral-500">
+              Escolha um dos 20 modelos pré-prontos por tipo de obra
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setStartingPoint('import')
+              setImportDialogOpen(true)
+            }}
+            className="group flex flex-col items-center gap-3 rounded-xl border-2 border-neutral-200 bg-white p-8 text-center transition-all hover:border-primary hover:shadow-md"
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+              <Upload className="h-7 w-7" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Importar planilha
+            </h3>
+            <p className="text-sm text-neutral-500">
+              Faça upload de um arquivo XLSX ou CSV
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStartingPoint('blank')}
+            className="group flex flex-col items-center gap-3 rounded-xl border-2 border-neutral-200 bg-white p-8 text-center transition-all hover:border-primary hover:shadow-md"
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+              <FilePlus className="h-7 w-7" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Em branco
+            </h3>
+            <p className="text-sm text-neutral-500">
+              Comece do zero adicionando fases e atividades
+            </p>
+          </button>
+        </div>
+
+        {/* Import dialog for the import card */}
+        <ImportTemplateDialog
+          open={importDialogOpen}
+          onOpenChange={(open) => {
+            setImportDialogOpen(open)
+            if (!open && phases.length === 0) {
+              setStartingPoint(null)
+            }
+          }}
+          onLoad={handleImportLoad}
+        />
       </div>
     )
   }
@@ -201,35 +432,96 @@ export function ActivityTemplateEditor() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/settings/templates')}
+            onClick={() => navigate('/settings/planejamentos')}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-neutral-900">
-              {isEditing ? 'Editar Template' : 'Novo Template'}
+              {isEditing ? 'Editar Planejamento' : 'Novo Planejamento'}
             </h1>
             <p className="mt-1 text-neutral-600">
               {isEditing
-                ? 'Altere as informações do template de atividades'
-                : 'Crie um novo modelo hierárquico: Fases > Etapas > Atividades'}
+                ? 'Altere as informações do planejamento'
+                : 'Crie um novo planejamento hierárquico: Fases > Etapas > Atividades'}
             </p>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={isSaving}>
-          {isSaving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
+        <div className="flex items-center gap-2">
+          {isNew && startingPoint && (
+            <Button variant="outline" onClick={handleBackToCards}>
+              Escolher outro método
+            </Button>
           )}
-          Salvar
-        </Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Salvar
+          </Button>
+        </div>
       </div>
+
+      {/* Model selector - shown when starting from model */}
+      {startingPoint === 'model' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Modelo de Planejamento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Selecione o tipo de obra..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEMPLATE_CATEGORIES.map((category) => (
+                    <SelectGroup key={category}>
+                      <SelectLabel>{category}</SelectLabel>
+                      {TEMPLATE_MODELS
+                        .filter((t) => t.category === category)
+                        .map((t) => (
+                          <SelectItem key={t.key} value={t.key}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                disabled={!selectedModel}
+                onClick={handleLoadModel}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Carregar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!selectedModel}
+                onClick={handleDownloadModel}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar
+              </Button>
+            </div>
+            {selectedModel && (
+              <p className="mt-2 text-xs text-neutral-500 italic">
+                {TEMPLATE_MODELS.find((t) => t.key === selectedModel)?.description}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Template Info */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Informações do Template</CardTitle>
+          <CardTitle className="text-base">Informações do Planejamento</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -245,7 +537,7 @@ export function ActivityTemplateEditor() {
             <Label htmlFor="description">Descrição</Label>
             <Textarea
               id="description"
-              placeholder="Descreva o objetivo deste template..."
+              placeholder="Descreva o objetivo deste planejamento..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
@@ -257,7 +549,7 @@ export function ActivityTemplateEditor() {
       {/* Hierarchical Editor */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Estrutura do Template</CardTitle>
+          <CardTitle className="text-base">Estrutura do Planejamento</CardTitle>
         </CardHeader>
         <CardContent>
           <HierarchicalItemEditor phases={phases} onChange={setPhases} />

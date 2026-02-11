@@ -36,9 +36,7 @@ import {
   Copy,
   FileText,
   LayoutTemplate,
-  Upload,
 } from 'lucide-react'
-import { ImportTemplateDialog } from './ImportTemplateDialog'
 
 export function ActivityTemplates() {
   const navigate = useNavigate()
@@ -54,8 +52,6 @@ export function ActivityTemplates() {
   const [templateToClone, setTemplateToClone] = useState<any>(null)
   const [cloneName, setCloneName] = useState('')
   const [cloneDescription, setCloneDescription] = useState('')
-  const [importDialogOpen, setImportDialogOpen] = useState(false)
-
   const { data, isLoading } = useQuery({
     queryKey: ['activity-templates', { page, search }],
     queryFn: () =>
@@ -72,13 +68,13 @@ export function ActivityTemplates() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => activityTemplatesAPI.delete(id),
     onSuccess: () => {
-      toast.success('Template excluído com sucesso!')
+      toast.success('Planejamento excluído com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['activity-templates'] })
       setDeleteDialogOpen(false)
       setTemplateToDelete(null)
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao excluir template')
+      toast.error(error.message || 'Erro ao excluir planejamento')
     },
   })
 
@@ -86,7 +82,7 @@ export function ActivityTemplates() {
     mutationFn: ({ id, data }: { id: string; data: { name: string; description?: string } }) =>
       activityTemplatesAPI.clone(id, data),
     onSuccess: () => {
-      toast.success('Template clonado com sucesso!')
+      toast.success('Planejamento clonado com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['activity-templates'] })
       setCloneDialogOpen(false)
       setTemplateToClone(null)
@@ -94,7 +90,7 @@ export function ActivityTemplates() {
       setCloneDescription('')
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao clonar template')
+      toast.error(error.message || 'Erro ao clonar planejamento')
     },
   })
 
@@ -142,23 +138,17 @@ export function ActivityTemplates() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">
-            Templates de Atividades
+            Planejamentos de Atividades
           </h1>
           <p className="mt-1 text-neutral-600">
-            Modelos reutilizáveis de atividades para projetos
+            Modelos de planejamento reutilizáveis para projetos
           </p>
         </div>
         {canCreate && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" />
-              Importar Planilha
-            </Button>
-            <Button onClick={() => navigate('/settings/templates/new')}>
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Template
-            </Button>
-          </div>
+          <Button onClick={() => navigate('/settings/planejamentos/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Planejamento
+          </Button>
         )}
       </div>
 
@@ -168,7 +158,7 @@ export function ActivityTemplates() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <Input
-              placeholder="Buscar templates..."
+              placeholder="Buscar planejamentos..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="pl-10"
@@ -190,21 +180,21 @@ export function ActivityTemplates() {
           <LayoutTemplate className="h-16 w-16 text-neutral-300" />
           <h3 className="mt-4 text-xl font-medium text-neutral-900">
             {search
-              ? 'Nenhum template encontrado'
-              : 'Nenhum template cadastrado'}
+              ? 'Nenhum planejamento encontrado'
+              : 'Nenhum planejamento cadastrado'}
           </h3>
           <p className="mt-2 text-neutral-500">
             {search
               ? 'Tente ajustar os termos de busca.'
-              : 'Comece criando seu primeiro template de atividades.'}
+              : 'Comece criando seu primeiro planejamento de atividades.'}
           </p>
           {canCreate && !search && (
             <Button
               className="mt-6"
-              onClick={() => navigate('/settings/templates/new')}
+              onClick={() => navigate('/settings/planejamentos/new')}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Criar Primeiro Template
+              Criar Primeiro Planejamento
             </Button>
           )}
         </div>
@@ -233,7 +223,7 @@ export function ActivityTemplates() {
                       key={template.id}
                       className="cursor-pointer"
                       onClick={() =>
-                        navigate(`/settings/templates/${template.id}`)
+                        navigate(`/settings/planejamentos/${template.id}`)
                       }
                     >
                       <TableCell>
@@ -292,7 +282,7 @@ export function ActivityTemplates() {
           {pagination.totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-neutral-500">
-                Mostrando {templates.length} de {pagination.total} templates
+                Mostrando {templates.length} de {pagination.total} planejamentos
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -326,10 +316,10 @@ export function ActivityTemplates() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir Template</DialogTitle>
+            <DialogTitle>Excluir Planejamento</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-neutral-600">
-            Tem certeza que deseja excluir o template{' '}
+            Tem certeza que deseja excluir o planejamento{' '}
             <strong>{templateToDelete?.name}</strong>? Esta ação não pode ser
             desfeita.
           </p>
@@ -357,19 +347,13 @@ export function ActivityTemplates() {
         </DialogContent>
       </Dialog>
 
-      {/* Import Dialog */}
-      <ImportTemplateDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-      />
-
       {/* Clone Dialog */}
       <Dialog open={cloneDialogOpen} onOpenChange={setCloneDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clonar Template</DialogTitle>
+            <DialogTitle>Clonar Planejamento</DialogTitle>
             <DialogDescription>
-              Crie uma cópia do template <strong>{templateToClone?.name}</strong> com um novo nome.
+              Crie uma cópia do planejamento <strong>{templateToClone?.name}</strong> com um novo nome.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -379,7 +363,7 @@ export function ActivityTemplates() {
                 id="clone-name"
                 value={cloneName}
                 onChange={(e) => setCloneName(e.target.value)}
-                placeholder="Nome do novo template"
+                placeholder="Nome do novo planejamento"
                 autoFocus
               />
             </div>
@@ -389,7 +373,7 @@ export function ActivityTemplates() {
                 id="clone-description"
                 value={cloneDescription}
                 onChange={(e) => setCloneDescription(e.target.value)}
-                placeholder="Descrição do novo template (opcional)"
+                placeholder="Descrição do novo planejamento (opcional)"
                 rows={3}
               />
             </div>

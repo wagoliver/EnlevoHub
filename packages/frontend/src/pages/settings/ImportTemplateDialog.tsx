@@ -41,6 +41,7 @@ import type { TemplateModel } from './template-models'
 interface ImportTemplateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onLoad?: (data: { name: string; phases: ParsedPhase[] }) => void
 }
 
 interface ParsedPhase {
@@ -292,7 +293,9 @@ function rowsToPhases(rows: any[][], autoCalcPercentage: boolean): { phases: Par
   return { phases, errors }
 }
 
-export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialogProps) {
+export type { ParsedPhase }
+
+export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTemplateDialogProps) {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -375,17 +378,23 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
   const createMutation = useMutation({
     mutationFn: (data: any) => activityTemplatesAPI.create(data),
     onSuccess: () => {
-      toast.success('Template importado com sucesso!')
+      toast.success('Planejamento importado com sucesso!')
       queryClient.invalidateQueries({ queryKey: ['activity-templates'] })
       handleClose()
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Erro ao criar template')
+      toast.error(error.message || 'Erro ao criar planejamento')
     },
   })
 
   const handleSubmit = () => {
     if (!canSubmit) return
+
+    if (onLoad) {
+      onLoad({ name: templateName.trim(), phases })
+      handleClose()
+      return
+    }
 
     createMutation.mutate({
       name: templateName.trim(),
@@ -433,7 +442,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Importar Template de Planilha</DialogTitle>
+          <DialogTitle>Importar Planejamento de Planilha</DialogTitle>
           <DialogDescription>
             Importe atividades a partir de um arquivo XLSX ou CSV seguindo o modelo.
           </DialogDescription>
@@ -776,7 +785,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
           {/* Template name */}
           {hasData && (
             <div>
-              <Label htmlFor="template-name">Nome do Template *</Label>
+              <Label htmlFor="template-name">Nome do Planejamento *</Label>
               <Input
                 id="template-name"
                 value={templateName}
@@ -798,7 +807,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
             {createMutation.isPending && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            Criar Template
+            {onLoad ? 'Carregar no Editor' : 'Criar Planejamento'}
           </Button>
         </DialogFooter>
       </DialogContent>

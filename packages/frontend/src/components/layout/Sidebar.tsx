@@ -101,8 +101,8 @@ const mainNavigation: NavItem[] = [
 
 const settingsNavigation: NavItem[] = [
   {
-    title: 'Templates',
-    href: '/settings/templates',
+    title: 'Planejamentos',
+    href: '/settings/planejamentos',
     icon: ListChecks,
     permission: 'activities:create',
   },

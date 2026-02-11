@@ -70,8 +70,8 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<EmailSettings />} />
             <Route path="settings/storage" element={<StorageSettings />} />
-            <Route path="settings/templates" element={<ActivityTemplates />} />
-            <Route path="settings/templates/:id" element={<ActivityTemplateEditor />} />
+            <Route path="settings/planejamentos" element={<ActivityTemplates />} />
+            <Route path="settings/planejamentos/:id" element={<ActivityTemplateEditor />} />
             <Route path="users" element={<Users />} />
             <Route path="performance" element={<Performance />} />
           </Route>

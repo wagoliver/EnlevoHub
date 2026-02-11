@@ -117,7 +117,7 @@ export function AddActivityDialog({
 
           <Tabs defaultValue="template" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="template">De Template</TabsTrigger>
+              <TabsTrigger value="template">De Planejamento</TabsTrigger>
               <TabsTrigger value="manual">Manual</TabsTrigger>
             </TabsList>
 
@@ -130,10 +130,10 @@ export function AddActivityDialog({
                 </div>
                 <div className="text-center">
                   <h4 className="font-medium text-neutral-900">
-                    Importar de Template com Cronograma
+                    Importar de Planejamento com Cronograma
                   </h4>
                   <p className="mt-1 text-sm text-neutral-500">
-                    Selecione um template hierárquico, configure datas de início e fim,
+                    Selecione um planejamento hierárquico, configure datas de início e fim,
                     e o sistema calculará o cronograma automaticamente.
                   </p>
                 </div>

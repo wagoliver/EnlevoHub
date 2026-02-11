@@ -25,6 +25,11 @@ import {
   Upload,
   FilePlus,
   Download,
+  Lightbulb,
+  Layers,
+  ListTree,
+  CheckSquare,
+  ChevronRight,
 } from 'lucide-react'
 import {
   HierarchicalItemEditor,
@@ -407,6 +412,75 @@ export function ActivityTemplateEditor() {
               Comece do zero adicionando fases e atividades
             </p>
           </button>
+        </div>
+
+        {/* How it works - Visual hierarchy explanation */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-6">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
+            Como funciona a estrutura
+          </h3>
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center sm:gap-0">
+            {/* Phase */}
+            <div className="flex flex-col items-center gap-1.5 px-6 py-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                <Layers className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-semibold text-neutral-800">Fases</span>
+              <span className="max-w-[140px] text-center text-xs text-neutral-500">
+                Grandes etapas da obra (ex: Fundação, Estrutura)
+              </span>
+            </div>
+            {/* Arrow */}
+            <ChevronRight className="hidden h-5 w-5 shrink-0 text-neutral-300 sm:block" />
+            {/* Stage */}
+            <div className="flex flex-col items-center gap-1.5 px-6 py-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+                <ListTree className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-semibold text-neutral-800">Etapas</span>
+              <span className="max-w-[140px] text-center text-xs text-neutral-500">
+                Subdivisões de cada fase (ex: Alvenaria, Reboco)
+              </span>
+            </div>
+            {/* Arrow */}
+            <ChevronRight className="hidden h-5 w-5 shrink-0 text-neutral-300 sm:block" />
+            {/* Activity */}
+            <div className="flex flex-col items-center gap-1.5 px-6 py-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-green-600">
+                <CheckSquare className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-semibold text-neutral-800">Atividades</span>
+              <span className="max-w-[140px] text-center text-xs text-neutral-500">
+                Tarefas específicas com peso e duração
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tips section */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-5">
+          <div className="flex gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+              <Lightbulb className="h-5 w-5" />
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-amber-900">Qual opção escolher?</h4>
+              <ul className="space-y-1.5 text-sm text-amber-800">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold text-amber-600">&bull;</span>
+                  <span><strong>A partir de modelo</strong> — Ideal para quem está começando. Escolha entre 20 modelos prontos por tipo de obra e personalize conforme sua necessidade.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold text-amber-600">&bull;</span>
+                  <span><strong>Importar planilha</strong> — Perfeito se você já tem um cronograma em Excel ou CSV. O sistema identifica fases, etapas e atividades automaticamente.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold text-amber-600">&bull;</span>
+                  <span><strong>Em branco</strong> — Para quem prefere montar a estrutura do zero, com total liberdade na organização.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         {/* Import dialog for the import card */}

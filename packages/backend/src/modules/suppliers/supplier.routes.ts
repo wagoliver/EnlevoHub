@@ -34,7 +34,7 @@ export async function supplierRoutes(fastify: FastifyInstance) {
   const service = new SupplierService(fastify.prisma)
 
   const getTenantId = (request: any): string => request.user.tenantId
-  const getUserId = (request: any): string => request.user.id
+  const getUserId = (request: any): string => request.user.userId
   const getUserRole = (request: any): string => request.user.role
 
   // ==================== MATERIAL ROUTES ====================

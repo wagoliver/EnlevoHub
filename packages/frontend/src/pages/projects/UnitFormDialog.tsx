@@ -137,6 +137,7 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
     onSuccess: () => {
       toast.success(isEdit ? 'Unidade atualizada!' : 'Unidade criada!')
       queryClient.invalidateQueries({ queryKey: ['project-units', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['standalone-units'] })
       queryClient.invalidateQueries({ queryKey: ['project', projectId.split('/')[0]] })
       queryClient.invalidateQueries({ queryKey: ['project-stats'] })
       onOpenChange(false)

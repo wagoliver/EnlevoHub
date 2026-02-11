@@ -134,6 +134,7 @@ export function BulkGenerateWizard({ projectId, open, onOpenChange }: BulkGenera
     onSuccess: (data) => {
       toast.success(data.message || `${data.count} unidades criadas!`)
       queryClient.invalidateQueries({ queryKey: ['project-units', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['standalone-units'] })
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-stats'] })
       onOpenChange(false)

@@ -440,12 +440,12 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Step 1: Download model */}
+          {/* Step 1: Template model */}
           <div className="rounded-lg border border-dashed border-neutral-300 p-4 space-y-3">
             <div>
               <p className="text-sm font-medium">Modelo de planilha</p>
               <p className="text-xs text-neutral-500">
-                Escolha um modelo por tipo de obra, baixe, preencha e envie de volta.
+                Escolha um modelo por tipo de obra. Carregue direto ou baixe para editar no Excel.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -468,6 +468,33 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                variant="default"
+                size="sm"
+                disabled={!selectedTemplate}
+                onClick={() => {
+                  const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
+                  if (!tpl) return
+
+                  // Feed template rows directly into the parser
+                  const rows = tpl.rows.map((r) => [...r])
+                  setParsedRows(rows)
+                  setRowErrors([])
+                  setFileName('')
+
+                  const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
+                  setPhases(parsed)
+                  setParseErrors(structErrors)
+                  setExpandedPhases(new Set(parsed.map((p) => p.name)))
+
+                  if (!templateName) {
+                    setTemplateName(tpl.label)
+                  }
+                }}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Carregar
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

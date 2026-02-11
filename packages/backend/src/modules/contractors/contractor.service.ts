@@ -289,6 +289,84 @@ export class ContractorService {
     }))
   }
 
+  async syncUnits(tenantId: string, contractorId: string, projectId: string, unitIds: string[]) {
+    const [contractor, project] = await Promise.all([
+      this.prisma.contractor.findFirst({ where: { id: contractorId, tenantId } }),
+      this.prisma.project.findFirst({ where: { id: projectId, tenantId } }),
+    ])
+    if (!contractor) throw new Error('Empreiteiro não encontrado')
+    if (!project) throw new Error('Projeto não encontrado')
+
+    // Get current unit assignments for this contractor + project
+    const current = await this.prisma.contractorUnit.findMany({
+      where: {
+        contractorId,
+        unit: { projectId },
+      },
+      select: { id: true, unitId: true },
+    })
+    const currentIds = new Set(current.map(c => c.unitId))
+    const newIds = new Set(unitIds)
+
+    const toRemove = current.filter(c => !newIds.has(c.unitId))
+    const toAdd = unitIds.filter(id => !currentIds.has(id))
+
+    await this.prisma.$transaction(async (tx) => {
+      if (toRemove.length > 0) {
+        await tx.contractorUnit.deleteMany({
+          where: { id: { in: toRemove.map(r => r.id) } },
+        })
+      }
+      if (toAdd.length > 0) {
+        await tx.contractorUnit.createMany({
+          data: toAdd.map(unitId => ({
+            contractorId,
+            unitId,
+          })),
+          skipDuplicates: true,
+        })
+      }
+    })
+
+    return { message: 'Unidades sincronizadas com sucesso', added: toAdd.length, removed: toRemove.length }
+  }
+
+  async listUnitsByProject(tenantId: string, contractorId: string, projectId: string) {
+    const [contractor, project] = await Promise.all([
+      this.prisma.contractor.findFirst({ where: { id: contractorId, tenantId } }),
+      this.prisma.project.findFirst({ where: { id: projectId, tenantId } }),
+    ])
+    if (!contractor) throw new Error('Empreiteiro não encontrado')
+    if (!project) throw new Error('Projeto não encontrado')
+
+    const contractorUnits = await this.prisma.contractorUnit.findMany({
+      where: {
+        contractorId,
+        unit: { projectId },
+      },
+      include: {
+        unit: {
+          select: {
+            id: true,
+            code: true,
+            type: true,
+            floor: true,
+            area: true,
+            status: true,
+            blockId: true,
+            floorPlanId: true,
+          },
+        },
+      },
+    })
+
+    return contractorUnits.map(cu => ({
+      ...cu.unit,
+      contractorUnitId: cu.id,
+      unitId: cu.unitId,
+    }))
+  }
+
   async syncActivities(tenantId: string, contractorId: string, projectId: string, activityIds: string[]) {
     const [contractor, project] = await Promise.all([
       this.prisma.contractor.findFirst({ where: { id: contractorId, tenantId } }),

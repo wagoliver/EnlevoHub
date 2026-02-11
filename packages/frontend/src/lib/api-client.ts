@@ -435,6 +435,12 @@ export const contractorsAPI = {
     apiClient.delete<any>(`/contractors/${contractorId}/activities/${activityId}`),
   listActivitiesByProject: (contractorId: string, projectId: string) =>
     apiClient.get<any>(`/contractors/${contractorId}/projects/${projectId}/activities`),
+
+  // Contractor Units
+  syncUnits: (contractorId: string, projectId: string, unitIds: string[]) =>
+    apiClient.post<any>(`/contractors/${contractorId}/projects/${projectId}/units`, { unitIds }),
+  listUnitsByProject: (contractorId: string, projectId: string) =>
+    apiClient.get<any>(`/contractors/${contractorId}/projects/${projectId}/units`),
 }
 
 export const usersAPI = {

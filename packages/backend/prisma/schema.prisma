@@ -244,8 +244,9 @@ model Unit {
   project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   block          Block?         @relation(fields: [blockId], references: [id], onDelete: SetNull)
   floorPlan      FloorPlan?     @relation(fields: [floorPlanId], references: [id], onDelete: SetNull)
-  sales          Sale[]
-  unitActivities UnitActivity[]
+  sales           Sale[]
+  unitActivities  UnitActivity[]
+  contractorUnits ContractorUnit[]
 
   @@unique([projectId, code])
   @@index([projectId])
@@ -418,6 +419,7 @@ model Contractor {
   contracts    Contract[]
   measurements Measurement[]
   activities   ContractorActivity[]
+  units        ContractorUnit[]
 
   @@index([tenantId])
   @@index([document])
@@ -457,6 +459,21 @@ model ContractorActivity {
   @@index([contractorId])
   @@index([projectActivityId])
   @@map("contractor_activities")
+}
+
+model ContractorUnit {
+  id           String   @id @default(uuid())
+  contractorId String
+  unitId       String
+  createdAt    DateTime @default(now())
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  unit       Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([contractorId, unitId])
+  @@index([contractorId])
+  @@index([unitId])
+  @@map("contractor_units")
 }
 
 // ==================== BROKERS & SALES ====================

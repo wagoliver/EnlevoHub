@@ -9,6 +9,7 @@ import {
   listContractorsQuerySchema,
   assignContractorToProjectSchema,
   assignActivitiesSchema,
+  syncUnitsSchema,
 } from './contractor.schemas'
 
 function requirePermission(permission: string) {
@@ -327,6 +328,67 @@ export async function contractorRoutes(fastify: FastifyInstance) {
     try {
       const { id, projectId } = request.params as { id: string; projectId: string }
       const result = await service.listActivitiesByProject(getTenantId(request), id, projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ==================== CONTRACTOR UNITS ====================
+
+  // Sync units for a contractor in a project
+  fastify.post('/:id/projects/:projectId/units', {
+    preHandler: [authMiddleware, requirePermission('contractors:edit')],
+    schema: {
+      description: 'Sync contractor units for a project',
+      tags: ['contractors'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'projectId'],
+        properties: {
+          id: { type: 'string' },
+          projectId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, projectId } = request.params as { id: string; projectId: string }
+      const body = syncUnitsSchema.parse(request.body)
+      const result = await service.syncUnits(getTenantId(request), id, projectId, body.unitIds)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // List contractor units for a project
+  fastify.get('/:id/projects/:projectId/units', {
+    preHandler: [authMiddleware, requirePermission('contractors:view')],
+    schema: {
+      description: 'List units assigned to a contractor in a project',
+      tags: ['contractors'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id', 'projectId'],
+        properties: {
+          id: { type: 'string' },
+          projectId: { type: 'string' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id, projectId } = request.params as { id: string; projectId: string }
+      const result = await service.listUnitsByProject(getTenantId(request), id, projectId)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

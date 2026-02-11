@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import { ContractorFormDialog } from './ContractorFormDialog'
 import { ContractorActivitiesDialog } from './ContractorActivitiesDialog'
+import { ContractorUnitsDialog } from './ContractorUnitsDialog'
 import {
   ArrowLeft,
   Edit,
@@ -51,6 +52,7 @@ import {
   Loader2,
   FolderOpen,
   ClipboardList,
+  Home,
 } from 'lucide-react'
 
 function renderStars(rating: number) {
@@ -84,6 +86,10 @@ export function ContractorDetail() {
   const [assignStartDate, setAssignStartDate] = useState('')
   const [assignEndDate, setAssignEndDate] = useState('')
   const [activitiesProject, setActivitiesProject] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [unitsProject, setUnitsProject] = useState<{
     id: string
     name: string
   } | null>(null)
@@ -420,6 +426,19 @@ export function ContractorDetail() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() =>
+                              setUnitsProject({
+                                id: assignment.projectId || assignment.project?.id,
+                                name: assignment.project?.name || 'Projeto',
+                              })
+                            }
+                          >
+                            <Home className="mr-1 h-4 w-4" />
+                            Unidades
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="text-destructive hover:text-destructive"
                             onClick={() => {
                               if (
@@ -564,6 +583,19 @@ export function ContractorDetail() {
           contractorId={id!}
           projectId={activitiesProject.id}
           projectName={activitiesProject.name}
+        />
+      )}
+
+      {/* Contractor Units Dialog */}
+      {unitsProject && (
+        <ContractorUnitsDialog
+          open={!!unitsProject}
+          onOpenChange={(open) => {
+            if (!open) setUnitsProject(null)
+          }}
+          contractorId={id!}
+          projectId={unitsProject.id}
+          projectName={unitsProject.name}
         />
       )}
     </div>

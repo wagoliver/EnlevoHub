@@ -11,6 +11,8 @@ export const createContractorSchema = z.object({
     address: z.string().optional(),
   }),
   rating: z.number().min(0).max(5).optional(),
+  loginEmail: z.string().email().optional(),
+  loginPassword: z.string().min(6).optional(),
 })
 
 export const updateContractorSchema = z.object({

@@ -32,6 +32,8 @@ const contractorFormSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email('E-mail inválido').optional().or(z.literal('')),
   address: z.string().optional(),
+  loginEmail: z.string().email('E-mail inválido').optional().or(z.literal('')),
+  loginPassword: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres').optional().or(z.literal('')),
 })
 
 type ContractorFormValues = z.infer<typeof contractorFormSchema>
@@ -74,6 +76,8 @@ export function ContractorFormDialog({
           phone: '',
           email: '',
           address: '',
+          loginEmail: '',
+          loginPassword: '',
         },
   })
 
@@ -108,6 +112,13 @@ export function ContractorFormDialog({
       if (isEdit) {
         return contractorsAPI.update(contractor.id, payload)
       }
+
+      // Include login credentials if provided (create only)
+      if (values.loginEmail && values.loginPassword) {
+        payload.loginEmail = values.loginEmail
+        payload.loginPassword = values.loginPassword
+      }
+
       return contractorsAPI.create(payload)
     },
     onSuccess: () => {
@@ -265,6 +276,54 @@ export function ContractorFormDialog({
               </div>
             </div>
           </div>
+
+          {/* Login Credentials (create only) */}
+          {!isEdit && (
+            <>
+              <Separator />
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-neutral-700">
+                  Acesso ao Sistema
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Preencha para criar um login para o empreiteiro acessar a plataforma.
+                </p>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="loginEmail">E-mail de Acesso</Label>
+                    <Input
+                      id="loginEmail"
+                      type="email"
+                      {...form.register('loginEmail')}
+                      placeholder="login@exemplo.com"
+                    />
+                    {form.formState.errors.loginEmail && (
+                      <p className="text-sm text-destructive mt-1">
+                        {form.formState.errors.loginEmail.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="loginPassword">Senha</Label>
+                    <Input
+                      id="loginPassword"
+                      type="password"
+                      {...form.register('loginPassword')}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                    {form.formState.errors.loginPassword && (
+                      <p className="text-sm text-destructive mt-1">
+                        {form.formState.errors.loginPassword.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           <DialogFooter>
             <Button

@@ -1,10 +1,13 @@
 import { PrismaClient, Prisma } from '@prisma/client'
+import bcrypt from 'bcrypt'
 import {
   CreateContractorInput,
   UpdateContractorInput,
   ListContractorsQuery,
   AssignContractorToProjectInput,
 } from './contractor.schemas'
+
+const SALT_ROUNDS = 10
 
 export class ContractorService {
   constructor(private prisma: PrismaClient) {}
@@ -74,22 +77,53 @@ export class ContractorService {
   }
 
   async create(tenantId: string, data: CreateContractorInput) {
-    const contractor = await this.prisma.contractor.create({
-      data: {
-        tenantId,
-        name: data.name,
-        document: data.document,
-        specialty: data.specialty,
-        teamSize: data.teamSize,
-        contacts: data.contacts as any,
-        rating: data.rating,
-      },
-      include: {
-        _count: { select: { projects: true, measurements: true } },
-      },
+    // If login credentials provided, validate email uniqueness
+    if (data.loginEmail) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: data.loginEmail },
+      })
+      if (existingUser) {
+        throw new Error('Já existe um usuário com este e-mail')
+      }
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const contractor = await tx.contractor.create({
+        data: {
+          tenantId,
+          name: data.name,
+          document: data.document,
+          specialty: data.specialty,
+          teamSize: data.teamSize,
+          contacts: data.contacts as any,
+          rating: data.rating,
+        },
+        include: {
+          _count: { select: { projects: true, measurements: true } },
+        },
+      })
+
+      // Create user account if login credentials provided
+      if (data.loginEmail && data.loginPassword) {
+        const hashedPassword = await bcrypt.hash(data.loginPassword, SALT_ROUNDS)
+        await tx.user.create({
+          data: {
+            email: data.loginEmail,
+            password: hashedPassword,
+            name: data.name,
+            role: 'CONTRACTOR',
+            tenantId,
+            contractorId: contractor.id,
+            isApproved: true,
+            permissions: {},
+          },
+        })
+      }
+
+      return contractor
     })
 
-    return this.serialize(contractor)
+    return this.serialize(result)
   }
 
   async update(tenantId: string, id: string, data: UpdateContractorInput) {

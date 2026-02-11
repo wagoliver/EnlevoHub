@@ -79,6 +79,7 @@ export function ReconciliationView() {
   const [manualSearch, setManualSearch] = useState('')
   const [manualSearchQuery, setManualSearchQuery] = useState('')
   const [filter, setFilter] = useState('PENDING')
+  const [txSearch, setTxSearch] = useState('')
 
   const { data: allTx, isLoading } = useQuery({
     queryKey: ['financial', 'reconciliation', 'pending', filter],
@@ -143,10 +144,24 @@ export function ReconciliationView() {
     onError: (error: Error) => toast.error(error.message),
   })
 
-  const transactions = (allTx as any[]) || []
+  const allTransactions = (allTx as any[]) || []
   const suggestionList = (suggestions as any[]) || []
   const entityResults = (searchResults as any[]) || []
-  const selectedTx = transactions.find((tx: any) => tx.id === selectedTxId)
+
+  const transactions = txSearch.trim()
+    ? allTransactions.filter((tx: any) => {
+        const q = txSearch.toLowerCase()
+        const desc = (tx.rawDescription || tx.description || '').toLowerCase()
+        const bank = (tx.bankAccount?.bankName || '').toLowerCase()
+        const linked = (tx.linkedEntityName || '').toLowerCase()
+        const date = new Date(tx.date).toLocaleDateString('pt-BR')
+        const amount = formatCurrency(tx.amount).toLowerCase()
+        const amountRaw = String(tx.amount)
+        return desc.includes(q) || bank.includes(q) || linked.includes(q) || date.includes(q) || amount.includes(q) || amountRaw.includes(q)
+      })
+    : allTransactions
+
+  const selectedTx = allTransactions.find((tx: any) => tx.id === selectedTxId)
   const isPending = selectedTx?.reconciliationStatus === 'PENDING'
 
   const handleManualSearch = (e: React.FormEvent) => {
@@ -172,10 +187,10 @@ export function ReconciliationView() {
         </p>
       </div>
 
-      {/* Filter + Rerun */}
-      <div className="flex items-center gap-3">
+      {/* Filter + Search + Rerun */}
+      <div className="flex items-center gap-3 flex-wrap">
         <span className="text-sm font-medium text-neutral-600">Filtrar:</span>
-        <Select value={filter} onValueChange={(v) => { setFilter(v); setSelectedTxId(null) }}>
+        <Select value={filter} onValueChange={(v) => { setFilter(v); setSelectedTxId(null); setTxSearch('') }}>
           <SelectTrigger className="w-[200px]">
             <SelectValue />
           </SelectTrigger>
@@ -186,8 +201,17 @@ export function ReconciliationView() {
             <SelectItem value="ALL">Todas</SelectItem>
           </SelectContent>
         </Select>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Input
+            placeholder="Buscar valor, descrição, data..."
+            value={txSearch}
+            onChange={(e) => setTxSearch(e.target.value)}
+            className="pl-10 w-[280px] h-9"
+          />
+        </div>
         <span className="text-sm text-neutral-400">
-          {transactions.length} transação(ões)
+          {transactions.length}{allTransactions.length !== transactions.length ? ` de ${allTransactions.length}` : ''} transação(ões)
         </span>
         <div className="flex-1" />
         {canEdit && (

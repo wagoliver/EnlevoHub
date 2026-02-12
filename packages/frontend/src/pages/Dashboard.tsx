@@ -382,7 +382,7 @@ export function Dashboard() {
   const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0) // 0-indexed
 
   // Fetch dashboard stats (existing endpoint)
-  const { data: dashboardStats, isLoading } = useQuery({
+  const { data: dashboardStats } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: () => projectsAPI.getDashboardStats(),
   })

@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useAuthStore } from '@/stores/auth.store'
 import { projectsAPI } from '@/lib/api-client'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -11,15 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
 import {
   ClipboardList,
   Calculator,
@@ -31,20 +21,14 @@ import {
   CheckCircle2,
   Check,
   Pause,
-  TrendingUp,
-  Wallet,
-  ListChecks,
-  AlertCircle,
-  ArrowRight,
-  Activity,
-  BarChart3,
+  XCircle,
+  ChevronsRight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-// ─── Constants ───────────────────────────────────────────────────
-
-const GOLD = '#b8a378'
-const EMERALD = '#10b981'
+// ---------------------------------------------------------------------------
+// Phase definitions
+// ---------------------------------------------------------------------------
 
 interface Phase {
   number: number
@@ -54,27 +38,86 @@ interface Phase {
 }
 
 const PHASES: Phase[] = [
-  { number: 1, name: 'Planejamento', icon: ClipboardList, description: 'Criação do projeto, definição de escopo, plantas baixas e orçamento preliminar da obra.' },
-  { number: 2, name: 'Levantamento', icon: Calculator, description: 'Quantificação de materiais, serviços e insumos necessários para execução.' },
-  { number: 3, name: 'Contratação', icon: FileSignature, description: 'Cotações, seleção de fornecedores e formalização dos contratos de serviço e material.' },
-  { number: 4, name: 'Mobilização', icon: HardHat, description: 'Seleção, contratação e preparação dos empreiteiros para início da execução.' },
-  { number: 5, name: 'Documentação', icon: ShieldCheck, description: 'Conferência de documentos, seguros, certidões, alvarás e habilitações dos envolvidos.' },
-  { number: 6, name: 'Execução', icon: Hammer, description: 'Acompanhamento da obra em campo — vistorias, relatórios de progresso e controle de qualidade.' },
-  { number: 7, name: 'Medição', icon: Ruler, description: 'Aferição do trabalho executado, aprovação das medições e liberação de pagamentos parciais.' },
-  { number: 8, name: 'Encerramento', icon: CheckCircle2, description: 'Termo de quitação contratual, aceite definitivo e entrega formal da obra.' },
+  {
+    number: 1,
+    name: 'Planejamento',
+    icon: ClipboardList,
+    description:
+      'Criação do projeto, definição de escopo, plantas baixas e orçamento preliminar da obra.',
+  },
+  {
+    number: 2,
+    name: 'Levantamento',
+    icon: Calculator,
+    description:
+      'Quantificação de materiais, serviços e insumos necessários para execução.',
+  },
+  {
+    number: 3,
+    name: 'Contratação',
+    icon: FileSignature,
+    description:
+      'Cotações, seleção de fornecedores e formalização dos contratos de serviço e material.',
+  },
+  {
+    number: 4,
+    name: 'Mobilização',
+    icon: HardHat,
+    description:
+      'Seleção, contratação e preparação dos empreiteiros para início da execução.',
+  },
+  {
+    number: 5,
+    name: 'Documentação',
+    icon: ShieldCheck,
+    description:
+      'Conferência de documentos, seguros, certidões, alvarás e habilitações dos envolvidos.',
+  },
+  {
+    number: 6,
+    name: 'Execução',
+    icon: Hammer,
+    description:
+      'Acompanhamento da obra em campo — vistorias, relatórios de progresso e controle de qualidade.',
+  },
+  {
+    number: 7,
+    name: 'Medição',
+    icon: Ruler,
+    description:
+      'Aferição do trabalho executado, aprovação das medições e liberação de pagamentos parciais.',
+  },
+  {
+    number: 8,
+    name: 'Encerramento',
+    icon: CheckCircle2,
+    description:
+      'Termo de quitação contratual, aceite definitivo e entrega formal da obra.',
+  },
 ]
 
-// ─── Helpers ─────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/** Returns 1-8 for active phases, 9 for COMPLETED (all done), 0 for neutral/cancelled. */
+const GOLD = '#b8a378'
+const GOLD_DARK = '#9a8a6a'
+const GRAY = '#d4d4d4'
+
 function getCurrentPhase(status?: string): number {
   switch (status) {
-    case 'PLANNING': return 1
-    case 'IN_PROGRESS': return 6
-    case 'PAUSED': return 6
-    case 'COMPLETED': return 9
-    case 'CANCELLED': return 0
-    default: return 0
+    case 'PLANNING':
+      return 1
+    case 'IN_PROGRESS':
+      return 6
+    case 'PAUSED':
+      return 6
+    case 'COMPLETED':
+      return 8
+    case 'CANCELLED':
+      return 0
+    default:
+      return 0
   }
 }
 
@@ -87,629 +130,539 @@ function getNodeState(phaseNumber: number, currentPhase: number): NodeState {
   return 'future'
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
+function stateLabel(state: NodeState, isPaused: boolean): string {
+  if (state === 'completed') return 'Concluído'
+  if (state === 'current') return isPaused ? 'Pausado' : 'Em andamento'
+  return 'Pendente'
 }
 
-function statusBadge(status?: string): { label: string; cls: string } {
-  switch (status) {
-    case 'PLANNING': return { label: 'Planejamento', cls: 'bg-blue-100 text-blue-700' }
-    case 'IN_PROGRESS': return { label: 'Em andamento', cls: 'bg-emerald-100 text-emerald-700' }
-    case 'PAUSED': return { label: 'Pausada', cls: 'bg-yellow-100 text-yellow-700' }
-    case 'COMPLETED': return { label: 'Concluída', cls: 'bg-green-100 text-green-800' }
-    case 'CANCELLED': return { label: 'Cancelada', cls: 'bg-red-100 text-red-700' }
-    default: return { label: '', cls: '' }
+function stateBadgeClass(state: NodeState, isPaused: boolean): string {
+  if (state === 'completed') return 'bg-green-100 text-green-700'
+  if (state === 'current')
+    return isPaused ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'
+  return 'bg-neutral-100 text-neutral-400'
+}
+
+// ---------------------------------------------------------------------------
+// Desktop flow node — rounded square with gradient
+// ---------------------------------------------------------------------------
+
+function FlowNode({
+  phase,
+  state,
+  isSelected,
+  onClick,
+  isPaused,
+  isCancelled,
+}: {
+  phase: Phase
+  state: NodeState
+  isSelected: boolean
+  onClick: () => void
+  isPaused: boolean
+  isCancelled: boolean
+}) {
+  const Icon = phase.icon
+
+  let bgStyle: React.CSSProperties = {}
+  let borderClass = ''
+  let iconEl: React.ReactNode
+
+  if (isCancelled) {
+    bgStyle = { backgroundColor: '#d4d4d4' }
+    borderClass = 'border-neutral-400'
+    iconEl = <XCircle className="h-6 w-6 text-white" />
+  } else if (state === 'completed') {
+    bgStyle = { background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_DARK} 100%)` }
+    iconEl = <Check className="h-6 w-6 text-white" />
+  } else if (state === 'current') {
+    bgStyle = { borderColor: GOLD }
+    borderClass = 'border-2 bg-white'
+    iconEl = isPaused ? (
+      <Pause className="h-6 w-6" style={{ color: GOLD }} />
+    ) : (
+      <Icon className="h-6 w-6" style={{ color: GOLD }} />
+    )
+  } else {
+    borderClass = 'border border-dashed border-neutral-300 bg-neutral-50'
+    iconEl = <Icon className="h-6 w-6 text-neutral-300" />
   }
+
+  const ringClass = isSelected
+    ? 'ring-2 ring-offset-2'
+    : ''
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center gap-2.5 focus:outline-none transition-transform duration-200 hover:scale-105 group"
+    >
+      {/* Number badge */}
+      <span
+        className={`text-[10px] font-bold tracking-widest ${
+          state === 'future' && !isCancelled ? 'text-neutral-300' : 'text-neutral-400'
+        }`}
+      >
+        {String(phase.number).padStart(2, '0')}
+      </span>
+
+      {/* Icon container */}
+      <div
+        className={`relative w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center
+          transition-all duration-300 shadow-sm ${borderClass} ${ringClass}
+          ${state === 'current' ? 'animate-pulse shadow-md' : ''}
+          ${state === 'completed' ? 'shadow-md' : ''}
+        `}
+        style={{
+          ...bgStyle,
+          ...(isSelected ? { ringColor: GOLD, '--tw-ring-color': GOLD } as React.CSSProperties : {}),
+        }}
+      >
+        {iconEl}
+      </div>
+
+      {/* Name */}
+      <span
+        className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
+          isCancelled
+            ? 'text-neutral-400'
+            : state === 'current'
+              ? 'text-neutral-900 font-semibold'
+              : state === 'completed'
+                ? 'text-neutral-700'
+                : 'text-neutral-400'
+        }`}
+      >
+        {phase.name}
+      </span>
+    </button>
+  )
 }
 
-function deadlineLabel(project: any): { text: string; cls: string } {
-  if (!project) return { text: '—', cls: 'text-neutral-400' }
-  if (project.status === 'COMPLETED') return { text: 'Concluída', cls: 'text-emerald-600' }
-  if (project.status === 'CANCELLED') return { text: 'Cancelada', cls: 'text-neutral-400' }
-  if (project.status === 'PAUSED') return { text: 'Pausada', cls: 'text-yellow-600' }
-  if (!project.expectedEndDate) return { text: 'No prazo', cls: 'text-emerald-600' }
+// ---------------------------------------------------------------------------
+// Desktop horizontal connector
+// ---------------------------------------------------------------------------
 
-  const now = new Date()
-  const end = new Date(project.expectedEndDate)
-  if (now > end) return { text: 'Atrasada', cls: 'text-rose-600' }
-
-  const days = Math.ceil((end.getTime() - now.getTime()) / 86_400_000)
-  if (days < 30) return { text: `${days}d restantes`, cls: 'text-amber-600' }
-  return { text: 'No prazo', cls: 'text-emerald-600' }
+function FlowConnector({ filled }: { filled: boolean }) {
+  return (
+    <div className="flex-1 flex items-center mx-0.5 lg:mx-1 -mt-3">
+      {filled ? (
+        <div
+          className="h-[3px] w-full rounded-full"
+          style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_DARK})` }}
+        />
+      ) : (
+        <div
+          className="h-[3px] w-full"
+          style={{
+            backgroundImage: `repeating-linear-gradient(90deg, ${GRAY} 0px, ${GRAY} 6px, transparent 6px, transparent 12px)`,
+          }}
+        />
+      )}
+    </div>
+  )
 }
 
-// ─── Dashboard ───────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Mobile flow node — horizontal card style
+// ---------------------------------------------------------------------------
+
+function MobileFlowNode({
+  phase,
+  state,
+  isSelected,
+  onClick,
+  isPaused,
+  isCancelled,
+  isLast,
+}: {
+  phase: Phase
+  state: NodeState
+  isSelected: boolean
+  onClick: () => void
+  isPaused: boolean
+  isCancelled: boolean
+  isLast: boolean
+}) {
+  const Icon = phase.icon
+
+  let dotStyle: React.CSSProperties = {}
+  let dotClass = ''
+  let iconEl: React.ReactNode
+
+  if (isCancelled) {
+    dotStyle = { backgroundColor: '#d4d4d4', borderColor: '#a3a3a3' }
+    iconEl = <XCircle className="h-4 w-4 text-white" />
+  } else if (state === 'completed') {
+    dotStyle = { background: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`, borderColor: GOLD }
+    iconEl = <Check className="h-4 w-4 text-white" />
+  } else if (state === 'current') {
+    dotStyle = { borderColor: GOLD }
+    dotClass = 'bg-white animate-pulse'
+    iconEl = isPaused ? (
+      <Pause className="h-4 w-4" style={{ color: GOLD }} />
+    ) : (
+      <Icon className="h-4 w-4" style={{ color: GOLD }} />
+    )
+  } else {
+    dotClass = 'bg-white border-dashed border-neutral-300'
+    iconEl = <Icon className="h-4 w-4 text-neutral-300" />
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-start gap-3 text-left w-full focus:outline-none p-2 -mx-2 rounded-lg transition-colors duration-200 ${
+        isSelected ? 'bg-neutral-50' : ''
+      }`}
+    >
+      {/* Rail */}
+      <div className="flex flex-col items-center">
+        <div
+          className={`h-9 w-9 flex-shrink-0 flex items-center justify-center rounded-xl border-2 ${dotClass}`}
+          style={dotStyle}
+        >
+          {iconEl}
+        </div>
+        {!isLast && (
+          <div
+            className="w-[3px] flex-1 min-h-[20px] mt-1 rounded-full"
+            style={
+              state === 'completed' || state === 'current'
+                ? { background: `linear-gradient(180deg, ${GOLD}, ${GOLD_DARK})` }
+                : {
+                    backgroundImage: `repeating-linear-gradient(180deg, ${GRAY} 0px, ${GRAY} 4px, transparent 4px, transparent 8px)`,
+                  }
+            }
+          />
+        )}
+      </div>
+
+      {/* Text */}
+      <div className="pt-0.5 pb-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`text-sm font-semibold ${
+              state === 'future' && !isCancelled ? 'text-neutral-400' : 'text-neutral-900'
+            }`}
+          >
+            {phase.number}. {phase.name}
+          </span>
+          {isCancelled ? (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
+              Cancelado
+            </span>
+          ) : (
+            <span
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${stateBadgeClass(state, isPaused)}`}
+            >
+              {stateLabel(state, isPaused)}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-neutral-500 mt-0.5 leading-relaxed line-clamp-2">
+          {phase.description}
+        </p>
+      </div>
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Phase description card (bottom grid)
+// ---------------------------------------------------------------------------
+
+function PhaseDescriptionCard({
+  phase,
+  state,
+  isPaused,
+  isCancelled,
+}: {
+  phase: Phase
+  state: NodeState
+  isPaused: boolean
+  isCancelled: boolean
+}) {
+  const Icon = phase.icon
+  const isCurrent = state === 'current'
+
+  const borderLeft = isCancelled
+    ? 'border-l-neutral-300'
+    : state === 'completed'
+      ? 'border-l-[#b8a378]'
+      : isCurrent
+        ? 'border-l-[#b8a378]'
+        : 'border-l-neutral-200'
+
+  return (
+    <div
+      className={`flex gap-4 p-4 rounded-xl border border-l-4 transition-all duration-300 ${borderLeft} ${
+        isCurrent
+          ? 'bg-[#b8a378]/5 shadow-sm border-[#b8a378]/30'
+          : 'bg-white border-neutral-100 hover:shadow-sm'
+      }`}
+    >
+      <div
+        className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+          isCancelled
+            ? 'bg-neutral-100'
+            : state === 'completed' || isCurrent
+              ? 'bg-[#b8a378]/10'
+              : 'bg-neutral-50'
+        }`}
+      >
+        <Icon
+          className="h-5 w-5"
+          style={{
+            color:
+              isCancelled
+                ? '#a3a3a3'
+                : state === 'completed' || isCurrent
+                  ? GOLD
+                  : '#a3a3a3',
+          }}
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3
+            className={`text-sm font-semibold ${
+              state === 'future' && !isCancelled ? 'text-neutral-500' : 'text-neutral-800'
+            }`}
+          >
+            {phase.number}. {phase.name}
+          </h3>
+          {isCancelled ? (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
+              Cancelado
+            </span>
+          ) : state !== 'future' ? (
+            <span
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${stateBadgeClass(state, isPaused)}`}
+            >
+              {stateLabel(state, isPaused)}
+            </span>
+          ) : null}
+        </div>
+        <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+          {phase.description}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 export function Dashboard() {
-  const navigate = useNavigate()
+  const { user, tenant } = useAuthStore()
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [selectedPhaseIdx, setSelectedPhaseIdx] = useState<number | null>(null)
-  const [period, setPeriod] = useState<'today' | '7d' | '30d'>('30d')
-
-  // ── Queries ──
+  const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0)
 
   const { data: projectsData } = useQuery({
     queryKey: ['projects', { limit: 100 }],
     queryFn: () => projectsAPI.list({ limit: 100 }),
   })
 
-  const { data: projectDetail } = useQuery({
-    queryKey: ['project', selectedProjectId],
-    queryFn: () => projectsAPI.getById(selectedProjectId!),
-    enabled: !!selectedProjectId,
-  })
-
   const projects = projectsData?.data || []
-  const project: any = projectDetail || projects.find((p: any) => p.id === selectedProjectId) || null
 
-  // ── Derived values ──
+  const selectedProject = selectedProjectId
+    ? projects.find((p: any) => p.id === selectedProjectId)
+    : null
 
-  const currentPhase = project ? getCurrentPhase(project.status) : 0
-  const completedCount = currentPhase > 0 ? Math.min(currentPhase - 1, 8) : 0
-  const progress: number = project?.currentProgress ?? project?.evolutions?.[0]?.percentage ?? 0
-  const budget: number = project?.budget ?? 0
-  const isCancelled = project?.status === 'CANCELLED'
-  const isPaused = project?.status === 'PAUSED'
-  const isCompleted = project?.status === 'COMPLETED'
+  const currentPhase = selectedProject
+    ? getCurrentPhase(selectedProject.status)
+    : 0
 
-  const badge = statusBadge(project?.status)
-  const deadline = deadlineLabel(project)
+  const isPaused = selectedProject?.status === 'PAUSED'
+  const isCancelled = selectedProject?.status === 'CANCELLED'
 
-  const nextPhaseIdx = currentPhase > 0 && currentPhase <= 8 ? currentPhase - 1 : 0
-  const nextPhase = PHASES[nextPhaseIdx]
-  const NextIcon = nextPhase.icon
-
-  const chartData = (projectDetail?.evolutions || [])
-    .slice()
-    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map((e: any) => ({
-      date: new Date(e.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-      progresso: e.percentage,
-    }))
-
-  // ── Render ──
+  const row1 = PHASES.slice(0, 4)
+  const row2 = PHASES.slice(4, 8)
 
   return (
-    <div className="space-y-6 pb-8">
-
-      {/* ═══════════════════════ HEADER ═══════════════════════════ */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-8">
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">
-            Dashboard Operacional
+          <h1 className="text-3xl font-bold text-neutral-900">
+            Bem-vindo, {user?.name}!
           </h1>
-          <p className="text-sm text-neutral-500 mt-0.5">
-            Visão consolidada da obra &mdash; Atualizado em tempo real
-          </p>
+          <p className="mt-1 text-neutral-600">{tenant?.name}</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Status badge */}
-          {project && badge.label && (
-            <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${badge.cls}`}>
-              {badge.label}
-            </span>
-          )}
-
-          {/* Period toggle */}
-          <div className="flex bg-neutral-100 rounded-lg p-0.5">
-            {([['today', 'Hoje'], ['7d', '7 dias'], ['30d', '30 dias']] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setPeriod(key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  period === key
-                    ? 'bg-white text-neutral-900 shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Project selector */}
-          <div className="w-56">
-            <Select
-              value={selectedProjectId ?? 'none'}
-              onValueChange={(v) => {
-                setSelectedProjectId(v === 'none' ? null : v)
-                setSelectedPhaseIdx(null)
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Selecionar obra" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Todas as obras</SelectItem>
-                {projects.map((p: any) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="w-full sm:w-72">
+          <Select
+            value={selectedProjectId ?? 'none'}
+            onValueChange={(v) => {
+              setSelectedProjectId(v === 'none' ? null : v)
+              setSelectedPhaseIdx(0)
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecionar Projeto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Visão geral</SelectItem>
+              {projects.map((p: any) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* ═══════════════════════ KPI CARDS ════════════════════════ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Progresso Físico */}
-        <Card className="p-5 rounded-xl border-0 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-                Progresso Físico
-              </p>
-              <p className="text-3xl font-bold text-neutral-900 mt-1.5 tabular-nums">
-                {project ? `${progress}%` : '—'}
-              </p>
-              {project && (
-                <>
-                  <div className="mt-3 h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700 ease-out"
-                      style={{ width: `${progress}%`, backgroundColor: EMERALD }}
-                    />
-                  </div>
-                  <p className={`text-xs font-medium mt-2 ${deadline.cls}`}>
-                    {deadline.text}
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0 ml-3">
-              <TrendingUp className="h-5 w-5 text-emerald-600" />
-            </div>
-          </div>
-        </Card>
-
-        {/* Orçamento */}
-        <Card className="p-5 rounded-xl border-0 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-                Orçamento
-              </p>
-              <p className="text-3xl font-bold text-neutral-900 mt-1.5 tabular-nums truncate">
-                {project && budget > 0 ? formatCurrency(budget) : '—'}
-              </p>
-              {project && budget > 0 && (
-                <>
-                  <div className="mt-3 h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out"
-                      style={{ width: `${Math.min(progress, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-neutral-500 mt-2">
-                    ~{formatCurrency(Math.round(budget * progress / 100))} executado
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 ml-3">
-              <Wallet className="h-5 w-5 text-blue-600" />
-            </div>
-          </div>
-        </Card>
-
-        {/* Etapas Concluídas */}
-        <Card className="p-5 rounded-xl border-0 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-                Etapas Concluídas
-              </p>
-              <p className="text-3xl font-bold text-neutral-900 mt-1.5 tabular-nums">
-                {project ? (
-                  <>{completedCount}<span className="text-lg text-neutral-300 font-normal"> /8</span></>
-                ) : '—'}
-              </p>
-              {project && (
-                <div className="mt-3 h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${(completedCount / 8) * 100}%`, backgroundColor: '#8b5cf6' }}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 ml-3">
-              <ListChecks className="h-5 w-5 text-violet-600" />
-            </div>
-          </div>
-        </Card>
-
-        {/* Pendências */}
-        <Card className="p-5 rounded-xl border-0 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-                Pendências
-              </p>
-              <p className="text-3xl font-bold text-neutral-900 mt-1.5 tabular-nums">
-                {project ? '0' : '—'}
-              </p>
-              {project && (
-                <p className="text-xs text-emerald-600 font-medium mt-3">
-                  Nenhuma pendência crítica
-                </p>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0 ml-3">
-              <AlertCircle className="h-5 w-5 text-rose-400" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* ═══════════════════════ TIMELINE ═════════════════════════ */}
-      <Card className="rounded-xl border-0 shadow-sm overflow-hidden">
-        <div className="p-6 lg:p-8">
-          {/* Title + progress bar */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
-            <h2 className="text-base font-semibold text-neutral-800">Fluxo da Obra</h2>
-            {project && (
-              <div className="flex items-center gap-3">
-                <div className="h-2 w-32 bg-neutral-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${(completedCount / 8) * 100}%`, backgroundColor: EMERALD }}
-                  />
-                </div>
-                <span className="text-xs text-neutral-500 whitespace-nowrap font-medium">
-                  {completedCount} de 8 etapas
+      {/* ── Infographic Flow (Desktop) ─────────────────────────────── */}
+      <div className="hidden md:block">
+        <Card className="overflow-hidden border-0 shadow-lg">
+          {/* Gradient background */}
+          <div
+            className="p-8 lg:p-10"
+            style={{
+              background:
+                'linear-gradient(135deg, #fafaf9 0%, #ffffff 40%, rgba(184,163,120,0.06) 100%)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-10">
+              <h2 className="text-lg font-semibold text-neutral-800">
+                Fluxo da Obra
+              </h2>
+              {selectedProject && (
+                <span className="text-sm text-neutral-400">
+                  &mdash; {selectedProject.name}
                 </span>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Desktop: horizontal timeline */}
-          <div className="hidden lg:block">
+            {/* Row 1: phases 1-4 */}
             <div className="flex items-start">
-              {PHASES.map((phase, idx) => {
-                const state = isCancelled ? 'future' as NodeState : getNodeState(phase.number, currentPhase)
-                const isSelected = selectedPhaseIdx === idx
-                const Icon = phase.icon
+              {row1.map((phase, idx) => {
+                const phaseState = isCancelled
+                  ? ('future' as NodeState)
+                  : getNodeState(phase.number, currentPhase)
                 return (
                   <div
                     key={phase.number}
-                    className={`flex items-start ${idx < 7 ? 'flex-1' : ''}`}
+                    className={`flex items-start ${idx < row1.length - 1 ? 'flex-1' : ''}`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPhaseIdx(isSelected ? null : idx)}
-                      className="flex flex-col items-center gap-2.5 focus:outline-none group"
-                    >
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110
-                          ${state === 'completed' ? 'bg-emerald-500 text-white shadow-sm' : ''}
-                          ${state === 'current' ? 'bg-white border-[3px]' : ''}
-                          ${state === 'future' ? 'bg-white border-2 border-dashed border-neutral-200' : ''}
-                          ${isSelected ? 'ring-2 ring-offset-2' : ''}
-                        `}
-                        style={{
-                          ...(state === 'current' ? {
-                            borderColor: GOLD,
-                            boxShadow: `0 0 0 4px rgba(184,163,120,0.15), 0 4px 12px rgba(184,163,120,0.1)`,
-                          } : {}),
-                          ...(isSelected ? { '--tw-ring-color': GOLD } as React.CSSProperties : {}),
-                        }}
-                      >
-                        {state === 'completed' ? (
-                          <Check className="h-5 w-5" />
-                        ) : state === 'current' ? (
-                          isPaused
-                            ? <Pause className="h-5 w-5" style={{ color: GOLD }} />
-                            : <Icon className="h-5 w-5" style={{ color: GOLD }} />
-                        ) : (
-                          <span className="text-sm font-bold text-neutral-300">{phase.number}</span>
-                        )}
-                      </div>
-                      <span className={`text-[11px] font-medium text-center leading-tight max-w-[76px] ${
-                        state === 'completed' ? 'text-neutral-600' :
-                        state === 'current' ? 'text-neutral-900 font-semibold' :
-                        'text-neutral-400'
-                      }`}>
-                        {phase.name}
-                      </span>
-                    </button>
+                    <FlowNode
+                      phase={phase}
+                      state={phaseState}
+                      isSelected={selectedPhaseIdx === idx}
+                      onClick={() => setSelectedPhaseIdx(idx)}
+                      isPaused={isPaused && phase.number === currentPhase}
+                      isCancelled={isCancelled}
+                    />
+                    {idx < row1.length - 1 && (
+                      <FlowConnector
+                        filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
-                    {/* Connector */}
-                    {idx < 7 && (
-                      <div className="flex-1 flex items-center mx-1 mt-[22px]">
-                        <div
-                          className="h-[2px] w-full rounded-full transition-all duration-500"
-                          style={{
-                            backgroundColor:
-                              !isCancelled && currentPhase > 0 && phase.number < currentPhase
-                                ? EMERALD
-                                : '#e5e5e5',
-                          }}
-                        />
-                      </div>
+            {/* Row transition */}
+            <div className="flex items-center gap-3 my-6 px-2">
+              <div className="flex-1 h-px bg-neutral-200/80" />
+              <ChevronsRight className="h-4 w-4 text-neutral-300 rotate-90" />
+              <div className="flex-1 h-px bg-neutral-200/80" />
+            </div>
+
+            {/* Row 2: phases 5-8 */}
+            <div className="flex items-start">
+              {row2.map((phase, idx) => {
+                const globalIdx = idx + 4
+                const phaseState = isCancelled
+                  ? ('future' as NodeState)
+                  : getNodeState(phase.number, currentPhase)
+                return (
+                  <div
+                    key={phase.number}
+                    className={`flex items-start ${idx < row2.length - 1 ? 'flex-1' : ''}`}
+                  >
+                    <FlowNode
+                      phase={phase}
+                      state={phaseState}
+                      isSelected={selectedPhaseIdx === globalIdx}
+                      onClick={() => setSelectedPhaseIdx(globalIdx)}
+                      isPaused={isPaused && phase.number === currentPhase}
+                      isCancelled={isCancelled}
+                    />
+                    {idx < row2.length - 1 && (
+                      <FlowConnector
+                        filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
+                      />
                     )}
                   </div>
                 )
               })}
             </div>
           </div>
-
-          {/* Mobile/Tablet: compact grid */}
-          <div className="lg:hidden grid grid-cols-4 gap-3">
-            {PHASES.map((phase, idx) => {
-              const state = isCancelled ? 'future' as NodeState : getNodeState(phase.number, currentPhase)
-              const isSelected = selectedPhaseIdx === idx
-              const Icon = phase.icon
-              return (
-                <button
-                  key={phase.number}
-                  type="button"
-                  onClick={() => setSelectedPhaseIdx(isSelected ? null : idx)}
-                  className={`flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl transition-all ${
-                    isSelected ? 'bg-neutral-50 shadow-inner' : ''
-                  }`}
-                >
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all
-                      ${state === 'completed' ? 'bg-emerald-500 text-white' : ''}
-                      ${state === 'current' ? 'bg-white border-2' : ''}
-                      ${state === 'future' ? 'bg-neutral-100 text-neutral-300' : ''}
-                    `}
-                    style={state === 'current' ? { borderColor: GOLD, boxShadow: `0 0 0 3px rgba(184,163,120,0.15)` } : undefined}
-                  >
-                    {state === 'completed' ? (
-                      <Check className="h-4 w-4" />
-                    ) : state === 'current' ? (
-                      <Icon className="h-4 w-4" style={{ color: GOLD }} />
-                    ) : (
-                      phase.number
-                    )}
-                  </div>
-                  <span className={`text-[10px] font-medium text-center leading-tight ${
-                    state === 'future' ? 'text-neutral-400' : 'text-neutral-700'
-                  }`}>
-                    {phase.name}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Selected phase detail panel */}
-          {selectedPhaseIdx !== null && (() => {
-            const phase = PHASES[selectedPhaseIdx]
-            const state = isCancelled ? 'future' as NodeState : getNodeState(phase.number, currentPhase)
-            const Icon = phase.icon
-            return (
-              <div className="mt-6 p-5 bg-neutral-50/80 rounded-xl border border-neutral-100 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-start gap-4">
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-                    style={{ backgroundColor: state === 'completed' ? EMERALD : state === 'current' ? `${GOLD}18` : '#f5f5f5' }}
-                  >
-                    {state === 'completed'
-                      ? <Check className="h-5 w-5 text-white" />
-                      : <Icon className="h-5 w-5" style={{ color: state === 'current' ? GOLD : '#a3a3a3' }} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold text-neutral-800">
-                        {phase.number}. {phase.name}
-                      </h3>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        state === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                        state === 'current' ? (isPaused ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700') :
-                        'bg-neutral-100 text-neutral-400'
-                      }`}>
-                        {state === 'completed' ? 'Concluída' : state === 'current' ? (isPaused ? 'Pausada' : 'Em andamento') : 'Pendente'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
-                      {phase.description}
-                    </p>
-                    {project && state === 'current' && (
-                      <div className="flex items-center gap-4 mt-3 text-xs text-neutral-400">
-                        <span className="flex items-center gap-1">
-                          <Activity className="h-3.5 w-3.5" /> Progresso: {progress}%
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-      </Card>
-
-      {/* ═══════════════════════ NEXT ACTION + CHART ══════════════ */}
-      <div className="grid gap-6 lg:grid-cols-12">
-
-        {/* Próxima Ação */}
-        <div className="lg:col-span-5">
-          <Card
-            className="h-full rounded-xl border-0 shadow-sm overflow-hidden"
-            style={{ borderLeft: `4px solid ${GOLD}` }}
-          >
-            <div className="p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-5">
-                Próxima ação recomendada
-              </p>
-
-              {!project ? (
-                <div className="py-10 text-center">
-                  <Activity className="h-10 w-10 text-neutral-200 mx-auto mb-3" />
-                  <p className="text-sm text-neutral-400">
-                    Selecione uma obra para ver a próxima ação
-                  </p>
-                </div>
-              ) : isCompleted ? (
-                <div className="py-10 text-center">
-                  <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
-                  <p className="text-base font-semibold text-neutral-800">Obra concluída!</p>
-                  <p className="text-sm text-neutral-500 mt-1">
-                    Todas as etapas foram finalizadas com sucesso.
-                  </p>
-                </div>
-              ) : isCancelled ? (
-                <div className="py-10 text-center">
-                  <AlertCircle className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
-                  <p className="text-base font-semibold text-neutral-600">Projeto cancelado</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${GOLD}15` }}
-                    >
-                      <NextIcon className="h-5 w-5" style={{ color: GOLD }} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-semibold text-neutral-900">
-                        {nextPhase.number}. {nextPhase.name}
-                      </h3>
-                      <p className={`text-xs font-medium ${deadline.cls}`}>{deadline.text}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-neutral-500 leading-relaxed mb-6">
-                    {nextPhase.description}
-                  </p>
-                  <Button
-                    className="w-full text-white"
-                    style={{ backgroundColor: GOLD }}
-                    onClick={() => navigate(`/projects/${project.id}`)}
-                  >
-                    {isPaused ? 'Retomar obra' : 'Continuar etapa'}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Evolução Física (chart) */}
-        <div className="lg:col-span-7">
-          <Card className="h-full rounded-xl border-0 shadow-sm">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="text-base font-semibold text-neutral-800">Evolução Física</h2>
-                <span className="text-[11px] text-neutral-400">% concluído ao longo do tempo</span>
-              </div>
-
-              {chartData.length > 1 ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={chartData} margin={{ top: 16, right: 4, bottom: 0, left: -20 }}>
-                    <defs>
-                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={EMERALD} stopOpacity={0.15} />
-                        <stop offset="100%" stopColor={EMERALD} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 11, fill: '#a3a3a3' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      tick={{ fontSize: 11, fill: '#a3a3a3' }}
-                      axisLine={false}
-                      tickLine={false}
-                      unit="%"
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: 10,
-                        border: 'none',
-                        boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-                        fontSize: 12,
-                        padding: '8px 12px',
-                      }}
-                      formatter={(value: any) => [`${value}%`, 'Progresso']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="progresso"
-                      stroke={EMERALD}
-                      strokeWidth={2.5}
-                      fill="url(#areaGrad)"
-                      dot={{ r: 3, fill: EMERALD, strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: EMERALD, strokeWidth: 2, stroke: '#fff' }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-[240px] text-neutral-300">
-                  <BarChart3 className="h-10 w-10 mb-3" />
-                  <p className="text-sm">
-                    {project ? 'Dados de evolução insuficientes' : 'Selecione uma obra'}
-                  </p>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
+        </Card>
       </div>
 
-      {/* ═══════════════════════ PHASE GRID ═══════════════════════ */}
-      <div>
-        <h2 className="text-base font-semibold text-neutral-800 mb-4">Etapas da Obra</h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {PHASES.map((phase) => {
-            const state = isCancelled ? 'future' as NodeState : getNodeState(phase.number, currentPhase)
-            const Icon = phase.icon
-            const barColor = state === 'completed' ? EMERALD : state === 'current' ? GOLD : '#e5e5e5'
-            const phaseProgress = state === 'completed' ? 100 : state === 'current' ? progress : 0
+      {/* ── Infographic Flow (Mobile) ──────────────────────────────── */}
+      <div className="md:hidden">
+        <Card className="overflow-hidden border-0 shadow-lg">
+          <div
+            className="p-5"
+            style={{
+              background:
+                'linear-gradient(135deg, #fafaf9 0%, #ffffff 40%, rgba(184,163,120,0.06) 100%)',
+            }}
+          >
+            <h2 className="text-lg font-semibold text-neutral-800 mb-5">
+              Fluxo da Obra
+            </h2>
+            <div className="flex flex-col">
+              {PHASES.map((phase, idx) => {
+                const phaseState = isCancelled
+                  ? ('future' as NodeState)
+                  : getNodeState(phase.number, currentPhase)
+                return (
+                  <MobileFlowNode
+                    key={phase.number}
+                    phase={phase}
+                    state={phaseState}
+                    isSelected={selectedPhaseIdx === idx}
+                    onClick={() => setSelectedPhaseIdx(idx)}
+                    isPaused={isPaused && phase.number === currentPhase}
+                    isCancelled={isCancelled}
+                    isLast={idx === PHASES.length - 1}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        </Card>
+      </div>
 
+      {/* ── Phase Descriptions ─────────────────────────────────────── */}
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-800 mb-4">
+          Etapas da Obra
+        </h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          {PHASES.map((phase) => {
+            const phaseState = isCancelled
+              ? ('future' as NodeState)
+              : getNodeState(phase.number, currentPhase)
             return (
-              <Card
+              <PhaseDescriptionCard
                 key={phase.number}
-                className="rounded-xl border-0 shadow-sm overflow-hidden hover:shadow-md transition-shadow group"
-                style={{ borderLeft: `3px solid ${barColor}` }}
-              >
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[22px] font-bold text-neutral-200 leading-none group-hover:text-neutral-300 transition-colors">
-                      {String(phase.number).padStart(2, '0')}
-                    </span>
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: state === 'future' ? '#fafafa' : `${barColor}12` }}
-                    >
-                      <Icon
-                        className="h-4 w-4"
-                        style={{ color: state === 'future' ? '#d4d4d4' : barColor }}
-                      />
-                    </div>
-                  </div>
-                  <h3 className={`text-sm font-semibold mb-2 ${
-                    state === 'future' ? 'text-neutral-400' : 'text-neutral-800'
-                  }`}>
-                    {phase.name}
-                  </h3>
-                  <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden mb-2">
-                    <div
-                      className="h-full rounded-full transition-all duration-700 ease-out"
-                      style={{ width: `${phaseProgress}%`, backgroundColor: barColor }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-neutral-400 leading-relaxed line-clamp-2">
-                    {phase.description}
-                  </p>
-                </div>
-              </Card>
+                phase={phase}
+                state={phaseState}
+                isPaused={isPaused && phase.number === currentPhase}
+                isCancelled={isCancelled}
+              />
             )
           })}
         </div>

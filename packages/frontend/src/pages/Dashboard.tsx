@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
 import { projectsAPI } from '@/lib/api-client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -11,10 +11,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  Building2,
-  Home,
-  Users,
-  DollarSign,
   ClipboardList,
   Calculator,
   FileSignature,
@@ -26,6 +22,7 @@ import {
   Check,
   Pause,
   XCircle,
+  ChevronsRight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -103,7 +100,10 @@ const PHASES: Phase[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Returns the 1-indexed current phase (0 = neutral / no project). */
+const GOLD = '#b8a378'
+const GOLD_DARK = '#9a8a6a'
+const GRAY = '#d4d4d4'
+
 function getCurrentPhase(status?: string): number {
   switch (status) {
     case 'PLANNING':
@@ -123,25 +123,31 @@ function getCurrentPhase(status?: string): number {
 
 type NodeState = 'completed' | 'current' | 'future'
 
-function getNodeState(
-  phaseNumber: number,
-  currentPhase: number,
-): NodeState {
+function getNodeState(phaseNumber: number, currentPhase: number): NodeState {
   if (currentPhase === 0) return 'future'
   if (phaseNumber < currentPhase) return 'completed'
   if (phaseNumber === currentPhase) return 'current'
   return 'future'
 }
 
+function stateLabel(state: NodeState, isPaused: boolean): string {
+  if (state === 'completed') return 'Concluído'
+  if (state === 'current') return isPaused ? 'Pausado' : 'Em andamento'
+  return 'Pendente'
+}
+
+function stateBadgeClass(state: NodeState, isPaused: boolean): string {
+  if (state === 'completed') return 'bg-green-100 text-green-700'
+  if (state === 'current')
+    return isPaused ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'
+  return 'bg-neutral-100 text-neutral-400'
+}
+
 // ---------------------------------------------------------------------------
-// Sub-components
+// Desktop flow node — rounded square with gradient
 // ---------------------------------------------------------------------------
 
-const GOLD = '#b8a378'
-const GRAY = '#d4d4d4'
-
-/** A single stepper node (desktop). */
-function StepperNode({
+function FlowNode({
   phase,
   state,
   isSelected,
@@ -158,57 +164,74 @@ function StepperNode({
 }) {
   const Icon = phase.icon
 
-  const baseCircle =
-    'relative flex items-center justify-center rounded-full transition-all duration-300 cursor-pointer'
-
-  let circleClass: string
+  let bgStyle: React.CSSProperties = {}
+  let borderClass = ''
   let iconEl: React.ReactNode
 
   if (isCancelled) {
-    circleClass = `${baseCircle} h-12 w-12 bg-neutral-300 border-2 border-neutral-400`
-    iconEl = <XCircle className="h-5 w-5 text-white" />
+    bgStyle = { backgroundColor: '#d4d4d4' }
+    borderClass = 'border-neutral-400'
+    iconEl = <XCircle className="h-6 w-6 text-white" />
   } else if (state === 'completed') {
-    circleClass = `${baseCircle} h-12 w-12 border-2`
-    iconEl = <Check className="h-5 w-5 text-white" />
+    bgStyle = { background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_DARK} 100%)` }
+    iconEl = <Check className="h-6 w-6 text-white" />
   } else if (state === 'current') {
-    circleClass = `${baseCircle} h-14 w-14 border-[3px] animate-pulse`
+    bgStyle = { borderColor: GOLD }
+    borderClass = 'border-2 bg-white'
     iconEl = isPaused ? (
       <Pause className="h-6 w-6" style={{ color: GOLD }} />
     ) : (
       <Icon className="h-6 w-6" style={{ color: GOLD }} />
     )
   } else {
-    circleClass = `${baseCircle} h-12 w-12 border-2 border-dashed border-neutral-300 bg-white`
-    iconEl = <Icon className="h-5 w-5 text-neutral-300" />
+    borderClass = 'border border-dashed border-neutral-300 bg-neutral-50'
+    iconEl = <Icon className="h-6 w-6 text-neutral-300" />
   }
+
+  const ringClass = isSelected
+    ? 'ring-2 ring-offset-2'
+    : ''
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-center gap-2 focus:outline-none group ${
-        isSelected ? 'scale-105' : ''
-      } transition-transform duration-200`}
+      className="flex flex-col items-center gap-2.5 focus:outline-none transition-transform duration-200 hover:scale-105 group"
     >
+      {/* Number badge */}
+      <span
+        className={`text-[10px] font-bold tracking-widest ${
+          state === 'future' && !isCancelled ? 'text-neutral-300' : 'text-neutral-400'
+        }`}
+      >
+        {String(phase.number).padStart(2, '0')}
+      </span>
+
+      {/* Icon container */}
       <div
-        className={circleClass}
-        style={
-          state === 'completed'
-            ? { backgroundColor: GOLD, borderColor: GOLD }
-            : state === 'current'
-              ? { borderColor: GOLD, backgroundColor: 'white' }
-              : undefined
-        }
+        className={`relative w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center
+          transition-all duration-300 shadow-sm ${borderClass} ${ringClass}
+          ${state === 'current' ? 'animate-pulse shadow-md' : ''}
+          ${state === 'completed' ? 'shadow-md' : ''}
+        `}
+        style={{
+          ...bgStyle,
+          ...(isSelected ? { ringColor: GOLD, '--tw-ring-color': GOLD } as React.CSSProperties : {}),
+        }}
       >
         {iconEl}
       </div>
+
+      {/* Name */}
       <span
         className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
-          state === 'future' && !isCancelled
+          isCancelled
             ? 'text-neutral-400'
             : state === 'current'
               ? 'text-neutral-900 font-semibold'
-              : 'text-neutral-600'
+              : state === 'completed'
+                ? 'text-neutral-700'
+                : 'text-neutral-400'
         }`}
       >
         {phase.name}
@@ -217,28 +240,35 @@ function StepperNode({
   )
 }
 
-/** Connecting line segment between two nodes (desktop). */
-function ConnectorLine({ filled }: { filled: boolean }) {
+// ---------------------------------------------------------------------------
+// Desktop horizontal connector
+// ---------------------------------------------------------------------------
+
+function FlowConnector({ filled }: { filled: boolean }) {
   return (
-    <div className="flex-1 flex items-center mx-1 mt-[-24px]">
-      <div
-        className="h-[3px] w-full rounded-full"
-        style={
-          filled
-            ? { backgroundColor: GOLD }
-            : {
-                backgroundImage: `repeating-linear-gradient(90deg, ${GRAY} 0px, ${GRAY} 6px, transparent 6px, transparent 12px)`,
-                backgroundSize: '12px 3px',
-                height: '3px',
-              }
-        }
-      />
+    <div className="flex-1 flex items-center mx-0.5 lg:mx-1 -mt-3">
+      {filled ? (
+        <div
+          className="h-[3px] w-full rounded-full"
+          style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_DARK})` }}
+        />
+      ) : (
+        <div
+          className="h-[3px] w-full"
+          style={{
+            backgroundImage: `repeating-linear-gradient(90deg, ${GRAY} 0px, ${GRAY} 6px, transparent 6px, transparent 12px)`,
+          }}
+        />
+      )}
     </div>
   )
 }
 
-/** Mobile stepper node (vertical layout). */
-function MobileStepperNode({
+// ---------------------------------------------------------------------------
+// Mobile flow node — horizontal card style
+// ---------------------------------------------------------------------------
+
+function MobileFlowNode({
   phase,
   state,
   isSelected,
@@ -257,83 +287,53 @@ function MobileStepperNode({
 }) {
   const Icon = phase.icon
 
-  let dotColor: string
-  let dotBorder: string
+  let dotStyle: React.CSSProperties = {}
+  let dotClass = ''
   let iconEl: React.ReactNode
 
   if (isCancelled) {
-    dotColor = 'bg-neutral-300'
-    dotBorder = 'border-neutral-400'
+    dotStyle = { backgroundColor: '#d4d4d4', borderColor: '#a3a3a3' }
     iconEl = <XCircle className="h-4 w-4 text-white" />
   } else if (state === 'completed') {
-    dotColor = ''
-    dotBorder = ''
+    dotStyle = { background: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`, borderColor: GOLD }
     iconEl = <Check className="h-4 w-4 text-white" />
   } else if (state === 'current') {
-    dotColor = 'bg-white'
-    dotBorder = ''
+    dotStyle = { borderColor: GOLD }
+    dotClass = 'bg-white animate-pulse'
     iconEl = isPaused ? (
       <Pause className="h-4 w-4" style={{ color: GOLD }} />
     ) : (
       <Icon className="h-4 w-4" style={{ color: GOLD }} />
     )
   } else {
-    dotColor = 'bg-white'
-    dotBorder = 'border-dashed border-neutral-300'
+    dotClass = 'bg-white border-dashed border-neutral-300'
     iconEl = <Icon className="h-4 w-4 text-neutral-300" />
   }
-
-  const badgeLabel =
-    state === 'completed'
-      ? 'Concluído'
-      : state === 'current'
-        ? isPaused
-          ? 'Pausado'
-          : 'Em andamento'
-        : 'Pendente'
-
-  const badgeColor =
-    state === 'completed'
-      ? 'bg-green-100 text-green-700'
-      : state === 'current'
-        ? isPaused
-          ? 'bg-yellow-100 text-yellow-700'
-          : 'bg-amber-100 text-amber-700'
-        : 'bg-neutral-100 text-neutral-500'
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-start gap-3 text-left w-full focus:outline-none ${
-        isSelected ? 'bg-neutral-50 rounded-lg' : ''
-      } p-2 -m-2 transition-colors duration-200`}
+      className={`flex items-start gap-3 text-left w-full focus:outline-none p-2 -mx-2 rounded-lg transition-colors duration-200 ${
+        isSelected ? 'bg-neutral-50' : ''
+      }`}
     >
-      {/* Timeline rail */}
+      {/* Rail */}
       <div className="flex flex-col items-center">
         <div
-          className={`h-9 w-9 flex items-center justify-center rounded-full border-2 ${dotColor} ${dotBorder} ${
-            state === 'current' ? 'animate-pulse' : ''
-          }`}
-          style={
-            state === 'completed'
-              ? { backgroundColor: GOLD, borderColor: GOLD }
-              : state === 'current'
-                ? { borderColor: GOLD }
-                : undefined
-          }
+          className={`h-9 w-9 flex-shrink-0 flex items-center justify-center rounded-xl border-2 ${dotClass}`}
+          style={dotStyle}
         >
           {iconEl}
         </div>
         {!isLast && (
           <div
-            className="w-[3px] flex-1 min-h-[24px] mt-1 rounded-full"
+            className="w-[3px] flex-1 min-h-[20px] mt-1 rounded-full"
             style={
               state === 'completed' || state === 'current'
-                ? { backgroundColor: GOLD }
+                ? { background: `linear-gradient(180deg, ${GOLD}, ${GOLD_DARK})` }
                 : {
                     backgroundImage: `repeating-linear-gradient(180deg, ${GRAY} 0px, ${GRAY} 4px, transparent 4px, transparent 8px)`,
-                    backgroundSize: '3px 8px',
                   }
             }
           />
@@ -341,31 +341,116 @@ function MobileStepperNode({
       </div>
 
       {/* Text */}
-      <div className="pt-1 pb-3 flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+      <div className="pt-0.5 pb-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
           <span
-            className={`text-sm font-medium ${
-              state === 'future' && !isCancelled
-                ? 'text-neutral-400'
-                : 'text-neutral-900'
+            className={`text-sm font-semibold ${
+              state === 'future' && !isCancelled ? 'text-neutral-400' : 'text-neutral-900'
             }`}
           >
             {phase.number}. {phase.name}
           </span>
           {isCancelled ? (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600">
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
               Cancelado
             </span>
           ) : (
             <span
-              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${badgeColor}`}
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${stateBadgeClass(state, isPaused)}`}
             >
-              {badgeLabel}
+              {stateLabel(state, isPaused)}
             </span>
           )}
         </div>
+        <p className="text-xs text-neutral-500 mt-0.5 leading-relaxed line-clamp-2">
+          {phase.description}
+        </p>
       </div>
     </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Phase description card (bottom grid)
+// ---------------------------------------------------------------------------
+
+function PhaseDescriptionCard({
+  phase,
+  state,
+  isPaused,
+  isCancelled,
+}: {
+  phase: Phase
+  state: NodeState
+  isPaused: boolean
+  isCancelled: boolean
+}) {
+  const Icon = phase.icon
+  const isCurrent = state === 'current'
+
+  const borderLeft = isCancelled
+    ? 'border-l-neutral-300'
+    : state === 'completed'
+      ? 'border-l-[#b8a378]'
+      : isCurrent
+        ? 'border-l-[#b8a378]'
+        : 'border-l-neutral-200'
+
+  return (
+    <div
+      className={`flex gap-4 p-4 rounded-xl border border-l-4 transition-all duration-300 ${borderLeft} ${
+        isCurrent
+          ? 'bg-[#b8a378]/5 shadow-sm border-[#b8a378]/30'
+          : 'bg-white border-neutral-100 hover:shadow-sm'
+      }`}
+    >
+      <div
+        className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+          isCancelled
+            ? 'bg-neutral-100'
+            : state === 'completed' || isCurrent
+              ? 'bg-[#b8a378]/10'
+              : 'bg-neutral-50'
+        }`}
+      >
+        <Icon
+          className="h-5 w-5"
+          style={{
+            color:
+              isCancelled
+                ? '#a3a3a3'
+                : state === 'completed' || isCurrent
+                  ? GOLD
+                  : '#a3a3a3',
+          }}
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3
+            className={`text-sm font-semibold ${
+              state === 'future' && !isCancelled ? 'text-neutral-500' : 'text-neutral-800'
+            }`}
+          >
+            {phase.number}. {phase.name}
+          </h3>
+          {isCancelled ? (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
+              Cancelado
+            </span>
+          ) : state !== 'future' ? (
+            <span
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${stateBadgeClass(state, isPaused)}`}
+            >
+              {stateLabel(state, isPaused)}
+            </span>
+          ) : null}
+        </div>
+        <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+          {phase.description}
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -376,18 +461,9 @@ function MobileStepperNode({
 export function Dashboard() {
   const { user, tenant } = useAuthStore()
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
-  )
-  const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0) // 0-indexed
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0)
 
-  // Fetch dashboard stats (existing endpoint)
-  const { data: dashboardStats } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: () => projectsAPI.getDashboardStats(),
-  })
-
-  // Fetch project list for the selector
   const { data: projectsData } = useQuery({
     queryKey: ['projects', { limit: 100 }],
     queryFn: () => projectsAPI.list({ limit: 100 }),
@@ -406,47 +482,12 @@ export function Dashboard() {
   const isPaused = selectedProject?.status === 'PAUSED'
   const isCancelled = selectedProject?.status === 'CANCELLED'
 
-  const activePhase = PHASES[selectedPhaseIdx]
-
-  // Mini stats
-  const stats = [
-    {
-      title: 'Projetos Ativos',
-      value: dashboardStats ? String(dashboardStats.projects.inProgress) : '...',
-      icon: Building2,
-      description: dashboardStats
-        ? `${dashboardStats.projects.total} total`
-        : 'Carregando...',
-    },
-    {
-      title: 'Unidades',
-      value: dashboardStats ? String(dashboardStats.units.total) : '...',
-      icon: Home,
-      description: dashboardStats
-        ? `${dashboardStats.units.sold} vendida(s)`
-        : 'Carregando...',
-    },
-    {
-      title: 'Disponíveis',
-      value: dashboardStats ? String(dashboardStats.units.available) : '...',
-      icon: Users,
-      description: dashboardStats
-        ? `${dashboardStats.units.reserved} reservada(s)`
-        : 'Carregando...',
-    },
-    {
-      title: 'Em Planejamento',
-      value: dashboardStats ? String(dashboardStats.projects.planning) : '...',
-      icon: DollarSign,
-      description: dashboardStats
-        ? `${dashboardStats.projects.completed} concluído(s)`
-        : 'Carregando...',
-    },
-  ]
+  const row1 = PHASES.slice(0, 4)
+  const row2 = PHASES.slice(4, 8)
 
   return (
     <div className="space-y-8">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900">
@@ -454,8 +495,6 @@ export function Dashboard() {
           </h1>
           <p className="mt-1 text-neutral-600">{tenant?.name}</p>
         </div>
-
-        {/* Project selector */}
         <div className="w-full sm:w-72">
           <Select
             value={selectedProjectId ?? 'none'}
@@ -479,132 +518,154 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* ── Stepper (Desktop) ─────────────────────────────────────────── */}
+      {/* ── Infographic Flow (Desktop) ─────────────────────────────── */}
       <div className="hidden md:block">
-        <Card>
-          <CardContent className="pt-8 pb-6 px-6">
+        <Card className="overflow-hidden border-0 shadow-lg">
+          {/* Gradient background */}
+          <div
+            className="p-8 lg:p-10"
+            style={{
+              background:
+                'linear-gradient(135deg, #fafaf9 0%, #ffffff 40%, rgba(184,163,120,0.06) 100%)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-10">
+              <h2 className="text-lg font-semibold text-neutral-800">
+                Fluxo da Obra
+              </h2>
+              {selectedProject && (
+                <span className="text-sm text-neutral-400">
+                  &mdash; {selectedProject.name}
+                </span>
+              )}
+            </div>
+
+            {/* Row 1: phases 1-4 */}
             <div className="flex items-start">
-              {PHASES.map((phase, idx) => (
-                <div
-                  key={phase.number}
-                  className={`flex items-start ${idx < PHASES.length - 1 ? 'flex-1' : ''}`}
-                >
-                  <StepperNode
+              {row1.map((phase, idx) => {
+                const phaseState = isCancelled
+                  ? ('future' as NodeState)
+                  : getNodeState(phase.number, currentPhase)
+                return (
+                  <div
+                    key={phase.number}
+                    className={`flex items-start ${idx < row1.length - 1 ? 'flex-1' : ''}`}
+                  >
+                    <FlowNode
+                      phase={phase}
+                      state={phaseState}
+                      isSelected={selectedPhaseIdx === idx}
+                      onClick={() => setSelectedPhaseIdx(idx)}
+                      isPaused={isPaused && phase.number === currentPhase}
+                      isCancelled={isCancelled}
+                    />
+                    {idx < row1.length - 1 && (
+                      <FlowConnector
+                        filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Row transition */}
+            <div className="flex items-center gap-3 my-6 px-2">
+              <div className="flex-1 h-px bg-neutral-200/80" />
+              <ChevronsRight className="h-4 w-4 text-neutral-300 rotate-90" />
+              <div className="flex-1 h-px bg-neutral-200/80" />
+            </div>
+
+            {/* Row 2: phases 5-8 */}
+            <div className="flex items-start">
+              {row2.map((phase, idx) => {
+                const globalIdx = idx + 4
+                const phaseState = isCancelled
+                  ? ('future' as NodeState)
+                  : getNodeState(phase.number, currentPhase)
+                return (
+                  <div
+                    key={phase.number}
+                    className={`flex items-start ${idx < row2.length - 1 ? 'flex-1' : ''}`}
+                  >
+                    <FlowNode
+                      phase={phase}
+                      state={phaseState}
+                      isSelected={selectedPhaseIdx === globalIdx}
+                      onClick={() => setSelectedPhaseIdx(globalIdx)}
+                      isPaused={isPaused && phase.number === currentPhase}
+                      isCancelled={isCancelled}
+                    />
+                    {idx < row2.length - 1 && (
+                      <FlowConnector
+                        filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Infographic Flow (Mobile) ──────────────────────────────── */}
+      <div className="md:hidden">
+        <Card className="overflow-hidden border-0 shadow-lg">
+          <div
+            className="p-5"
+            style={{
+              background:
+                'linear-gradient(135deg, #fafaf9 0%, #ffffff 40%, rgba(184,163,120,0.06) 100%)',
+            }}
+          >
+            <h2 className="text-lg font-semibold text-neutral-800 mb-5">
+              Fluxo da Obra
+            </h2>
+            <div className="flex flex-col">
+              {PHASES.map((phase, idx) => {
+                const phaseState = isCancelled
+                  ? ('future' as NodeState)
+                  : getNodeState(phase.number, currentPhase)
+                return (
+                  <MobileFlowNode
+                    key={phase.number}
                     phase={phase}
-                    state={
-                      isCancelled ? 'future' : getNodeState(phase.number, currentPhase)
-                    }
+                    state={phaseState}
                     isSelected={selectedPhaseIdx === idx}
                     onClick={() => setSelectedPhaseIdx(idx)}
                     isPaused={isPaused && phase.number === currentPhase}
                     isCancelled={isCancelled}
+                    isLast={idx === PHASES.length - 1}
                   />
-                  {idx < PHASES.length - 1 && (
-                    <ConnectorLine
-                      filled={
-                        !isCancelled &&
-                        currentPhase > 0 &&
-                        phase.number < currentPhase
-                      }
-                    />
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      {/* ── Stepper (Mobile) ──────────────────────────────────────────── */}
-      <div className="md:hidden">
-        <Card>
-          <CardContent className="pt-6 pb-4 px-4">
-            <div className="flex flex-col">
-              {PHASES.map((phase, idx) => (
-                <MobileStepperNode
-                  key={phase.number}
-                  phase={phase}
-                  state={
-                    isCancelled ? 'future' : getNodeState(phase.number, currentPhase)
-                  }
-                  isSelected={selectedPhaseIdx === idx}
-                  onClick={() => setSelectedPhaseIdx(idx)}
-                  isPaused={isPaused && phase.number === currentPhase}
-                  isCancelled={isCancelled}
-                  isLast={idx === PHASES.length - 1}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Phase detail card ─────────────────────────────────────────── */}
-      <Card className="transition-all duration-300 overflow-hidden">
-        <CardHeader className="flex flex-row items-center gap-4 pb-2">
-          <div
-            className="flex h-11 w-11 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${GOLD}20` }}
-          >
-            <activePhase.icon className="h-5 w-5" style={{ color: GOLD }} />
-          </div>
-          <div className="flex-1">
-            <CardTitle className="text-lg">
-              {activePhase.number}. {activePhase.name}
-            </CardTitle>
-            {selectedProject && !isCancelled && (
-              <span
-                className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  getNodeState(activePhase.number, currentPhase) === 'completed'
-                    ? 'bg-green-100 text-green-700'
-                    : getNodeState(activePhase.number, currentPhase) === 'current'
-                      ? isPaused
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-amber-100 text-amber-700'
-                      : 'bg-neutral-100 text-neutral-500'
-                }`}
-              >
-                {getNodeState(activePhase.number, currentPhase) === 'completed'
-                  ? 'Concluído'
-                  : getNodeState(activePhase.number, currentPhase) === 'current'
-                    ? isPaused
-                      ? 'Pausado'
-                      : 'Em andamento'
-                    : 'Pendente'}
-              </span>
-            )}
-            {isCancelled && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600">
-                Cancelado
-              </span>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-neutral-600 text-sm leading-relaxed">
-            {activePhase.description}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* ── Mini Stats ────────────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-neutral-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-neutral-500 mt-1">
-                {stat.description}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* ── Phase Descriptions ─────────────────────────────────────── */}
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-800 mb-4">
+          Etapas da Obra
+        </h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          {PHASES.map((phase) => {
+            const phaseState = isCancelled
+              ? ('future' as NodeState)
+              : getNodeState(phase.number, currentPhase)
+            return (
+              <PhaseDescriptionCard
+                key={phase.number}
+                phase={phase}
+                state={phaseState}
+                isPaused={isPaused && phase.number === currentPhase}
+                isCancelled={isCancelled}
+              />
+            )
+          })}
+        </div>
       </div>
     </div>
   )

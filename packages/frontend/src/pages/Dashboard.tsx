@@ -152,7 +152,7 @@ function stateBadgeClass(state: NodeState, isPaused: boolean): string {
   if (state === 'completed') return 'bg-green-100 text-green-700'
   if (state === 'current')
     return isPaused ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'
-  return 'bg-neutral-100 text-neutral-400'
+  return 'bg-neutral-100 text-neutral-600'
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ function FlowNode({
     )
   } else {
     borderClass = 'border border-dashed border-neutral-300 bg-neutral-50'
-    iconEl = <Icon className="h-6 w-6 text-neutral-300" />
+    iconEl = <Icon className="h-6 w-6 text-neutral-400" />
   }
 
   const ringClass = isSelected
@@ -216,7 +216,7 @@ function FlowNode({
       {/* Number badge */}
       <span
         className={`text-[10px] font-bold tracking-widest ${
-          state === 'future' && !isCancelled ? 'text-neutral-300' : 'text-neutral-400'
+          state === 'future' && !isCancelled ? 'text-neutral-400' : 'text-neutral-500'
         }`}
       >
         {String(phase.number).padStart(2, '0')}
@@ -226,7 +226,7 @@ function FlowNode({
       <div
         className={`relative w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center
           transition-all duration-300 shadow-sm ${borderClass} ${ringClass}
-          ${state === 'current' ? 'animate-pulse shadow-md' : ''}
+          ${state === 'current' ? 'shadow-md' : ''}
           ${state === 'completed' ? 'shadow-md' : ''}
         `}
         style={{
@@ -236,7 +236,7 @@ function FlowNode({
       >
         {iconEl}
         {!isComingSoon && (
-          <ExternalLink className="absolute -top-1 -right-1 h-3 w-3 text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ExternalLink className="absolute -top-1 -right-1 h-3 w-3 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
         )}
       </div>
 
@@ -245,18 +245,18 @@ function FlowNode({
         <span
           className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
             isCancelled
-              ? 'text-neutral-400'
+              ? 'text-neutral-500'
               : state === 'current'
                 ? 'text-neutral-900 font-semibold'
                 : state === 'completed'
-                  ? 'text-neutral-700'
-                  : 'text-neutral-400'
+                  ? 'text-neutral-800'
+                  : 'text-neutral-600'
           }`}
         >
           {phase.name}
         </span>
         {isComingSoon && (
-          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-400">
+          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
             Em breve
           </span>
         )}
@@ -325,7 +325,7 @@ function MobileFlowNode({
     iconEl = <Check className="h-4 w-4 text-white" />
   } else if (state === 'current') {
     dotStyle = { borderColor: GOLD }
-    dotClass = 'bg-white animate-pulse'
+    dotClass = 'bg-white'
     iconEl = isPaused ? (
       <Pause className="h-4 w-4" style={{ color: GOLD }} />
     ) : (
@@ -333,7 +333,7 @@ function MobileFlowNode({
     )
   } else {
     dotClass = 'bg-white border-dashed border-neutral-300'
-    iconEl = <Icon className="h-4 w-4 text-neutral-300" />
+    iconEl = <Icon className="h-4 w-4 text-neutral-400" />
   }
 
   return (
@@ -371,7 +371,7 @@ function MobileFlowNode({
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className={`text-sm font-semibold ${
-              state === 'future' && !isCancelled ? 'text-neutral-400' : 'text-neutral-900'
+              state === 'future' && !isCancelled ? 'text-neutral-600' : 'text-neutral-900'
             }`}
           >
             {phase.number}. {phase.name}
@@ -388,19 +388,19 @@ function MobileFlowNode({
             </span>
           )}
           {isComingSoon && (
-            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-400">
+            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
               Em breve
             </span>
           )}
         </div>
-        <p className="text-xs text-neutral-500 mt-0.5 leading-relaxed line-clamp-2">
+        <p className="text-xs text-neutral-600 mt-0.5 leading-relaxed line-clamp-2">
           {phase.description}
         </p>
       </div>
 
       {/* Navigate indicator */}
       {!isComingSoon && (
-        <ExternalLink className="h-3.5 w-3.5 text-neutral-300 mt-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <ExternalLink className="h-3.5 w-3.5 text-neutral-400 mt-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
       )}
     </button>
   )
@@ -472,7 +472,7 @@ function PhaseDescriptionCard({
         <div className="flex items-center gap-2 flex-wrap">
           <h3
             className={`text-sm font-semibold ${
-              state === 'future' && !isCancelled ? 'text-neutral-500' : 'text-neutral-800'
+              state === 'future' && !isCancelled ? 'text-neutral-700' : 'text-neutral-900'
             }`}
           >
             {phase.number}. {phase.name}
@@ -489,17 +489,17 @@ function PhaseDescriptionCard({
             </span>
           ) : null}
           {isComingSoon && (
-            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-400">
+            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-200 text-neutral-500">
               Em breve
             </span>
           )}
         </div>
-        <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+        <p className="text-xs text-neutral-600 mt-1.5 leading-relaxed">
           {phase.description}
         </p>
       </div>
       {!isComingSoon && (
-        <ExternalLink className="h-3.5 w-3.5 text-neutral-300 mt-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <ExternalLink className="h-3.5 w-3.5 text-neutral-400 mt-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
       )}
     </div>
   )
@@ -557,7 +557,7 @@ export function Dashboard() {
           <h1 className="text-3xl font-bold text-neutral-900">
             Bem-vindo, {user?.name}!
           </h1>
-          <p className="mt-1 text-neutral-600">{tenant?.name}</p>
+          <p className="mt-1 text-neutral-700">{tenant?.name}</p>
         </div>
         <div className="w-full sm:w-72">
           <Select
@@ -598,7 +598,7 @@ export function Dashboard() {
                 Fluxo da Obra
               </h2>
               {selectedProject && (
-                <span className="text-sm text-neutral-400">
+                <span className="text-sm text-neutral-600">
                   &mdash; {selectedProject.name}
                 </span>
               )}

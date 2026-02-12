@@ -24,7 +24,6 @@ import {
   Check,
   Pause,
   XCircle,
-  ChevronsRight,
   ExternalLink,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -184,21 +183,21 @@ function FlowNode({
   if (isCancelled) {
     bgStyle = { backgroundColor: '#d4d4d4' }
     borderClass = 'border-neutral-400'
-    iconEl = <XCircle className="h-6 w-6 text-white" />
+    iconEl = <XCircle className="h-5 w-5 text-white" />
   } else if (state === 'completed') {
     bgStyle = { background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_DARK} 100%)` }
-    iconEl = <Check className="h-6 w-6 text-white" />
+    iconEl = <Check className="h-5 w-5 text-white" />
   } else if (state === 'current') {
     bgStyle = { borderColor: GOLD }
     borderClass = 'border-2 bg-white'
     iconEl = isPaused ? (
-      <Pause className="h-6 w-6" style={{ color: GOLD }} />
+      <Pause className="h-5 w-5" style={{ color: GOLD }} />
     ) : (
-      <Icon className="h-6 w-6" style={{ color: GOLD }} />
+      <Icon className="h-5 w-5" style={{ color: GOLD }} />
     )
   } else {
     borderClass = 'border border-dashed border-neutral-300 bg-neutral-50'
-    iconEl = <Icon className="h-6 w-6 text-neutral-400" />
+    iconEl = <Icon className="h-5 w-5 text-neutral-400" />
   }
 
   const ringClass = isSelected
@@ -209,7 +208,7 @@ function FlowNode({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-center gap-2.5 focus:outline-none transition-transform duration-200 hover:scale-105 group ${
+      className={`flex flex-col items-center gap-1.5 focus:outline-none transition-transform duration-200 hover:scale-105 group ${
         isComingSoon ? 'opacity-60' : ''
       }`}
     >
@@ -224,14 +223,14 @@ function FlowNode({
 
       {/* Icon container */}
       <div
-        className={`relative w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center
+        className={`relative w-11 h-11 lg:w-12 lg:h-12 rounded-2xl flex items-center justify-center
           transition-all duration-300 shadow-sm ${borderClass} ${ringClass}
-          ${state === 'current' ? 'shadow-md' : ''}
           ${state === 'completed' ? 'shadow-md' : ''}
         `}
         style={{
           ...bgStyle,
           ...(isSelected ? { ringColor: GOLD, '--tw-ring-color': GOLD } as React.CSSProperties : {}),
+          ...(state === 'current' ? { animation: 'glowBreath 3s ease-in-out infinite' } : {}),
         }}
       >
         {iconEl}
@@ -243,7 +242,7 @@ function FlowNode({
       {/* Name + Coming Soon badge */}
       <div className="flex flex-col items-center gap-1">
         <span
-          className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
+          className={`text-[11px] font-medium text-center leading-tight max-w-[72px] ${
             isCancelled
               ? 'text-neutral-500'
               : state === 'current'
@@ -271,12 +270,21 @@ function FlowNode({
 
 function FlowConnector({ filled }: { filled: boolean }) {
   return (
-    <div className="flex-1 flex items-center mx-0.5 lg:mx-1 -mt-3">
+    <div className="flex-1 flex items-center mx-0 -mt-3">
       {filled ? (
         <div
-          className="h-[3px] w-full rounded-full"
+          className="h-[3px] w-full rounded-full relative overflow-hidden"
           style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_DARK})` }}
-        />
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmerLine 2s linear infinite',
+            }}
+          />
+        </div>
       ) : (
         <div
           className="h-[3px] w-full"
@@ -348,7 +356,10 @@ function MobileFlowNode({
       <div className="flex flex-col items-center">
         <div
           className={`h-9 w-9 flex-shrink-0 flex items-center justify-center rounded-xl border-2 ${dotClass}`}
-          style={dotStyle}
+          style={{
+            ...dotStyle,
+            ...(state === 'current' ? { animation: 'glowBreath 3s ease-in-out infinite' } : {}),
+          }}
         >
           {iconEl}
         </div>
@@ -546,11 +557,28 @@ export function Dashboard() {
     }
   }
 
-  const row1 = PHASES.slice(0, 4)
-  const row2 = PHASES.slice(4, 8)
-
   return (
     <div className="space-y-8">
+      {/* ── Animations ────────────────────────────────────────────── */}
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes glowBreath {
+          0%   { box-shadow: 0 0 0 0 rgba(184,163,120,0.3); }
+          50%  { box-shadow: 0 0 20px 4px rgba(184,163,120,0.15); }
+          100% { box-shadow: 0 0 0 0 rgba(184,163,120,0.3); }
+        }
+        @keyframes shimmerLine {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        @keyframes cardFadeIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -604,16 +632,21 @@ export function Dashboard() {
               )}
             </div>
 
-            {/* Row 1: phases 1-4 */}
+            {/* All 8 phases in a single row */}
             <div className="flex items-start">
-              {row1.map((phase, idx) => {
+              {PHASES.map((phase, idx) => {
                 const phaseState = isCancelled
                   ? ('future' as NodeState)
                   : getNodeState(phase.number, currentPhase)
                 return (
                   <div
                     key={phase.number}
-                    className={`flex items-start ${idx < row1.length - 1 ? 'flex-1' : ''}`}
+                    className={`flex items-start ${idx < PHASES.length - 1 ? 'flex-1' : ''}`}
+                    style={{
+                      opacity: 0,
+                      animation: 'fadeSlideUp 0.5s ease-out forwards',
+                      animationDelay: `${idx * 80}ms`,
+                    }}
                   >
                     <FlowNode
                       phase={phase}
@@ -623,44 +656,7 @@ export function Dashboard() {
                       isPaused={isPaused && phase.number === currentPhase}
                       isCancelled={isCancelled}
                     />
-                    {idx < row1.length - 1 && (
-                      <FlowConnector
-                        filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Row transition */}
-            <div className="flex items-center gap-3 my-6 px-2">
-              <div className="flex-1 h-px bg-neutral-200/80" />
-              <ChevronsRight className="h-4 w-4 text-neutral-300 rotate-90" />
-              <div className="flex-1 h-px bg-neutral-200/80" />
-            </div>
-
-            {/* Row 2: phases 5-8 */}
-            <div className="flex items-start">
-              {row2.map((phase, idx) => {
-                const globalIdx = idx + 4
-                const phaseState = isCancelled
-                  ? ('future' as NodeState)
-                  : getNodeState(phase.number, currentPhase)
-                return (
-                  <div
-                    key={phase.number}
-                    className={`flex items-start ${idx < row2.length - 1 ? 'flex-1' : ''}`}
-                  >
-                    <FlowNode
-                      phase={phase}
-                      state={phaseState}
-                      isSelected={selectedPhaseIdx === globalIdx}
-                      onClick={() => { setSelectedPhaseIdx(globalIdx); handlePhaseClick(phase) }}
-                      isPaused={isPaused && phase.number === currentPhase}
-                      isCancelled={isCancelled}
-                    />
-                    {idx < row2.length - 1 && (
+                    {idx < PHASES.length - 1 && (
                       <FlowConnector
                         filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
                       />
@@ -692,16 +688,24 @@ export function Dashboard() {
                   ? ('future' as NodeState)
                   : getNodeState(phase.number, currentPhase)
                 return (
-                  <MobileFlowNode
+                  <div
                     key={phase.number}
-                    phase={phase}
-                    state={phaseState}
-                    isSelected={selectedPhaseIdx === idx}
-                    onClick={() => { setSelectedPhaseIdx(idx); handlePhaseClick(phase) }}
-                    isPaused={isPaused && phase.number === currentPhase}
-                    isCancelled={isCancelled}
-                    isLast={idx === PHASES.length - 1}
-                  />
+                    style={{
+                      opacity: 0,
+                      animation: 'fadeSlideUp 0.5s ease-out forwards',
+                      animationDelay: `${idx * 80}ms`,
+                    }}
+                  >
+                    <MobileFlowNode
+                      phase={phase}
+                      state={phaseState}
+                      isSelected={selectedPhaseIdx === idx}
+                      onClick={() => { setSelectedPhaseIdx(idx); handlePhaseClick(phase) }}
+                      isPaused={isPaused && phase.number === currentPhase}
+                      isCancelled={isCancelled}
+                      isLast={idx === PHASES.length - 1}
+                    />
+                  </div>
                 )
               })}
             </div>
@@ -715,19 +719,27 @@ export function Dashboard() {
           Etapas da Obra
         </h2>
         <div className="grid gap-3 md:grid-cols-2">
-          {PHASES.map((phase) => {
+          {PHASES.map((phase, idx) => {
             const phaseState = isCancelled
               ? ('future' as NodeState)
               : getNodeState(phase.number, currentPhase)
             return (
-              <PhaseDescriptionCard
+              <div
                 key={phase.number}
-                phase={phase}
-                state={phaseState}
-                isPaused={isPaused && phase.number === currentPhase}
-                isCancelled={isCancelled}
-                onClick={() => handlePhaseClick(phase)}
-              />
+                style={{
+                  opacity: 0,
+                  animation: 'cardFadeIn 0.4s ease-out forwards',
+                  animationDelay: `${idx * 60}ms`,
+                }}
+              >
+                <PhaseDescriptionCard
+                  phase={phase}
+                  state={phaseState}
+                  isPaused={isPaused && phase.number === currentPhase}
+                  isCancelled={isCancelled}
+                  onClick={() => handlePhaseClick(phase)}
+                />
+              </div>
             )
           })}
         </div>

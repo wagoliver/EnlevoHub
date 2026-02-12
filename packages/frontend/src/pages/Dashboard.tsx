@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth.store'
 import { projectsAPI } from '@/lib/api-client'
 import { Card } from '@/components/ui/card'
@@ -23,6 +25,7 @@ import {
   Pause,
   XCircle,
   ChevronsRight,
+  ExternalLink,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -35,6 +38,7 @@ interface Phase {
   name: string
   icon: LucideIcon
   description: string
+  route: string | null // null = coming soon
 }
 
 const PHASES: Phase[] = [
@@ -44,6 +48,7 @@ const PHASES: Phase[] = [
     icon: ClipboardList,
     description:
       'Criação do projeto, definição de escopo, plantas baixas e orçamento preliminar da obra.',
+    route: '/projects',
   },
   {
     number: 2,
@@ -51,6 +56,7 @@ const PHASES: Phase[] = [
     icon: Calculator,
     description:
       'Quantificação de materiais, serviços e insumos necessários para execução.',
+    route: '/suppliers',
   },
   {
     number: 3,
@@ -58,6 +64,7 @@ const PHASES: Phase[] = [
     icon: FileSignature,
     description:
       'Cotações, seleção de fornecedores e formalização dos contratos de serviço e material.',
+    route: '/purchases',
   },
   {
     number: 4,
@@ -65,6 +72,7 @@ const PHASES: Phase[] = [
     icon: HardHat,
     description:
       'Seleção, contratação e preparação dos empreiteiros para início da execução.',
+    route: '/contractors',
   },
   {
     number: 5,
@@ -72,6 +80,7 @@ const PHASES: Phase[] = [
     icon: ShieldCheck,
     description:
       'Conferência de documentos, seguros, certidões, alvarás e habilitações dos envolvidos.',
+    route: null,
   },
   {
     number: 6,
@@ -79,6 +88,7 @@ const PHASES: Phase[] = [
     icon: Hammer,
     description:
       'Acompanhamento da obra em campo — vistorias, relatórios de progresso e controle de qualidade.',
+    route: '/projects',
   },
   {
     number: 7,
@@ -86,6 +96,7 @@ const PHASES: Phase[] = [
     icon: Ruler,
     description:
       'Aferição do trabalho executado, aprovação das medições e liberação de pagamentos parciais.',
+    route: '/projects',
   },
   {
     number: 8,
@@ -93,6 +104,7 @@ const PHASES: Phase[] = [
     icon: CheckCircle2,
     description:
       'Termo de quitação contratual, aceite definitivo e entrega formal da obra.',
+    route: '/brokers',
   },
 ]
 
@@ -163,6 +175,7 @@ function FlowNode({
   isCancelled: boolean
 }) {
   const Icon = phase.icon
+  const isComingSoon = phase.route === null
 
   let bgStyle: React.CSSProperties = {}
   let borderClass = ''
@@ -196,7 +209,9 @@ function FlowNode({
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2.5 focus:outline-none transition-transform duration-200 hover:scale-105 group"
+      className={`flex flex-col items-center gap-2.5 focus:outline-none transition-transform duration-200 hover:scale-105 group ${
+        isComingSoon ? 'opacity-60' : ''
+      }`}
     >
       {/* Number badge */}
       <span
@@ -220,22 +235,32 @@ function FlowNode({
         }}
       >
         {iconEl}
+        {!isComingSoon && (
+          <ExternalLink className="absolute -top-1 -right-1 h-3 w-3 text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
       </div>
 
-      {/* Name */}
-      <span
-        className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
-          isCancelled
-            ? 'text-neutral-400'
-            : state === 'current'
-              ? 'text-neutral-900 font-semibold'
-              : state === 'completed'
-                ? 'text-neutral-700'
-                : 'text-neutral-400'
-        }`}
-      >
-        {phase.name}
-      </span>
+      {/* Name + Coming Soon badge */}
+      <div className="flex flex-col items-center gap-1">
+        <span
+          className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
+            isCancelled
+              ? 'text-neutral-400'
+              : state === 'current'
+                ? 'text-neutral-900 font-semibold'
+                : state === 'completed'
+                  ? 'text-neutral-700'
+                  : 'text-neutral-400'
+          }`}
+        >
+          {phase.name}
+        </span>
+        {isComingSoon && (
+          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-400">
+            Em breve
+          </span>
+        )}
+      </div>
     </button>
   )
 }
@@ -286,6 +311,7 @@ function MobileFlowNode({
   isLast: boolean
 }) {
   const Icon = phase.icon
+  const isComingSoon = phase.route === null
 
   let dotStyle: React.CSSProperties = {}
   let dotClass = ''
@@ -314,9 +340,9 @@ function MobileFlowNode({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-start gap-3 text-left w-full focus:outline-none p-2 -mx-2 rounded-lg transition-colors duration-200 ${
+      className={`flex items-start gap-3 text-left w-full focus:outline-none p-2 -mx-2 rounded-lg transition-colors duration-200 group ${
         isSelected ? 'bg-neutral-50' : ''
-      }`}
+      } ${isComingSoon ? 'opacity-60' : ''}`}
     >
       {/* Rail */}
       <div className="flex flex-col items-center">
@@ -361,11 +387,21 @@ function MobileFlowNode({
               {stateLabel(state, isPaused)}
             </span>
           )}
+          {isComingSoon && (
+            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-400">
+              Em breve
+            </span>
+          )}
         </div>
         <p className="text-xs text-neutral-500 mt-0.5 leading-relaxed line-clamp-2">
           {phase.description}
         </p>
       </div>
+
+      {/* Navigate indicator */}
+      {!isComingSoon && (
+        <ExternalLink className="h-3.5 w-3.5 text-neutral-300 mt-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
     </button>
   )
 }
@@ -379,14 +415,17 @@ function PhaseDescriptionCard({
   state,
   isPaused,
   isCancelled,
+  onClick,
 }: {
   phase: Phase
   state: NodeState
   isPaused: boolean
   isCancelled: boolean
+  onClick: () => void
 }) {
   const Icon = phase.icon
   const isCurrent = state === 'current'
+  const isComingSoon = phase.route === null
 
   const borderLeft = isCancelled
     ? 'border-l-neutral-300'
@@ -398,11 +437,15 @@ function PhaseDescriptionCard({
 
   return (
     <div
-      className={`flex gap-4 p-4 rounded-xl border border-l-4 transition-all duration-300 ${borderLeft} ${
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      className={`flex gap-4 p-4 rounded-xl border border-l-4 transition-all duration-300 cursor-pointer group ${borderLeft} ${
         isCurrent
           ? 'bg-[#b8a378]/5 shadow-sm border-[#b8a378]/30'
           : 'bg-white border-neutral-100 hover:shadow-sm'
-      }`}
+      } ${isComingSoon ? 'opacity-60' : 'hover:shadow-md'}`}
     >
       <div
         className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -445,11 +488,19 @@ function PhaseDescriptionCard({
               {stateLabel(state, isPaused)}
             </span>
           ) : null}
+          {isComingSoon && (
+            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-400">
+              Em breve
+            </span>
+          )}
         </div>
         <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
           {phase.description}
         </p>
       </div>
+      {!isComingSoon && (
+        <ExternalLink className="h-3.5 w-3.5 text-neutral-300 mt-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
     </div>
   )
 }
@@ -460,6 +511,7 @@ function PhaseDescriptionCard({
 
 export function Dashboard() {
   const { user, tenant } = useAuthStore()
+  const navigate = useNavigate()
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0)
@@ -481,6 +533,18 @@ export function Dashboard() {
 
   const isPaused = selectedProject?.status === 'PAUSED'
   const isCancelled = selectedProject?.status === 'CANCELLED'
+
+  function handlePhaseClick(phase: Phase) {
+    if (phase.route === null) {
+      toast.info('Módulo em desenvolvimento — em breve!')
+      return
+    }
+    if (phase.route === '/projects' && selectedProjectId) {
+      navigate(`/projects/${selectedProjectId}`)
+    } else {
+      navigate(phase.route)
+    }
+  }
 
   const row1 = PHASES.slice(0, 4)
   const row2 = PHASES.slice(4, 8)
@@ -555,7 +619,7 @@ export function Dashboard() {
                       phase={phase}
                       state={phaseState}
                       isSelected={selectedPhaseIdx === idx}
-                      onClick={() => setSelectedPhaseIdx(idx)}
+                      onClick={() => { setSelectedPhaseIdx(idx); handlePhaseClick(phase) }}
                       isPaused={isPaused && phase.number === currentPhase}
                       isCancelled={isCancelled}
                     />
@@ -592,7 +656,7 @@ export function Dashboard() {
                       phase={phase}
                       state={phaseState}
                       isSelected={selectedPhaseIdx === globalIdx}
-                      onClick={() => setSelectedPhaseIdx(globalIdx)}
+                      onClick={() => { setSelectedPhaseIdx(globalIdx); handlePhaseClick(phase) }}
                       isPaused={isPaused && phase.number === currentPhase}
                       isCancelled={isCancelled}
                     />
@@ -633,7 +697,7 @@ export function Dashboard() {
                     phase={phase}
                     state={phaseState}
                     isSelected={selectedPhaseIdx === idx}
-                    onClick={() => setSelectedPhaseIdx(idx)}
+                    onClick={() => { setSelectedPhaseIdx(idx); handlePhaseClick(phase) }}
                     isPaused={isPaused && phase.number === currentPhase}
                     isCancelled={isCancelled}
                     isLast={idx === PHASES.length - 1}
@@ -662,6 +726,7 @@ export function Dashboard() {
                 state={phaseState}
                 isPaused={isPaused && phase.number === currentPhase}
                 isCancelled={isCancelled}
+                onClick={() => handlePhaseClick(phase)}
               />
             )
           })}

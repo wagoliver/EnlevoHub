@@ -29,11 +29,6 @@ import {
   ChevronsRight,
   Lightbulb,
   ArrowRight,
-  FolderKanban,
-  Users,
-  ShoppingCart,
-  DollarSign,
-  Building2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -41,12 +36,13 @@ import type { LucideIcon } from 'lucide-react'
 // Phase definitions
 // ---------------------------------------------------------------------------
 
-interface RelatedModule {
+interface PhaseAction {
   label: string
   path: string
   /** When a project is selected, use this path instead (`:id` will be replaced) */
   projectPath?: string
-  icon: LucideIcon
+  /** If true, this action requires a project to be selected */
+  requiresProject: boolean
 }
 
 interface Phase {
@@ -57,7 +53,7 @@ interface Phase {
   longDescription: string
   checklist: string[]
   tip: string
-  relatedModules: RelatedModule[]
+  actions: PhaseAction[]
 }
 
 const PHASES: Phase[] = [
@@ -76,10 +72,10 @@ const PHASES: Phase[] = [
       'Criar cronograma macro de fases',
       'Registrar o projeto no sistema',
     ],
-    tip: 'Comece cadastrando o projeto no módulo de Projetos — isso desbloqueia todas as outras funcionalidades da plataforma.',
-    relatedModules: [
-      { label: 'Projetos', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
-      { label: 'Planejamentos', path: '/settings/planejamentos', icon: ClipboardList },
+    tip: 'Comece criando o projeto — isso desbloqueia todas as outras funcionalidades da plataforma.',
+    actions: [
+      { label: 'Criar Projeto', path: '/projects', requiresProject: false },
+      { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
     ],
   },
   {
@@ -98,9 +94,9 @@ const PHASES: Phase[] = [
       'Validar quantitativos com engenheiro',
     ],
     tip: 'Acesse o detalhe do projeto para revisar o planejamento e detalhar os quantitativos de cada atividade.',
-    relatedModules: [
-      { label: 'Projeto', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
-      { label: 'Planejamentos', path: '/settings/planejamentos', icon: ClipboardList },
+    actions: [
+      { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Detalhar quantitativos', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
     ],
   },
   {
@@ -119,9 +115,9 @@ const PHASES: Phase[] = [
       'Formalizar contratos de fornecimento',
     ],
     tip: 'Cadastre fornecedores primeiro, depois crie pedidos de compra vinculados ao projeto selecionado.',
-    relatedModules: [
-      { label: 'Fornecedores', path: '/suppliers', icon: Users },
-      { label: 'Compras', path: '/purchases', icon: ShoppingCart },
+    actions: [
+      { label: 'Cadastrar Fornecedores', path: '/suppliers', requiresProject: false },
+      { label: 'Criar Pedidos de Compra', path: '/purchases', requiresProject: false },
     ],
   },
   {
@@ -140,8 +136,8 @@ const PHASES: Phase[] = [
       'Verificar documentação dos trabalhadores',
     ],
     tip: 'Use o módulo de Empreiteiros para avaliar histórico e desempenho antes de contratar.',
-    relatedModules: [
-      { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
+    actions: [
+      { label: 'Cadastrar Empreiteiros', path: '/contractors', requiresProject: false },
     ],
   },
   {
@@ -160,9 +156,9 @@ const PHASES: Phase[] = [
       'Organizar pasta documental do projeto',
     ],
     tip: 'Confira os cadastros de fornecedores e empreiteiros para garantir que a documentação está em dia.',
-    relatedModules: [
-      { label: 'Fornecedores', path: '/suppliers', icon: Users },
-      { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
+    actions: [
+      { label: 'Conferir docs de Fornecedores', path: '/suppliers', requiresProject: false },
+      { label: 'Conferir docs de Empreiteiros', path: '/contractors', requiresProject: false },
     ],
   },
   {
@@ -181,9 +177,9 @@ const PHASES: Phase[] = [
       'Atualizar progresso no sistema',
     ],
     tip: 'Acesse o detalhe do projeto para acompanhar atividades e progresso em tempo real.',
-    relatedModules: [
-      { label: 'Projeto', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
-      { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
+    actions: [
+      { label: 'Acompanhar atividades do projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Gerenciar Empreiteiros em campo', path: '/contractors', requiresProject: false },
     ],
   },
   {
@@ -202,9 +198,9 @@ const PHASES: Phase[] = [
       'Registrar no módulo financeiro',
     ],
     tip: 'Use o módulo Financeiro para controlar pagamentos e manter o fluxo de caixa atualizado.',
-    relatedModules: [
-      { label: 'Financeiro', path: '/financial', icon: DollarSign },
-      { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
+    actions: [
+      { label: 'Registrar transações financeiras', path: '/financial', requiresProject: false },
+      { label: 'Conferir situação dos Empreiteiros', path: '/contractors', requiresProject: false },
     ],
   },
   {
@@ -223,10 +219,10 @@ const PHASES: Phase[] = [
       'Encerrar projeto no sistema',
     ],
     tip: 'Finalize o projeto e utilize Unidades para gerenciar a entrega das unidades aos compradores.',
-    relatedModules: [
-      { label: 'Projeto', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
-      { label: 'Financeiro', path: '/financial', icon: DollarSign },
-      { label: 'Unidades', path: '/units', icon: Building2 },
+    actions: [
+      { label: 'Encerrar projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Quitar pendências financeiras', path: '/financial', requiresProject: false },
+      { label: 'Gerenciar Unidades', path: '/units', requiresProject: false },
     ],
   },
 ]
@@ -673,32 +669,63 @@ function PhaseDetailPanel({
         </p>
       </div>
 
-      {/* Quick actions */}
-      {phase.relatedModules.length > 0 && (
+      {/* Sequential actions */}
+      {phase.actions.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-neutral-700 mb-2.5">
-            Acesso rápido
+            Próximos passos
           </h4>
-          <div className="flex flex-wrap gap-2">
-            {phase.relatedModules.map((mod) => {
-              const ModIcon = mod.icon
+          <div className="rounded-lg border border-neutral-200 divide-y divide-neutral-100 overflow-hidden">
+            {phase.actions.map((action, idx) => {
+              const disabled = action.requiresProject && !selectedProjectId
+              const path = action.projectPath && selectedProjectId
+                ? action.projectPath.replace(':id', selectedProjectId)
+                : action.path
+
               return (
-                <Button
-                  key={mod.path}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 text-neutral-600 hover:text-neutral-900 hover:border-[#b8a378]/50"
-                  onClick={() => {
-                    const path = mod.projectPath && selectedProjectId
-                      ? mod.projectPath.replace(':id', selectedProjectId)
-                      : mod.path
-                    navigate(`${path}?phase=${phase.number}`)
-                  }}
+                <div
+                  key={idx}
+                  className={`flex items-center gap-3 px-4 py-3 ${
+                    disabled ? 'bg-neutral-50/50' : 'bg-white hover:bg-neutral-50'
+                  } transition-colors`}
                 >
-                  <ModIcon className="h-4 w-4" />
-                  {mod.label}
-                  <ArrowRight className="h-3 w-3 ml-1 opacity-50" />
-                </Button>
+                  {/* Step number */}
+                  <div
+                    className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      disabled
+                        ? 'bg-neutral-100 text-neutral-300'
+                        : 'bg-[#b8a378]/10 text-[#b8a378]'
+                    }`}
+                  >
+                    {idx + 1}
+                  </div>
+
+                  {/* Label */}
+                  <span
+                    className={`flex-1 text-sm ${
+                      disabled ? 'text-neutral-400' : 'text-neutral-700'
+                    }`}
+                  >
+                    {action.label}
+                  </span>
+
+                  {/* Action button */}
+                  {disabled ? (
+                    <span className="text-[11px] text-neutral-400 italic flex-shrink-0">
+                      Selecione um projeto
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-[#b8a378] hover:text-[#9a8a6a] hover:bg-[#b8a378]/5 flex-shrink-0 h-8"
+                      onClick={() => navigate(`${path}?phase=${phase.number}`)}
+                    >
+                      Ir
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               )
             })}
           </div>

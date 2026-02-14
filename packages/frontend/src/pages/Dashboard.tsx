@@ -97,7 +97,7 @@ const PHASES: Phase[] = [
     ],
     tip: 'Use a Calculadora de Materiais na aba "Levantamento" do projeto para criar orçamentos com preços SINAPI ou valores próprios.',
     actions: [
-      { label: 'Calculadora de Materiais', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Calculadora de Materiais', path: '/projects', projectPath: '/projects/:id/levantamento', requiresProject: true },
       { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true },
     ],
   },

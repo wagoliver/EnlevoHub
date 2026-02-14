@@ -633,6 +633,17 @@ export const levantamentoAPI = {
     apiClient.patch<any>(`/projects/${projectId}/levantamentos/${id}`, data),
   delete: (projectId: string, id: string) =>
     apiClient.delete<any>(`/projects/${projectId}/levantamentos/${id}`),
+  // Ambientes
+  listAmbientes: (projectId: string, levantamentoId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/ambientes`),
+  createAmbiente: (projectId: string, levantamentoId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/ambientes`, data),
+  updateAmbiente: (projectId: string, levantamentoId: string, ambienteId: string, data: any) =>
+    apiClient.patch<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/ambientes/${ambienteId}`, data),
+  deleteAmbiente: (projectId: string, levantamentoId: string, ambienteId: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/ambientes/${ambienteId}`),
+
+  // Items
   addItem: (projectId: string, levantamentoId: string, data: any) =>
     apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens`, data),
   updateItem: (projectId: string, levantamentoId: string, itemId: string, data: any) =>

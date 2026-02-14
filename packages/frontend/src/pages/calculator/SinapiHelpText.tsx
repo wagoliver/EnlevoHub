@@ -19,9 +19,6 @@ export function SinapiHelpText() {
               <br />
               <strong>Modo SINAPI:</strong> Busque composições oficiais e importe automaticamente com preços de referência.
             </p>
-            <p className="text-xs text-amber-600">
-              Para usar o modo SINAPI, o administrador (ROOT) deve importar a base de dados via CSV na tela de importação.
-            </p>
           </div>
         </div>
       </CardContent>

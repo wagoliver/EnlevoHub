@@ -16,12 +16,43 @@ export const updateLevantamentoSchema = z.object({
   observacoes: z.string().optional().nullable(),
 })
 
+export const createAmbienteSchema = z.object({
+  nome: z.string().min(1).max(200),
+  tipo: z.enum([
+    'SALA', 'QUARTO', 'COZINHA', 'BANHEIRO', 'AREA_SERVICO',
+    'VARANDA', 'GARAGEM', 'HALL', 'CORREDOR', 'AREA_COMUM', 'OUTRO',
+  ]),
+  comprimento: z.number().positive(),
+  largura: z.number().positive(),
+  peDireito: z.number().positive().default(2.80),
+  qtdPortas: z.number().int().min(0).default(1),
+  qtdJanelas: z.number().int().min(0).default(1),
+  observacoes: z.string().optional(),
+  order: z.number().int().min(0).optional(),
+})
+
+export const updateAmbienteSchema = z.object({
+  nome: z.string().min(1).max(200).optional(),
+  tipo: z.enum([
+    'SALA', 'QUARTO', 'COZINHA', 'BANHEIRO', 'AREA_SERVICO',
+    'VARANDA', 'GARAGEM', 'HALL', 'CORREDOR', 'AREA_COMUM', 'OUTRO',
+  ]).optional(),
+  comprimento: z.number().positive().optional(),
+  largura: z.number().positive().optional(),
+  peDireito: z.number().positive().optional(),
+  qtdPortas: z.number().int().min(0).optional(),
+  qtdJanelas: z.number().int().min(0).optional(),
+  observacoes: z.string().optional().nullable(),
+  order: z.number().int().min(0).optional(),
+})
+
 export const createItemSchema = z.object({
   nome: z.string().min(1).max(500),
   unidade: z.string().min(1).max(20),
   quantidade: z.number().positive(),
   precoUnitario: z.number().min(0),
   etapa: z.string().max(200).optional(),
+  ambienteId: z.string().uuid().optional(),
   sinapiInsumoId: z.string().uuid().optional(),
   sinapiComposicaoId: z.string().uuid().optional(),
   observacoes: z.string().optional(),
@@ -43,6 +74,7 @@ export const fromComposicaoSchema = z.object({
   quantidade: z.number().positive().default(1),
   desonerado: z.boolean().default(false),
   etapa: z.string().max(200).optional(),
+  ambienteId: z.string().uuid().optional(),
 })
 
 export const listLevantamentosSchema = z.object({
@@ -52,6 +84,8 @@ export const listLevantamentosSchema = z.object({
 
 export type CreateLevantamentoInput = z.infer<typeof createLevantamentoSchema>
 export type UpdateLevantamentoInput = z.infer<typeof updateLevantamentoSchema>
+export type CreateAmbienteInput = z.infer<typeof createAmbienteSchema>
+export type UpdateAmbienteInput = z.infer<typeof updateAmbienteSchema>
 export type CreateItemInput = z.infer<typeof createItemSchema>
 export type UpdateItemInput = z.infer<typeof updateItemSchema>
 export type FromComposicaoInput = z.infer<typeof fromComposicaoSchema>

@@ -6,6 +6,8 @@ import { LevantamentoService } from './levantamento.service'
 import {
   createLevantamentoSchema,
   updateLevantamentoSchema,
+  createAmbienteSchema,
+  updateAmbienteSchema,
   createItemSchema,
   updateItemSchema,
   fromComposicaoSchema,
@@ -102,6 +104,70 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     try {
       const { projectId, id } = request.params as { projectId: string; id: string }
       const result = await service.delete(getTenantId(request), projectId, id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Ambientes ----
+
+  fastify.get('/:projectId/levantamentos/:levantamentoId/ambientes', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const { projectId, levantamentoId } = request.params as { projectId: string; levantamentoId: string }
+      const result = await service.listAmbientes(getTenantId(request), projectId, levantamentoId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/:projectId/levantamentos/:levantamentoId/ambientes', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { projectId, levantamentoId } = request.params as { projectId: string; levantamentoId: string }
+      const data = createAmbienteSchema.parse(request.body)
+      const result = await service.createAmbiente(getTenantId(request), projectId, levantamentoId, data)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.patch('/:projectId/levantamentos/:levantamentoId/ambientes/:ambienteId', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { projectId, levantamentoId, ambienteId } = request.params as { projectId: string; levantamentoId: string; ambienteId: string }
+      const data = updateAmbienteSchema.parse(request.body)
+      const result = await service.updateAmbiente(getTenantId(request), projectId, levantamentoId, ambienteId, data)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.delete('/:projectId/levantamentos/:levantamentoId/ambientes/:ambienteId', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { projectId, levantamentoId, ambienteId } = request.params as { projectId: string; levantamentoId: string; ambienteId: string }
+      const result = await service.deleteAmbiente(getTenantId(request), projectId, levantamentoId, ambienteId)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

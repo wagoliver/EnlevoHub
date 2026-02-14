@@ -15,6 +15,7 @@ import { Projects } from './pages/Projects'
 import { ProjectDetail } from './pages/projects/ProjectDetail'
 import { ProjectActivities } from './pages/projects/ProjectActivities'
 import { ProjectClose } from './pages/projects/ProjectClose'
+import { ProjectLevantamento } from './pages/projects/ProjectLevantamento'
 import { Contractors } from './pages/Contractors'
 import { ContractorDetail } from './pages/contractors/ContractorDetail'
 import { Brokers } from './pages/Brokers'
@@ -68,6 +69,7 @@ function App() {
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="projects/:id/activities" element={<ProjectActivities />} />
+            <Route path="projects/:id/levantamento" element={<ProjectLevantamento />} />
             <Route path="projects/:id/close" element={<ProjectClose />} />
             <Route path="units" element={<Units />} />
             <Route path="suppliers" element={<Suppliers />} />

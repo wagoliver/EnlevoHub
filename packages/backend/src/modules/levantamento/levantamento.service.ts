@@ -2,6 +2,8 @@ import { PrismaClient, Prisma } from '@prisma/client'
 import type {
   CreateLevantamentoInput,
   UpdateLevantamentoInput,
+  CreateAmbienteInput,
+  UpdateAmbienteInput,
   CreateItemInput,
   UpdateItemInput,
   FromComposicaoInput,
@@ -21,7 +23,7 @@ export class LevantamentoService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          _count: { select: { itens: true } },
+          _count: { select: { itens: true, ambientes: true } },
         },
       }),
       this.prisma.projetoLevantamento.count({ where }),
@@ -38,6 +40,7 @@ export class LevantamentoService {
       where: { id, tenantId, projectId },
       include: {
         itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
       },
     })
 
@@ -86,6 +89,75 @@ export class LevantamentoService {
     if (!existing) throw new Error('Levantamento não encontrado')
 
     await this.prisma.projetoLevantamento.delete({ where: { id } })
+    return { success: true }
+  }
+
+  // --- Ambientes ---
+
+  async listAmbientes(tenantId: string, projectId: string, levantamentoId: string) {
+    const lev = await this.prisma.projetoLevantamento.findFirst({
+      where: { id: levantamentoId, tenantId, projectId },
+    })
+    if (!lev) throw new Error('Levantamento não encontrado')
+
+    return this.prisma.ambiente.findMany({
+      where: { levantamentoId },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      include: { _count: { select: { itens: true } } },
+    })
+  }
+
+  async createAmbiente(tenantId: string, projectId: string, levantamentoId: string, data: CreateAmbienteInput) {
+    const lev = await this.prisma.projetoLevantamento.findFirst({
+      where: { id: levantamentoId, tenantId, projectId },
+    })
+    if (!lev) throw new Error('Levantamento não encontrado')
+
+    return this.prisma.ambiente.create({
+      data: {
+        levantamentoId,
+        ...data,
+      },
+      include: { _count: { select: { itens: true } } },
+    })
+  }
+
+  async updateAmbiente(tenantId: string, projectId: string, levantamentoId: string, ambienteId: string, data: UpdateAmbienteInput) {
+    const lev = await this.prisma.projetoLevantamento.findFirst({
+      where: { id: levantamentoId, tenantId, projectId },
+    })
+    if (!lev) throw new Error('Levantamento não encontrado')
+
+    const ambiente = await this.prisma.ambiente.findFirst({
+      where: { id: ambienteId, levantamentoId },
+    })
+    if (!ambiente) throw new Error('Ambiente não encontrado')
+
+    return this.prisma.ambiente.update({
+      where: { id: ambienteId },
+      data,
+      include: { _count: { select: { itens: true } } },
+    })
+  }
+
+  async deleteAmbiente(tenantId: string, projectId: string, levantamentoId: string, ambienteId: string) {
+    const lev = await this.prisma.projetoLevantamento.findFirst({
+      where: { id: levantamentoId, tenantId, projectId },
+    })
+    if (!lev) throw new Error('Levantamento não encontrado')
+
+    const ambiente = await this.prisma.ambiente.findFirst({
+      where: { id: ambienteId, levantamentoId },
+    })
+    if (!ambiente) throw new Error('Ambiente não encontrado')
+
+    // Unlink items from this ambiente (set ambienteId to null) before deleting
+    await this.prisma.levantamentoItem.updateMany({
+      where: { ambienteId },
+      data: { ambienteId: null },
+    })
+
+    await this.prisma.ambiente.delete({ where: { id: ambienteId } })
     return { success: true }
   }
 
@@ -174,6 +246,7 @@ export class LevantamentoService {
 
       return {
         levantamentoId,
+        ambienteId: input.ambienteId || null,
         nome: item.insumo.descricao,
         unidade: item.insumo.unidade,
         quantidade: coeficiente * input.quantidade,
@@ -197,24 +270,50 @@ export class LevantamentoService {
   async getResumo(tenantId: string, projectId: string, levantamentoId: string) {
     const lev = await this.prisma.projetoLevantamento.findFirst({
       where: { id: levantamentoId, tenantId, projectId },
-      include: { itens: true },
+      include: {
+        itens: true,
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
     })
     if (!lev) throw new Error('Levantamento não encontrado')
 
-    const etapas = new Map<string, { count: number; total: number }>()
+    const ambienteMap = new Map<string, { id: string; nome: string; count: number; total: number }>()
+    let semAmbiente = { count: 0, total: 0 }
     let totalGeral = 0
 
+    // Pre-populate with all ambientes (even empty ones)
+    for (const amb of lev.ambientes) {
+      ambienteMap.set(amb.id, { id: amb.id, nome: amb.nome, count: 0, total: 0 })
+    }
+
     for (const item of lev.itens) {
-      const etapa = item.etapa || 'Sem etapa'
       const itemTotal = Number(item.quantidade) * Number(item.precoUnitario)
       totalGeral += itemTotal
 
-      if (!etapas.has(etapa)) {
-        etapas.set(etapa, { count: 0, total: 0 })
+      if (item.ambienteId && ambienteMap.has(item.ambienteId)) {
+        const a = ambienteMap.get(item.ambienteId)!
+        a.count++
+        a.total += itemTotal
+      } else {
+        semAmbiente.count++
+        semAmbiente.total += itemTotal
       }
-      const e = etapas.get(etapa)!
-      e.count++
-      e.total += itemTotal
+    }
+
+    const ambientes = Array.from(ambienteMap.values()).map((a) => ({
+      id: a.id,
+      nome: a.nome,
+      itens: a.count,
+      total: Math.round(a.total * 100) / 100,
+    }))
+
+    if (semAmbiente.count > 0) {
+      ambientes.push({
+        id: '',
+        nome: 'Sem ambiente',
+        itens: semAmbiente.count,
+        total: Math.round(semAmbiente.total * 100) / 100,
+      })
     }
 
     return {
@@ -224,12 +323,9 @@ export class LevantamentoService {
         tipo: lev.tipo,
       },
       totalItens: lev.itens.length,
+      totalAmbientes: lev.ambientes.length,
       totalGeral: Math.round(totalGeral * 100) / 100,
-      etapas: Array.from(etapas.entries()).map(([nome, dados]) => ({
-        nome,
-        itens: dados.count,
-        total: Math.round(dados.total * 100) / 100,
-      })),
+      ambientes,
     }
   }
 }

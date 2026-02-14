@@ -22,6 +22,7 @@ interface ManualCalculatorProps {
   projectId: string
   levantamentoId: string
   itens: any[]
+  ambienteId?: string
 }
 
 interface EditingItem {
@@ -35,7 +36,7 @@ interface EditingItem {
 
 const emptyItem: EditingItem = { nome: '', unidade: 'UN', quantidade: '', precoUnitario: '', etapa: '' }
 
-export function ManualCalculator({ projectId, levantamentoId, itens }: ManualCalculatorProps) {
+export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId }: ManualCalculatorProps) {
   const queryClient = useQueryClient()
   const [newItem, setNewItem] = useState<EditingItem>({ ...emptyItem })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -87,6 +88,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens }: ManualCal
       quantidade: qtd,
       precoUnitario: preco,
       etapa: newItem.etapa || undefined,
+      ambienteId: ambienteId || undefined,
     })
   }
 

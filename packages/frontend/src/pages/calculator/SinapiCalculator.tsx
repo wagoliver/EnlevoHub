@@ -14,9 +14,10 @@ import { SinapiHelpText } from './SinapiHelpText'
 interface SinapiCalculatorProps {
   projectId: string
   levantamentoId: string
+  ambienteId?: string
 }
 
-export function SinapiCalculator({ projectId, levantamentoId }: SinapiCalculatorProps) {
+export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: SinapiCalculatorProps) {
   const role = useRole()
   const queryClient = useQueryClient()
   const isRoot = role === 'ROOT'
@@ -47,7 +48,7 @@ export function SinapiCalculator({ projectId, levantamentoId }: SinapiCalculator
   }
 
   const handleImportComposicao = (data: any) => {
-    importComposicaoMutation.mutate(data)
+    importComposicaoMutation.mutate({ ...data, ambienteId: ambienteId || undefined })
   }
 
   return (

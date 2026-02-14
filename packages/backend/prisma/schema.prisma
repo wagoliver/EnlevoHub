@@ -962,18 +962,56 @@ model ProjetoLevantamento {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  itens   LevantamentoItem[]
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itens     LevantamentoItem[]
+  ambientes Ambiente[]
 
   @@index([tenantId])
   @@index([projectId])
   @@map("projeto_levantamentos")
 }
 
+model Ambiente {
+  id              String       @id @default(uuid())
+  levantamentoId  String
+  nome            String
+  tipo            AmbienteTipo
+  comprimento     Decimal      @db.Decimal(8, 2)
+  largura         Decimal      @db.Decimal(8, 2)
+  peDireito       Decimal      @db.Decimal(4, 2) @default(2.80)
+  qtdPortas       Int          @default(1)
+  qtdJanelas      Int          @default(1)
+  observacoes     String?      @db.Text
+  order           Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  levantamento ProjetoLevantamento @relation(fields: [levantamentoId], references: [id], onDelete: Cascade)
+  itens        LevantamentoItem[]
+
+  @@index([levantamentoId])
+  @@map("ambientes")
+}
+
+enum AmbienteTipo {
+  SALA
+  QUARTO
+  COZINHA
+  BANHEIRO
+  AREA_SERVICO
+  VARANDA
+  GARAGEM
+  HALL
+  CORREDOR
+  AREA_COMUM
+  OUTRO
+}
+
 model LevantamentoItem {
   id              String  @id @default(uuid())
   levantamentoId  String
+  ambienteId      String?
   nome            String
   unidade         String
   quantidade      Decimal @db.Decimal(12, 4)
@@ -986,8 +1024,10 @@ model LevantamentoItem {
   updatedAt       DateTime @updatedAt
 
   levantamento ProjetoLevantamento @relation(fields: [levantamentoId], references: [id], onDelete: Cascade)
+  ambiente     Ambiente?           @relation(fields: [ambienteId], references: [id], onDelete: SetNull)
 
   @@index([levantamentoId])
+  @@index([ambienteId])
   @@index([etapa])
   @@map("levantamento_itens")
 }

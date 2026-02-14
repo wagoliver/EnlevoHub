@@ -3,11 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI } from '@/lib/api-client'
 import { usePermission } from '@/hooks/usePermission'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -22,9 +21,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Calculator, Plus, Trash2, Loader2, FileText } from 'lucide-react'
-import { ManualCalculator } from './ManualCalculator'
-import { SinapiCalculator } from './SinapiCalculator'
-import { LevantamentoSummary } from './LevantamentoSummary'
+import { AmbienteSidebar } from './AmbienteSidebar'
+import { AmbienteDetail } from './AmbienteDetail'
+import { AmbienteResumo } from './AmbienteResumo'
+import { AmbienteForm } from './AmbienteForm'
 
 interface MaterialsCalculatorProps {
   projectId: string
@@ -34,9 +34,14 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   const queryClient = useQueryClient()
   const canEdit = usePermission('projects:edit')
   const [selectedLevId, setSelectedLevId] = useState<string | null>(null)
+  const [selectedAmbienteId, setSelectedAmbienteId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newTipo, setNewTipo] = useState<'MANUAL' | 'SINAPI'>('MANUAL')
+
+  // Ambiente form state
+  const [ambienteFormOpen, setAmbienteFormOpen] = useState(false)
+  const [editingAmbiente, setEditingAmbiente] = useState<any>(null)
 
   const { data: levantamentos, isLoading } = useQuery({
     queryKey: ['levantamentos', projectId],
@@ -64,9 +69,45 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => levantamentoAPI.delete(projectId, id),
     onSuccess: () => {
-      toast.success('Levantamento excluído')
+      toast.success('Levantamento excluido')
       queryClient.invalidateQueries({ queryKey: ['levantamentos', projectId] })
       setSelectedLevId(null)
+      setSelectedAmbienteId(null)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  // Ambiente mutations
+  const createAmbienteMutation = useMutation({
+    mutationFn: (data: any) => levantamentoAPI.createAmbiente(projectId, selectedLevId!, data),
+    onSuccess: (data) => {
+      toast.success('Ambiente criado')
+      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, selectedLevId] })
+      setAmbienteFormOpen(false)
+      setEditingAmbiente(null)
+      setSelectedAmbienteId(data.id)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const updateAmbienteMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      levantamentoAPI.updateAmbiente(projectId, selectedLevId!, id, data),
+    onSuccess: () => {
+      toast.success('Ambiente atualizado')
+      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, selectedLevId] })
+      setAmbienteFormOpen(false)
+      setEditingAmbiente(null)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const deleteAmbienteMutation = useMutation({
+    mutationFn: (id: string) => levantamentoAPI.deleteAmbiente(projectId, selectedLevId!, id),
+    onSuccess: () => {
+      toast.success('Ambiente removido')
+      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, selectedLevId] })
+      if (selectedAmbienteId) setSelectedAmbienteId(null)
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -76,6 +117,18 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   // Auto-select first levantamento
   if (!selectedLevId && levList.length > 0 && !isLoading) {
     setSelectedLevId(levList[0].id)
+  }
+
+  const ambientes = selectedLev?.ambientes || []
+  const itens = selectedLev?.itens || []
+  const selectedAmbiente = ambientes.find((a: any) => a.id === selectedAmbienteId)
+
+  const handleAmbienteFormSubmit = (data: any) => {
+    if (editingAmbiente) {
+      updateAmbienteMutation.mutate({ id: editingAmbiente.id, data })
+    } else {
+      createAmbienteMutation.mutate(data)
+    }
   }
 
   return (
@@ -99,7 +152,7 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
         <div className="flex items-center gap-3">
           <Select
             value={selectedLevId ?? ''}
-            onValueChange={setSelectedLevId}
+            onValueChange={(v) => { setSelectedLevId(v); setSelectedAmbienteId(null) }}
           >
             <SelectTrigger className="w-80">
               <SelectValue placeholder="Selecionar levantamento" />
@@ -139,7 +192,7 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
               Nenhum levantamento
             </h3>
             <p className="mt-1 text-xs text-neutral-500">
-              Crie um levantamento para começar a listar materiais e serviços.
+              Crie um levantamento para comecar a listar materiais e servicos.
             </p>
             {canEdit && (
               <Button size="sm" className="mt-4" onClick={() => setCreateOpen(true)}>
@@ -151,51 +204,43 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
         </Card>
       )}
 
-      {/* Selected levantamento content */}
+      {/* Sidebar + Content layout */}
       {selectedLev && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                {selectedLev.nome}
-                <span className="text-xs font-normal text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded">
-                  {selectedLev.tipo}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="manual">
-                <TabsList>
-                  <TabsTrigger value="manual">Manual</TabsTrigger>
-                  <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
-                </TabsList>
+        <div className="flex gap-0 border rounded-lg overflow-hidden bg-white min-h-[500px]">
+          {/* Sidebar */}
+          <div className="w-56 flex-shrink-0 border-r bg-neutral-50/50">
+            <AmbienteSidebar
+              ambientes={ambientes}
+              itens={itens}
+              selectedId={selectedAmbienteId}
+              onSelect={setSelectedAmbienteId}
+              onAdd={() => { setEditingAmbiente(null); setAmbienteFormOpen(true) }}
+              onEdit={(amb) => { setEditingAmbiente(amb); setAmbienteFormOpen(true) }}
+              onDelete={(id) => deleteAmbienteMutation.mutate(id)}
+              canEdit={canEdit}
+            />
+          </div>
 
-                <TabsContent value="manual" className="mt-4">
-                  <ManualCalculator
-                    projectId={projectId}
-                    levantamentoId={selectedLev.id}
-                    itens={selectedLev.itens || []}
-                  />
-                </TabsContent>
-
-                <TabsContent value="sinapi" className="mt-4">
-                  <SinapiCalculator
-                    projectId={projectId}
-                    levantamentoId={selectedLev.id}
-                  />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          <LevantamentoSummary
-            projectId={projectId}
-            levantamentoId={selectedLev.id}
-          />
+          {/* Main content */}
+          <div className="flex-1 p-4 overflow-y-auto">
+            {selectedAmbiente ? (
+              <AmbienteDetail
+                ambiente={selectedAmbiente}
+                projectId={projectId}
+                levantamentoId={selectedLev.id}
+                itens={itens}
+              />
+            ) : (
+              <AmbienteResumo
+                ambientes={ambientes}
+                itens={itens}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {/* Create dialog */}
+      {/* Create levantamento dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -223,8 +268,8 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
               </Select>
               <p className="text-xs text-neutral-400 mt-1">
                 {newTipo === 'MANUAL'
-                  ? 'Adicione materiais livremente com preços próprios.'
-                  : 'Use composições SINAPI como referência de preços.'}
+                  ? 'Adicione materiais livremente com precos proprios.'
+                  : 'Use composicoes SINAPI como referencia de precos.'}
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -240,6 +285,15 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Ambiente form dialog */}
+      <AmbienteForm
+        open={ambienteFormOpen}
+        onOpenChange={(open) => { setAmbienteFormOpen(open); if (!open) setEditingAmbiente(null) }}
+        onSubmit={handleAmbienteFormSubmit}
+        isPending={createAmbienteMutation.isPending || updateAmbienteMutation.isPending}
+        editData={editingAmbiente}
+      />
     </div>
   )
 }

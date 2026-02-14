@@ -1,0 +1,62 @@
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { projectsAPI } from '@/lib/api-client'
+import { WorkflowStepper } from '@/components/WorkflowStepper'
+import { MaterialsCalculator } from '@/pages/calculator'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+export function ProjectLevantamento() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const phaseParam = searchParams.get('phase')
+
+  const { data: project, isLoading } = useQuery({
+    queryKey: ['project', id],
+    queryFn: () => projectsAPI.getById(id!),
+    enabled: !!id,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <h2 className="text-xl font-bold">Projeto não encontrado</h2>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/projects')}>
+          Voltar para Projetos
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {phaseParam ? (
+        <WorkflowStepper phase={parseInt(phaseParam, 10)} />
+      ) : (
+        <button
+          onClick={() => navigate(`/projects/${id}`)}
+          className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {project.name}
+        </button>
+      )}
+
+      <div>
+        <h1 className="text-2xl font-bold text-neutral-900">{project.name}</h1>
+        <p className="mt-1 text-sm text-neutral-500">Calculadora de Materiais</p>
+      </div>
+
+      <MaterialsCalculator projectId={id!} />
+    </div>
+  )
+}

@@ -282,6 +282,36 @@ export class MeasurementService {
             status: allCompleted ? 'COMPLETED' : anyStarted ? 'IN_PROGRESS' : 'PENDING',
           },
         })
+
+        // Auto-transition project status
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { status: true },
+        })
+
+        if (project && project.status !== 'PAUSED' && project.status !== 'CANCELLED') {
+          const allActivities = await tx.projectActivity.findMany({
+            where: { projectId, parentId: null },
+            select: { status: true },
+          })
+
+          if (allActivities.length > 0) {
+            const allActivitiesCompleted = allActivities.every(a => a.status === 'COMPLETED')
+            const anyActivityStarted = allActivities.some(a => a.status === 'IN_PROGRESS' || a.status === 'COMPLETED')
+
+            if (allActivitiesCompleted && project.status !== 'COMPLETED') {
+              await tx.project.update({
+                where: { id: projectId },
+                data: { status: 'COMPLETED', actualEndDate: new Date() },
+              })
+            } else if (anyActivityStarted && project.status === 'PLANNING') {
+              await tx.project.update({
+                where: { id: projectId },
+                data: { status: 'IN_PROGRESS' },
+              })
+            }
+          }
+        }
       }
 
       return this.serialize(updated)

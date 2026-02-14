@@ -737,7 +737,7 @@ export function ImportTemplateDialog({
         <div className="space-y-5">
           {/* ─── Step 1: Choose method ─── */}
           {step === 1 && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${showBlankOption ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div
                 className={`rounded-lg border-2 p-4 cursor-pointer transition-colors ${
                   sourceType === 'model'

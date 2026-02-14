@@ -42,6 +42,8 @@ interface PhaseAction {
   projectPath?: string
   /** If true, this action requires a project to be selected */
   requiresProject: boolean
+  /** Evaluates whether this action is already done */
+  doneCheck?: (ctx: { projectId: string | null; project: any }) => boolean
 }
 
 interface Phase {
@@ -73,8 +75,8 @@ const PHASES: Phase[] = [
     ],
     tip: 'Comece criando o projeto — isso desbloqueia todas as outras funcionalidades da plataforma.',
     actions: [
-      { label: 'Criar Projeto', path: '/projects', requiresProject: false },
-      { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true },
+      { label: 'Criar Projeto', path: '/projects', requiresProject: false, doneCheck: ({ projectId }) => !!projectId },
+      { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true, doneCheck: ({ project }) => (project?._count?.activities ?? 0) > 0 },
     ],
   },
   {
@@ -234,10 +236,12 @@ const GOLD = '#b8a378'
 const GOLD_DARK = '#9a8a6a'
 const GRAY = '#d4d4d4'
 
-function getCurrentPhase(status?: string): number {
-  switch (status) {
+function getCurrentPhase(project?: any): number {
+  if (!project) return 0
+  const hasActivities = (project._count?.activities ?? 0) > 0
+  switch (project.status) {
     case 'PLANNING':
-      return 1
+      return hasActivities ? 2 : 1
     case 'IN_PROGRESS':
       return 6
     case 'PAUSED':
@@ -594,12 +598,14 @@ function PhaseDetailPanel({
   isPaused,
   isCancelled,
   selectedProjectId,
+  selectedProject,
 }: {
   phase: Phase
   state: NodeState
   isPaused: boolean
   isCancelled: boolean
   selectedProjectId: string | null
+  selectedProject: any
 }) {
   const navigate = useNavigate()
   const Icon = phase.icon
@@ -685,6 +691,7 @@ function PhaseDetailPanel({
           <div className="rounded-lg border border-neutral-200 divide-y divide-neutral-100 overflow-hidden">
             {phase.actions.map((action, idx) => {
               const disabled = action.requiresProject && !selectedProjectId
+              const done = action.doneCheck?.({ projectId: selectedProjectId, project: selectedProject }) ?? false
               const path = action.projectPath && selectedProjectId
                 ? action.projectPath.replace(':id', selectedProjectId)
                 : action.path
@@ -693,31 +700,41 @@ function PhaseDetailPanel({
                 <div
                   key={idx}
                   className={`flex items-center gap-3 px-4 py-3 ${
-                    disabled ? 'bg-neutral-50/50' : 'bg-white hover:bg-neutral-50'
+                    done ? 'bg-green-50/50' : disabled ? 'bg-neutral-50/50' : 'bg-white hover:bg-neutral-50'
                   } transition-colors`}
                 >
-                  {/* Step number */}
-                  <div
-                    className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      disabled
-                        ? 'bg-neutral-100 text-neutral-300'
-                        : 'bg-[#b8a378]/10 text-[#b8a378]'
-                    }`}
-                  >
-                    {idx + 1}
-                  </div>
+                  {/* Step number or check */}
+                  {done ? (
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-green-100 text-green-600">
+                      <Check className="h-3.5 w-3.5" />
+                    </div>
+                  ) : (
+                    <div
+                      className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        disabled
+                          ? 'bg-neutral-100 text-neutral-300'
+                          : 'bg-[#b8a378]/10 text-[#b8a378]'
+                      }`}
+                    >
+                      {idx + 1}
+                    </div>
+                  )}
 
                   {/* Label */}
                   <span
                     className={`flex-1 text-sm ${
-                      disabled ? 'text-neutral-400' : 'text-neutral-700'
+                      done ? 'text-green-700' : disabled ? 'text-neutral-400' : 'text-neutral-700'
                     }`}
                   >
                     {action.label}
                   </span>
 
                   {/* Action button */}
-                  {disabled ? (
+                  {done ? (
+                    <span className="text-[11px] text-green-600 font-medium flex-shrink-0">
+                      Concluído
+                    </span>
+                  ) : disabled ? (
                     <span className="text-[11px] text-neutral-400 italic flex-shrink-0">
                       Selecione um projeto
                     </span>
@@ -780,9 +797,7 @@ export function Dashboard() {
     ? projects.find((p: any) => p.id === selectedProjectId)
     : null
 
-  const currentPhase = selectedProject
-    ? getCurrentPhase(selectedProject.status)
-    : 0
+  const currentPhase = getCurrentPhase(selectedProject)
 
   const isPaused = selectedProject?.status === 'PAUSED'
   const isCancelled = selectedProject?.status === 'CANCELLED'
@@ -988,6 +1003,7 @@ export function Dashboard() {
               isPaused={isPaused && PHASES[selectedPhaseIdx].number === currentPhase}
               isCancelled={isCancelled}
               selectedProjectId={selectedProjectId}
+              selectedProject={selectedProject}
             />
           </Card>
         </div>
@@ -1006,6 +1022,7 @@ export function Dashboard() {
               isPaused={isPaused && PHASES[selectedPhaseIdx].number === currentPhase}
               isCancelled={isCancelled}
               selectedProjectId={selectedProjectId}
+              selectedProject={selectedProject}
             />
           </Card>
         </div>

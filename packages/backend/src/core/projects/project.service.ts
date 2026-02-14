@@ -61,7 +61,7 @@ export class ProjectService {
             take: 1,
           },
           _count: {
-            select: { units: true, evolutions: true },
+            select: { units: true, evolutions: true, activities: true },
           },
         },
       }),

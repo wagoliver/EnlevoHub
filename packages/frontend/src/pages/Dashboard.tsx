@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
 import { projectsAPI } from '@/lib/api-client'
@@ -689,7 +689,7 @@ function PhaseDetailPanel({
                   variant="outline"
                   size="sm"
                   className="gap-2 text-neutral-600 hover:text-neutral-900 hover:border-[#b8a378]/50"
-                  onClick={() => navigate(mod.path)}
+                  onClick={() => navigate(`${mod.path}?phase=${phase.number}`)}
                 >
                   <ModIcon className="h-4 w-4" />
                   {mod.label}
@@ -710,9 +710,19 @@ function PhaseDetailPanel({
 
 export function Dashboard() {
   const { user, tenant } = useAuthStore()
+  const [searchParams] = useSearchParams()
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0)
+
+  // Restore selected phase from query param (e.g. /?phase=3)
+  useEffect(() => {
+    const p = searchParams.get('phase')
+    if (p) {
+      const idx = parseInt(p, 10) - 1
+      if (idx >= 0 && idx < 8) setSelectedPhaseIdx(idx)
+    }
+  }, [searchParams])
 
   const { data: projectsData } = useQuery({
     queryKey: ['projects', { limit: 100 }],

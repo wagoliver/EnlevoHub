@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Clock,
@@ -15,6 +15,7 @@ import {
   ImageIcon,
   ArrowLeft,
 } from 'lucide-react'
+import { WorkflowStepper } from '@/components/WorkflowStepper'
 import {
   AreaChart,
   Area,
@@ -872,6 +873,8 @@ function StorageTab() {
 export function Performance() {
   const role = useRole()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const phaseParam = searchParams.get('phase')
 
   if (role !== 'ROOT') {
     return <Navigate to="/" replace />
@@ -879,11 +882,17 @@ export function Performance() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors mb-1">
+      {/* Workflow Stepper */}
+      {phaseParam ? (
+        <WorkflowStepper phase={parseInt(phaseParam, 10)} />
+      ) : (
+        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" />
           Dashboard
         </button>
+      )}
+
+      <div>
         <h1 className="text-2xl font-bold tracking-tight">Performance</h1>
         <p className="text-muted-foreground">Monitoramento do sistema em tempo real</p>
       </div>

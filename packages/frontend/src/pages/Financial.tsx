@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { financialAPI } from '@/lib/api-client'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -11,6 +11,7 @@ import {
   Loader2,
   ArrowLeft,
 } from 'lucide-react'
+import { WorkflowStepper } from '@/components/WorkflowStepper'
 import { TransactionList } from './financial/TransactionList'
 import { BankAccountList } from './financial/BankAccountList'
 import { ReconciliationView } from './financial/ReconciliationView'
@@ -184,15 +185,23 @@ function DashboardCards() {
 
 export function Financial() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const phaseParam = searchParams.get('phase')
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors mb-1">
+      {/* Workflow Stepper */}
+      {phaseParam ? (
+        <WorkflowStepper phase={parseInt(phaseParam, 10)} />
+      ) : (
+        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" />
           Dashboard
         </button>
+      )}
+
+      {/* Header */}
+      <div>
         <h1 className="text-2xl font-bold text-neutral-900">Financeiro</h1>
         <p className="mt-1 text-neutral-600">
           Gerencie receitas, despesas e extratos bancários

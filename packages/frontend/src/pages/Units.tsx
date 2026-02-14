@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { projectsAPI } from '@/lib/api-client'
@@ -48,6 +48,7 @@ import {
   X,
   ArrowLeft,
 } from 'lucide-react'
+import { WorkflowStepper } from '@/components/WorkflowStepper'
 
 const unitTypeLabel: Record<string, string> = {
   APARTMENT: 'Apartamento',
@@ -76,6 +77,8 @@ function formatCurrency(value: number) {
 
 export function Units() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const phaseParam = searchParams.get('phase')
   const queryClient = useQueryClient()
   const canCreate = usePermission('units:create')
   const canEdit = usePermission('units:edit')
@@ -216,11 +219,17 @@ export function Units() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors mb-1">
+      {/* Workflow Stepper */}
+      {phaseParam ? (
+        <WorkflowStepper phase={parseInt(phaseParam, 10)} />
+      ) : (
+        <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" />
           Dashboard
         </button>
+      )}
+
+      <div>
         <h1 className="text-2xl font-bold text-neutral-900">Unidades</h1>
         <p className="text-neutral-500 mt-1">Gerencie plantas, blocos e unidades dos seus projetos.</p>
       </div>

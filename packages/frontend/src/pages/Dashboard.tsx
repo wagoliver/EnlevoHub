@@ -35,7 +35,6 @@ import {
   DollarSign,
   FileText,
   Building2,
-  BarChart3,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -46,6 +45,8 @@ import type { LucideIcon } from 'lucide-react'
 interface RelatedModule {
   label: string
   path: string
+  /** When a project is selected, use this path instead (`:id` will be replaced) */
+  projectPath?: string
   icon: LucideIcon
 }
 
@@ -78,7 +79,7 @@ const PHASES: Phase[] = [
     ],
     tip: 'Comece cadastrando o projeto no módulo de Projetos — isso desbloqueia todas as outras funcionalidades da plataforma.',
     relatedModules: [
-      { label: 'Projetos', path: '/projects', icon: FolderKanban },
+      { label: 'Projetos', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
       { label: 'Planejamentos', path: '/settings/planejamentos', icon: ClipboardList },
     ],
   },
@@ -89,18 +90,18 @@ const PHASES: Phase[] = [
     description:
       'Quantificação de materiais, serviços e insumos necessários para execução.',
     longDescription:
-      'Com o projeto definido, é hora de quantificar tudo o que será necessário: materiais, serviços e insumos. Um levantamento detalhado evita compras desnecessárias e garante que nada falte durante a execução.',
+      'Com o projeto definido, é hora de quantificar tudo o que será necessário: materiais, serviços e insumos. Revise as atividades do planejamento e detalhe os quantitativos dentro do projeto.',
     checklist: [
+      'Revisar atividades do planejamento',
       'Listar materiais por etapa da obra',
       'Quantificar serviços e mão de obra',
       'Levantar insumos e equipamentos',
-      'Comparar com orçamento preliminar',
       'Validar quantitativos com engenheiro',
     ],
-    tip: 'Utilize o módulo de Compras para já iniciar cotações à medida que o levantamento avança.',
+    tip: 'Acesse o detalhe do projeto para revisar o planejamento e detalhar os quantitativos de cada atividade.',
     relatedModules: [
-      { label: 'Compras', path: '/purchases', icon: ShoppingCart },
-      { label: 'Fornecedores', path: '/suppliers', icon: Users },
+      { label: 'Projeto', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
+      { label: 'Planejamentos', path: '/settings/planejamentos', icon: ClipboardList },
     ],
   },
   {
@@ -110,19 +111,18 @@ const PHASES: Phase[] = [
     description:
       'Cotações, seleção de fornecedores e formalização dos contratos de serviço e material.',
     longDescription:
-      'Fase de negociação e formalização: cotações são comparadas, fornecedores selecionados e contratos assinados. Uma contratação bem-feita protege o projeto contra atrasos e custos inesperados.',
+      'Fase de negociação e formalização: cotações são comparadas, fornecedores selecionados e pedidos de compra criados vinculados ao projeto. Uma contratação bem-feita protege contra atrasos e custos inesperados.',
     checklist: [
+      'Cadastrar fornecedores no sistema',
       'Solicitar no mínimo 3 cotações por item',
       'Comparar preços, prazos e condições',
-      'Selecionar fornecedores e negociar',
+      'Criar pedidos de compra vinculados ao projeto',
       'Formalizar contratos de fornecimento',
-      'Registrar pedidos de compra no sistema',
     ],
-    tip: 'Cadastre fornecedores no módulo dedicado antes de emitir pedidos — isso agiliza futuras cotações.',
+    tip: 'Cadastre fornecedores primeiro, depois crie pedidos de compra vinculados ao projeto selecionado.',
     relatedModules: [
       { label: 'Fornecedores', path: '/suppliers', icon: Users },
       { label: 'Compras', path: '/purchases', icon: ShoppingCart },
-      { label: 'Contratos', path: '/contracts', icon: FileText },
     ],
   },
   {
@@ -143,7 +143,6 @@ const PHASES: Phase[] = [
     tip: 'Use o módulo de Empreiteiros para avaliar histórico e desempenho antes de contratar.',
     relatedModules: [
       { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
-      { label: 'Projetos', path: '/projects', icon: FolderKanban },
     ],
   },
   {
@@ -161,11 +160,10 @@ const PHASES: Phase[] = [
       'Checar habilitações dos empreiteiros',
       'Organizar pasta documental do projeto',
     ],
-    tip: 'Mantenha os documentos digitalizados nos cadastros de fornecedores e empreiteiros para consulta rápida.',
+    tip: 'Confira os cadastros de fornecedores e empreiteiros para garantir que a documentação está em dia.',
     relatedModules: [
       { label: 'Fornecedores', path: '/suppliers', icon: Users },
       { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
-      { label: 'Projetos', path: '/projects', icon: FolderKanban },
     ],
   },
   {
@@ -185,8 +183,8 @@ const PHASES: Phase[] = [
     ],
     tip: 'Acesse o detalhe do projeto para acompanhar atividades e progresso em tempo real.',
     relatedModules: [
-      { label: 'Projetos', path: '/projects', icon: FolderKanban },
-      { label: 'Desempenho', path: '/performance', icon: BarChart3 },
+      { label: 'Projeto', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
+      { label: 'Empreiteiros', path: '/contractors', icon: HardHat },
     ],
   },
   {
@@ -225,9 +223,9 @@ const PHASES: Phase[] = [
       'Arquivar documentação completa',
       'Encerrar projeto no sistema',
     ],
-    tip: 'Após o encerramento, consulte Relatórios para analisar indicadores e aprender com o projeto concluído.',
+    tip: 'Finalize o projeto e utilize Unidades para gerenciar a entrega das unidades aos compradores.',
     relatedModules: [
-      { label: 'Projetos', path: '/projects', icon: FolderKanban },
+      { label: 'Projeto', path: '/projects', projectPath: '/projects/:id', icon: FolderKanban },
       { label: 'Financeiro', path: '/financial', icon: DollarSign },
       { label: 'Unidades', path: '/units', icon: Building2 },
     ],
@@ -593,11 +591,13 @@ function PhaseDetailPanel({
   state,
   isPaused,
   isCancelled,
+  selectedProjectId,
 }: {
   phase: Phase
   state: NodeState
   isPaused: boolean
   isCancelled: boolean
+  selectedProjectId: string | null
 }) {
   const navigate = useNavigate()
   const Icon = phase.icon
@@ -689,7 +689,12 @@ function PhaseDetailPanel({
                   variant="outline"
                   size="sm"
                   className="gap-2 text-neutral-600 hover:text-neutral-900 hover:border-[#b8a378]/50"
-                  onClick={() => navigate(`${mod.path}?phase=${phase.number}`)}
+                  onClick={() => {
+                    const path = mod.projectPath && selectedProjectId
+                      ? mod.projectPath.replace(':id', selectedProjectId)
+                      : mod.path
+                    navigate(`${path}?phase=${phase.number}`)
+                  }}
                 >
                   <ModIcon className="h-4 w-4" />
                   {mod.label}
@@ -947,6 +952,7 @@ export function Dashboard() {
               }
               isPaused={isPaused && PHASES[selectedPhaseIdx].number === currentPhase}
               isCancelled={isCancelled}
+              selectedProjectId={selectedProjectId}
             />
           </Card>
         </div>
@@ -964,6 +970,7 @@ export function Dashboard() {
               }
               isPaused={isPaused && PHASES[selectedPhaseIdx].number === currentPhase}
               isCancelled={isCancelled}
+              selectedProjectId={selectedProjectId}
             />
           </Card>
         </div>

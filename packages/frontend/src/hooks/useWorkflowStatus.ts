@@ -16,17 +16,17 @@ export function useWorkflowStatus() {
     staleTime: 1000 * 60 * 10,
   })
 
-  // Step 2: at least 1 purchase order
-  const { data: purchasesData } = useQuery({
-    queryKey: ['workflow-check', 'purchases'],
-    queryFn: () => suppliersAPI.listPurchaseOrders({ limit: 1 }),
-    staleTime: 1000 * 60 * 10,
-  })
-
   // Step 3: at least 1 supplier
   const { data: suppliersData } = useQuery({
     queryKey: ['workflow-check', 'suppliers'],
     queryFn: () => suppliersAPI.list({ limit: 1 }),
+    staleTime: 1000 * 60 * 10,
+  })
+
+  // Step 3: at least 1 purchase order
+  const { data: purchasesData } = useQuery({
+    queryKey: ['workflow-check', 'purchases'],
+    queryFn: () => suppliersAPI.listPurchaseOrders({ limit: 1 }),
     staleTime: 1000 * 60 * 10,
   })
 
@@ -59,8 +59,8 @@ export function useWorkflowStatus() {
   })
 
   const hasProjects = (projectsData?.data?.length ?? 0) > 0
-  const hasPurchases = (purchasesData?.data?.length ?? 0) > 0
   const hasSuppliers = (suppliersData?.data?.length ?? 0) > 0
+  const hasPurchases = (purchasesData?.data?.length ?? 0) > 0
   const hasContractors = (contractorsData?.data?.length ?? 0) > 0
   const hasInProgress = (inProgressData?.data?.length ?? 0) > 0
   const hasTransactions = (transactionsData?.data?.length ?? 0) > 0
@@ -72,12 +72,17 @@ export function useWorkflowStatus() {
       label: hasProjects ? 'Projeto cadastrado' : 'Nenhum projeto cadastrado',
     },
     2: {
-      fulfilled: hasPurchases,
-      label: hasPurchases ? 'Pedido de compra criado' : 'Nenhum pedido de compra',
+      fulfilled: hasProjects,
+      label: hasProjects ? 'Projeto com planejamento' : 'Crie um projeto primeiro',
     },
     3: {
-      fulfilled: hasSuppliers,
-      label: hasSuppliers ? 'Fornecedor cadastrado' : 'Nenhum fornecedor cadastrado',
+      fulfilled: hasSuppliers && hasPurchases,
+      label:
+        hasSuppliers && hasPurchases
+          ? 'Fornecedor e pedido cadastrados'
+          : !hasSuppliers
+            ? 'Nenhum fornecedor cadastrado'
+            : 'Nenhum pedido de compra',
     },
     4: {
       fulfilled: hasContractors,

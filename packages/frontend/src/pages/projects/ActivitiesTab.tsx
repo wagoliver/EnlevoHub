@@ -26,6 +26,7 @@ import { AddActivityDialog } from './AddActivityDialog'
 import { MeasurementFormDialog } from './MeasurementFormDialog'
 import { GanttChart } from './GanttChart'
 import { activityToGanttTask } from '@/lib/gantt-types'
+import { ImportTemplateDialog } from '@/pages/settings/ImportTemplateDialog'
 import {
   Plus,
   Trash2,
@@ -258,6 +259,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showSetupDialog, setShowSetupDialog] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [activityToDelete, setActivityToDelete] = useState<any>(null)
   const [measurementDialog, setMeasurementDialog] = useState<{
@@ -406,9 +408,9 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
             importe de um planejamento para acompanhar o progresso de cada fase.
           </p>
           {canEdit && (
-            <Button className="mt-6" onClick={() => setShowAddDialog(true)}>
+            <Button className="mt-6" onClick={() => setShowSetupDialog(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Adicionar Primeira Atividade
+              Adicionar Primeiras Atividades
             </Button>
           )}
         </div>
@@ -454,6 +456,14 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Setup Dialog (first time - import/template/blank) */}
+      <ImportTemplateDialog
+        open={showSetupDialog}
+        onOpenChange={setShowSetupDialog}
+        projectId={projectId}
+        showBlankOption
+      />
 
       {/* Add Activity Dialog */}
       <AddActivityDialog

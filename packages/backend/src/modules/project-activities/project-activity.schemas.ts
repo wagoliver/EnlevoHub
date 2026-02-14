@@ -42,6 +42,33 @@ export const createFromTemplateWithScheduleSchema = z.object({
   activities: z.array(scheduledActivityChildSchema).min(1),
 })
 
+// === Direct hierarchy creation (no template needed) ===
+
+const hierarchyActivitySchema = z.object({
+  name: z.string().min(1),
+  weight: z.number().min(0).max(100).default(1),
+  durationDays: z.number().int().positive().optional().nullable(),
+  dependencies: z.array(z.string()).optional().nullable(),
+})
+
+const hierarchyStageSchema = z.object({
+  name: z.string().min(1),
+  activities: z.array(hierarchyActivitySchema).min(1),
+})
+
+const hierarchyPhaseSchema = z.object({
+  name: z.string().min(1),
+  percentageOfTotal: z.number().min(0).max(100),
+  color: z.string().optional().nullable(),
+  stages: z.array(hierarchyStageSchema).min(1),
+})
+
+export const createFromHierarchySchema = z.object({
+  phases: z.array(hierarchyPhaseSchema).min(1),
+})
+
+export type CreateFromHierarchyInput = z.infer<typeof createFromHierarchySchema>
+
 export const createMeasurementSchema = z.object({
   activityId: z.string().uuid(),
   unitActivityId: z.string().uuid().optional(),

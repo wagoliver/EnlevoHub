@@ -3,6 +3,7 @@ import {
   CreateProjectActivityInput,
   UpdateProjectActivityInput,
   CreateFromTemplateWithScheduleInput,
+  CreateFromHierarchyInput,
 } from './project-activity.schemas'
 import { ContractorScope } from '../../core/rbac/contractor-filter'
 
@@ -435,6 +436,55 @@ export class ProjectActivityService {
     }
 
     return results
+  }
+
+  /**
+   * Create activities directly from a phases hierarchy (no template needed).
+   */
+  async createFromHierarchy(
+    tenantId: string,
+    projectId: string,
+    data: CreateFromHierarchyInput
+  ) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    const units = await this.prisma.unit.findMany({
+      where: { projectId },
+      select: { id: true },
+    })
+
+    // Convert phases hierarchy to the recursive format expected by createActivitiesRecursive
+    const activities: any[] = data.phases.map((phase, phaseIdx) => ({
+      name: phase.name,
+      level: 'PHASE',
+      order: phaseIdx,
+      weight: phase.percentageOfTotal,
+      color: phase.color || null,
+      children: phase.stages.map((stage, stageIdx) => ({
+        name: stage.name,
+        level: 'STAGE',
+        order: stageIdx,
+        weight: 1,
+        children: stage.activities.map((act, actIdx) => ({
+          name: act.name,
+          level: 'ACTIVITY',
+          order: actIdx,
+          weight: act.weight,
+          dependencies: act.dependencies || null,
+          scope: 'ALL_UNITS',
+        })),
+      })),
+    }))
+
+    return this.prisma.$transaction(async (tx) => {
+      const created = await this.createActivitiesRecursive(
+        tx, projectId, activities, null, units
+      )
+      return created
+    })
   }
 
   async getProjectProgress(tenantId: string, projectId: string, scope?: ContractorScope) {

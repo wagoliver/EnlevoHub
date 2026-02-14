@@ -11,6 +11,7 @@ import {
   updateProjectActivitySchema,
   createFromTemplateSchema,
   createFromTemplateWithScheduleSchema,
+  createFromHierarchySchema,
   createMeasurementSchema,
   createBatchMeasurementSchema,
   reviewMeasurementSchema,
@@ -130,6 +131,37 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
         getTenantId(request),
         id,
         body.templateId
+      )
+      return reply.status(201).send(activities)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Create activities from hierarchy (no template needed)
+  fastify.post('/:id/activities/from-hierarchy', {
+    preHandler: [authMiddleware, requirePermission('activities:create')],
+    schema: {
+      description: 'Create project activities from a phases hierarchy',
+      tags: ['activities'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = createFromHierarchySchema.parse(request.body)
+      const activities = await activityService.createFromHierarchy(
+        getTenantId(request),
+        id,
+        body
       )
       return reply.status(201).send(activities)
     } catch (error) {

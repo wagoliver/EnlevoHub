@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
-import { activityTemplatesAPI } from '@/lib/api-client'
+import { activityTemplatesAPI, projectsAPI } from '@/lib/api-client'
 import {
   Dialog,
   DialogContent,
@@ -34,14 +34,20 @@ import {
   ChevronDown,
   ChevronRight,
   HelpCircle,
+  PenLine,
 } from 'lucide-react'
 import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from './template-models'
 import type { TemplateModel } from './template-models'
+import { HierarchicalItemEditor, type TemplatePhase } from './HierarchicalItemEditor'
 
 interface ImportTemplateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onLoad?: (data: { name: string; phases: ParsedPhase[] }) => void
+  /** When set, saves activities directly to the project instead of creating a template */
+  projectId?: string
+  /** Show the "Em branco" (blank editor) option */
+  showBlankOption?: boolean
 }
 
 interface ParsedPhase {
@@ -293,11 +299,40 @@ function rowsToPhases(rows: any[][], autoCalcPercentage: boolean): { phases: Par
   return { phases, errors }
 }
 
+/** Convert TemplatePhase[] from HierarchicalItemEditor to ParsedPhase[] format */
+function templatePhasesToParsed(templatePhases: TemplatePhase[]): ParsedPhase[] {
+  return templatePhases.map((p, pIdx) => ({
+    name: p.name,
+    order: pIdx,
+    percentageOfTotal: p.percentageOfTotal,
+    color: p.color || null,
+    stages: p.stages.map((s, sIdx) => ({
+      name: s.name,
+      order: sIdx,
+      activities: s.activities.map((a, aIdx) => ({
+        name: a.name,
+        order: aIdx,
+        weight: a.weight,
+        durationDays: a.durationDays ?? null,
+        dependencies: a.dependencies && a.dependencies.length > 0 ? a.dependencies : null,
+      })),
+    })),
+  }))
+}
+
 export type { ParsedPhase }
 
-export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTemplateDialogProps) {
+export function ImportTemplateDialog({
+  open,
+  onOpenChange,
+  onLoad,
+  projectId,
+  showBlankOption,
+}: ImportTemplateDialogProps) {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isProjectMode = !!projectId
 
   const [templateName, setTemplateName] = useState('')
   const [fileName, setFileName] = useState('')
@@ -310,10 +345,20 @@ export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTempl
   const [rowErrors, setRowErrors] = useState<ValidationError[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
 
-  const hasData = phases.length > 0
+  // Blank editor state
+  const [blankMode, setBlankMode] = useState(false)
+  const [blankPhases, setBlankPhases] = useState<TemplatePhase[]>([])
+
+  const hasData = blankMode ? blankPhases.length > 0 : phases.length > 0
   const hasErrors = parseErrors.length > 0
   const blockingErrors = parseErrors.filter((e) => e.row === 0)
-  const canSubmit = hasData && blockingErrors.length === 0 && templateName.trim().length >= 2
+
+  // In project mode, no template name is needed
+  const canSubmit = blankMode
+    ? blankPhases.length > 0 &&
+      blankPhases.every(p => p.name.trim() && p.stages.every(s => s.name.trim() && s.activities.every(a => a.name.trim()))) &&
+      Math.abs(blankPhases.reduce((sum, p) => sum + p.percentageOfTotal, 0) - 100) < 0.1
+    : hasData && blockingErrors.length === 0 && (isProjectMode || templateName.trim().length >= 2)
 
   const togglePhase = (name: string) => {
     setExpandedPhases((prev) => {
@@ -336,6 +381,10 @@ export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTempl
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    // Exit blank mode when uploading a file
+    setBlankMode(false)
+    setBlankPhases([])
 
     setFileName(file.name)
     setPhases([])
@@ -387,18 +436,61 @@ export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTempl
     },
   })
 
+  const projectMutation = useMutation({
+    mutationFn: (data: { phases: ParsedPhase[] }) =>
+      projectsAPI.createActivitiesFromHierarchy(projectId!, data),
+    onSuccess: () => {
+      toast.success('Atividades aplicadas ao projeto com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      handleClose()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao aplicar atividades')
+    },
+  })
+
+  const isSubmitting = createMutation.isPending || projectMutation.isPending
+
   const handleSubmit = () => {
     if (!canSubmit) return
 
+    // Get the final phases data
+    const finalPhases = blankMode ? templatePhasesToParsed(blankPhases) : phases
+
+    if (isProjectMode) {
+      // Save directly to project
+      projectMutation.mutate({
+        phases: finalPhases.map((p) => ({
+          name: p.name,
+          order: p.order,
+          percentageOfTotal: p.percentageOfTotal,
+          color: p.color,
+          stages: p.stages.map((s) => ({
+            name: s.name,
+            order: s.order,
+            activities: s.activities.map((a) => ({
+              name: a.name,
+              order: a.order,
+              weight: a.weight,
+              durationDays: a.durationDays,
+              dependencies: a.dependencies,
+            })),
+          })),
+        })),
+      })
+      return
+    }
+
     if (onLoad) {
-      onLoad({ name: templateName.trim(), phases })
+      onLoad({ name: templateName.trim(), phases: finalPhases })
       handleClose()
       return
     }
 
     createMutation.mutate({
       name: templateName.trim(),
-      phases: phases.map((p) => ({
+      phases: finalPhases.map((p) => ({
         name: p.name,
         order: p.order,
         percentageOfTotal: p.percentageOfTotal,
@@ -428,371 +520,461 @@ export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTempl
     setRowErrors([])
     setAutoCalcPercentage(true)
     setSelectedTemplate('')
+    setBlankMode(false)
+    setBlankPhases([])
     onOpenChange(false)
   }
 
+  const handleStartBlank = () => {
+    setBlankMode(true)
+    // Clear spreadsheet/model data
+    setPhases([])
+    setParseErrors([])
+    setExpandedPhases(new Set())
+    setParsedRows([])
+    setRowErrors([])
+    setFileName('')
+    setSelectedTemplate('')
+    // Initialize with one empty phase
+    if (blankPhases.length === 0) {
+      setBlankPhases([{
+        name: '',
+        order: 0,
+        percentageOfTotal: 100,
+        color: '#3B82F6',
+        stages: [{
+          name: 'Etapa 1',
+          order: 0,
+          activities: [{ name: '', order: 0, weight: 1 }],
+        }],
+      }])
+    }
+  }
+
+  const handleExitBlank = () => {
+    setBlankMode(false)
+  }
+
   // Count totals
-  const totalActivities = phases.reduce(
+  const displayPhases = blankMode ? templatePhasesToParsed(blankPhases) : phases
+  const totalActivities = displayPhases.reduce(
     (s, p) => s + p.stages.reduce((ss, st) => ss + st.activities.length, 0),
     0
   )
-  const totalStages = phases.reduce((s, p) => s + p.stages.length, 0)
+  const totalStages = displayPhases.reduce((s, p) => s + p.stages.length, 0)
+
+  const dialogTitle = isProjectMode
+    ? 'Associar Atividades ao Projeto'
+    : 'Importar Planejamento de Planilha'
+
+  const dialogDescription = isProjectMode
+    ? 'Escolha um modelo, importe uma planilha ou crie do zero.'
+    : 'Importe atividades a partir de um arquivo XLSX ou CSV seguindo o modelo.'
+
+  const submitLabel = isProjectMode
+    ? 'Aplicar ao Projeto'
+    : onLoad
+      ? 'Carregar no Editor'
+      : 'Criar Planejamento'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`${blankMode ? 'max-w-5xl' : 'max-w-3xl'} max-h-[90vh] overflow-y-auto`}>
         <DialogHeader>
-          <DialogTitle>Importar Planejamento de Planilha</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
-            Importe atividades a partir de um arquivo XLSX ou CSV seguindo o modelo.
+            {dialogDescription}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Step 1: Template model */}
-          <div className="rounded-lg border border-dashed border-neutral-300 p-4 space-y-3">
-            <div>
-              <p className="text-sm font-medium">Modelo de planilha</p>
-              <p className="text-xs text-neutral-500">
-                Escolha um modelo por tipo de obra. Carregue direto ou baixe para editar no Excel.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Selecione o tipo de obra..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {TEMPLATE_CATEGORIES.map((category) => (
-                    <SelectGroup key={category}>
-                      <SelectLabel>{category}</SelectLabel>
-                      {TEMPLATE_MODELS
-                        .filter((t) => t.category === category)
-                        .map((t) => (
-                          <SelectItem key={t.key} value={t.key}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="default"
-                size="sm"
-                disabled={!selectedTemplate}
-                onClick={() => {
-                  const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
-                  if (!tpl) return
+          {/* Blank mode editor */}
+          {blankMode ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <PenLine className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Criando do zero</span>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleExitBlank}>
+                  Voltar para modelo/importar
+                </Button>
+              </div>
 
-                  // Feed template rows directly into the parser
-                  const rows = tpl.rows.map((r) => [...r])
-                  setParsedRows(rows)
-                  setRowErrors([])
-                  setFileName('')
+              <HierarchicalItemEditor
+                phases={blankPhases}
+                onChange={setBlankPhases}
+              />
+            </>
+          ) : (
+            <>
+              {/* Step 1: Template model */}
+              <div className="rounded-lg border border-dashed border-neutral-300 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Modelo de planilha</p>
+                  <p className="text-xs text-neutral-500">
+                    Escolha um modelo por tipo de obra. Carregue direto ou baixe para editar no Excel.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione o tipo de obra..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TEMPLATE_CATEGORIES.map((category) => (
+                        <SelectGroup key={category}>
+                          <SelectLabel>{category}</SelectLabel>
+                          {TEMPLATE_MODELS
+                            .filter((t) => t.category === category)
+                            .map((t) => (
+                              <SelectItem key={t.key} value={t.key}>
+                                {t.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={!selectedTemplate}
+                    onClick={() => {
+                      const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
+                      if (!tpl) return
 
-                  const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
-                  setPhases(parsed)
-                  setParseErrors(structErrors)
-                  setExpandedPhases(new Set(parsed.map((p) => p.name)))
+                      // Feed template rows directly into the parser
+                      const rows = tpl.rows.map((r) => [...r])
+                      setParsedRows(rows)
+                      setRowErrors([])
+                      setFileName('')
 
-                  if (!templateName) {
-                    setTemplateName(tpl.label)
-                  }
-                }}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Carregar
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!selectedTemplate}
-                onClick={() => {
-                  const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
-                  if (tpl) generateModelXLSX(tpl)
-                }}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Baixar
-              </Button>
-            </div>
-            {selectedTemplate && (
-              <p className="text-xs text-neutral-500 italic">
-                {TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)?.description}
-              </p>
-            )}
-          </div>
+                      const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
+                      setPhases(parsed)
+                      setParseErrors(structErrors)
+                      setExpandedPhases(new Set(parsed.map((p) => p.name)))
 
-          {/* Field descriptions */}
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50">
-            <button
-              type="button"
-              onClick={() => setShowHelp(!showHelp)}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-neutral-100 rounded-lg transition-colors"
-            >
-              <HelpCircle className="h-4 w-4 text-neutral-500" />
-              <span className="flex-1 text-sm font-medium text-neutral-700">
-                Entenda os campos da planilha
-              </span>
-              {showHelp ? (
-                <ChevronDown className="h-4 w-4 text-neutral-400" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-neutral-400" />
+                      if (!templateName) {
+                        setTemplateName(tpl.label)
+                      }
+                    }}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Carregar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!selectedTemplate}
+                    onClick={() => {
+                      const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
+                      if (tpl) generateModelXLSX(tpl)
+                    }}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar
+                  </Button>
+                </div>
+                {selectedTemplate && (
+                  <p className="text-xs text-neutral-500 italic">
+                    {TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)?.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Step 2: Upload */}
+              <div className="rounded-lg border border-dashed border-neutral-300 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Importar arquivo</p>
+                  <p className="text-xs text-neutral-500">
+                    Importe um arquivo XLSX ou CSV com a estrutura de fases, etapas e atividades.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {fileName || 'Selecionar arquivo'}
+                  </Button>
+                  {fileName && (
+                    <span className="text-sm text-neutral-500">{fileName}</span>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+
+              {/* Step 3: Blank option */}
+              {showBlankOption && (
+                <div className="rounded-lg border border-dashed border-neutral-300 p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Criar do zero</p>
+                    <p className="text-xs text-neutral-500">
+                      Monte a estrutura de fases, etapas e atividades manualmente.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={handleStartBlank}>
+                    <PenLine className="mr-2 h-4 w-4" />
+                    Começar em branco
+                  </Button>
+                </div>
               )}
-            </button>
 
-            {showHelp && (
-              <div className="border-t border-neutral-200 px-4 py-3 space-y-3 text-sm text-neutral-600">
-                <div>
-                  <span className="font-medium text-neutral-800">Fase</span>
-                  <span className="text-red-500"> *</span>
-                  <p className="text-xs mt-0.5">
-                    Agrupamento principal da obra. Ex: Fundação, Estrutura, Acabamento.
-                    Atividades com o mesmo nome de fase são agrupadas automaticamente.
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Percentual (%)</span>
-                  <span className="text-red-500"> *</span>
-                  <p className="text-xs mt-0.5">
-                    Quanto essa fase representa do total da obra. A soma de todas as fases
-                    deve ser exatamente 100%. Ex: Fundação 20%, Estrutura 30%, Acabamento 50%.
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Cor</span>
-                  <p className="text-xs mt-0.5">
-                    Cor da fase no painel de progresso. Use código hexadecimal (ex: #FF5733).
-                    Opcional — se não informar, o sistema usa a cor padrão.
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Etapa</span>
-                  <span className="text-red-500"> *</span>
-                  <p className="text-xs mt-0.5">
-                    Subdivisão dentro da fase. Ex: dentro de "Estrutura", as etapas
-                    podem ser "Pilares", "Vigas", "Lajes". Etapas com o mesmo nome dentro
-                    da mesma fase são agrupadas.
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Atividade</span>
-                  <span className="text-red-500"> *</span>
-                  <p className="text-xs mt-0.5">
-                    A tarefa específica a ser executada e medida. Ex: "Concretagem",
-                    "Chapisco", "Pintura final". Cada linha da planilha representa uma atividade.
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Peso (1-5)</span>
-                  <span className="text-red-500"> *</span>
-                  <p className="text-xs mt-0.5">
-                    Grau de importância da atividade dentro da etapa, de <strong>1 a 5</strong>.
-                    Quanto maior o peso, mais essa atividade influencia no progresso da etapa.
-                    <strong> Não sabe o que colocar? Use 1 em todas.</strong>
-                  </p>
-                  <div className="mt-2 rounded border border-neutral-200 bg-white text-xs">
-                    <div className="px-3 py-1.5 space-y-0.5 text-neutral-500">
-                      <p><strong className="text-neutral-700">1</strong> — Atividade simples, rápida, pouco impacto</p>
-                      <p><strong className="text-neutral-700">2</strong> — Importância baixa-média</p>
-                      <p><strong className="text-neutral-700">3</strong> — Importância média</p>
-                      <p><strong className="text-neutral-700">4</strong> — Importância alta</p>
-                      <p><strong className="text-neutral-700">5</strong> — Atividade crítica, complexa, maior impacto</p>
+              {/* Field descriptions */}
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50">
+                <button
+                  type="button"
+                  onClick={() => setShowHelp(!showHelp)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-neutral-100 rounded-lg transition-colors"
+                >
+                  <HelpCircle className="h-4 w-4 text-neutral-500" />
+                  <span className="flex-1 text-sm font-medium text-neutral-700">
+                    Entenda os campos da planilha
+                  </span>
+                  {showHelp ? (
+                    <ChevronDown className="h-4 w-4 text-neutral-400" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-neutral-400" />
+                  )}
+                </button>
+
+                {showHelp && (
+                  <div className="border-t border-neutral-200 px-4 py-3 space-y-3 text-sm text-neutral-600">
+                    <div>
+                      <span className="font-medium text-neutral-800">Fase</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Agrupamento principal da obra. Ex: Fundação, Estrutura, Acabamento.
+                        Atividades com o mesmo nome de fase são agrupadas automaticamente.
+                      </p>
                     </div>
-                    <div className="px-3 py-2 border-t border-neutral-100 text-neutral-500">
-                      <p className="font-medium text-neutral-600 mb-1">Como isso afeta o progresso?</p>
-                      <p>
-                        Ex: Chapisco (peso 1) concluído e Reboco (peso 4) pendente →
-                        etapa em <strong className="text-neutral-700">20%</strong>.
+                    <div>
+                      <span className="font-medium text-neutral-800">Percentual (%)</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Quanto essa fase representa do total da obra. A soma de todas as fases
+                        deve ser exatamente 100%. Ex: Fundação 20%, Estrutura 30%, Acabamento 50%.
                       </p>
-                      <p>
-                        Se fosse tudo peso 1 → etapa em <strong className="text-neutral-700">50%</strong>.
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Cor</span>
+                      <p className="text-xs mt-0.5">
+                        Cor da fase no painel de progresso. Use código hexadecimal (ex: #FF5733).
+                        Opcional — se não informar, o sistema usa a cor padrão.
                       </p>
-                      <p className="mt-1 text-neutral-400">
-                        O peso maior do Reboco reflete que a maior parte do trabalho ainda não foi feita.
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Etapa</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Subdivisão dentro da fase. Ex: dentro de "Estrutura", as etapas
+                        podem ser "Pilares", "Vigas", "Lajes". Etapas com o mesmo nome dentro
+                        da mesma fase são agrupadas.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Atividade</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        A tarefa específica a ser executada e medida. Ex: "Concretagem",
+                        "Chapisco", "Pintura final". Cada linha da planilha representa uma atividade.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Peso (1-5)</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Grau de importância da atividade dentro da etapa, de <strong>1 a 5</strong>.
+                        Quanto maior o peso, mais essa atividade influencia no progresso da etapa.
+                        <strong> Não sabe o que colocar? Use 1 em todas.</strong>
+                      </p>
+                      <div className="mt-2 rounded border border-neutral-200 bg-white text-xs">
+                        <div className="px-3 py-1.5 space-y-0.5 text-neutral-500">
+                          <p><strong className="text-neutral-700">1</strong> — Atividade simples, rápida, pouco impacto</p>
+                          <p><strong className="text-neutral-700">2</strong> — Importância baixa-média</p>
+                          <p><strong className="text-neutral-700">3</strong> — Importância média</p>
+                          <p><strong className="text-neutral-700">4</strong> — Importância alta</p>
+                          <p><strong className="text-neutral-700">5</strong> — Atividade crítica, complexa, maior impacto</p>
+                        </div>
+                        <div className="px-3 py-2 border-t border-neutral-100 text-neutral-500">
+                          <p className="font-medium text-neutral-600 mb-1">Como isso afeta o progresso?</p>
+                          <p>
+                            Ex: Chapisco (peso 1) concluído e Reboco (peso 4) pendente →
+                            etapa em <strong className="text-neutral-700">20%</strong>.
+                          </p>
+                          <p>
+                            Se fosse tudo peso 1 → etapa em <strong className="text-neutral-700">50%</strong>.
+                          </p>
+                          <p className="mt-1 text-neutral-400">
+                            O peso maior do Reboco reflete que a maior parte do trabalho ainda não foi feita.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Duração (dias)</span>
+                      <p className="text-xs mt-0.5">
+                        Estimativa de dias úteis para executar a atividade. Opcional — usado para
+                        planejamento de cronograma.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Dependências</span>
+                      <p className="text-xs mt-0.5">
+                        Nome de atividades que precisam ser concluídas antes desta iniciar.
+                        Separe múltiplas com ponto e vírgula (;). Opcional.
+                      </p>
+                      <p className="text-xs mt-1 text-neutral-500 italic">
+                        Exemplo: "Escavação; Estacas" — significa que esta atividade
+                        só inicia após Escavação e Estacas serem concluídas.
                       </p>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Duração (dias)</span>
-                  <p className="text-xs mt-0.5">
-                    Estimativa de dias úteis para executar a atividade. Opcional — usado para
-                    planejamento de cronograma.
-                  </p>
-                </div>
-                <div>
-                  <span className="font-medium text-neutral-800">Dependências</span>
-                  <p className="text-xs mt-0.5">
-                    Nome de atividades que precisam ser concluídas antes desta iniciar.
-                    Separe múltiplas com ponto e vírgula (;). Opcional.
-                  </p>
-                  <p className="text-xs mt-1 text-neutral-500 italic">
-                    Exemplo: "Escavação; Estacas" — significa que esta atividade
-                    só inicia após Escavação e Estacas serem concluídas.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Auto-calc percentage toggle */}
-          <label className="flex items-start gap-3 cursor-pointer">
-            <Checkbox
-              checked={autoCalcPercentage}
-              onChange={(e) => handleToggleAutoCalc(e.target.checked)}
-              className="mt-0.5"
-            />
-            <div>
-              <span className="text-sm font-medium text-neutral-700">
-                Calcular percentual automaticamente
-              </span>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                {autoCalcPercentage
-                  ? 'O percentual de cada fase será calculado com base na soma dos pesos das atividades. A coluna "Percentual (%)" da planilha será ignorada.'
-                  : 'O percentual de cada fase será lido da coluna "Percentual (%)" da planilha. A soma deve ser exatamente 100%.'}
-              </p>
-            </div>
-          </label>
-
-          {/* Step 2: Upload */}
-          <div>
-            <Label>Arquivo</Label>
-            <div className="mt-1 flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {fileName || 'Selecionar arquivo'}
-              </Button>
-              {fileName && (
-                <span className="text-sm text-neutral-500">{fileName}</span>
-              )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-          </div>
-
-          {/* Errors */}
-          {hasErrors && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-              <div className="flex items-center gap-2 text-red-700">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span className="text-sm font-medium">
-                  {parseErrors.length} problema(s) encontrado(s)
-                </span>
-              </div>
-              <ul className="mt-2 space-y-1">
-                {parseErrors.slice(0, 10).map((err, i) => (
-                  <li key={i} className="text-xs text-red-600">
-                    {err.row > 0 ? `Linha ${err.row}: ` : ''}{err.message}
-                  </li>
-                ))}
-                {parseErrors.length > 10 && (
-                  <li className="text-xs text-red-500">
-                    ... e mais {parseErrors.length - 10} erro(s)
-                  </li>
                 )}
-              </ul>
-            </div>
-          )}
-
-          {/* Preview */}
-          {hasData && (
-            <>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-neutral-700">
-                  {phases.length} fase(s), {totalStages} etapa(s), {totalActivities} atividade(s)
-                </span>
               </div>
 
-              <div className="max-h-[35vh] overflow-y-auto rounded-lg border">
-                {phases.map((phase) => {
-                  const isExpanded = expandedPhases.has(phase.name)
-                  return (
-                    <div key={phase.name} className="border-b last:border-b-0">
-                      <button
-                        type="button"
-                        onClick={() => togglePhase(phase.name)}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-neutral-50"
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-neutral-400" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-neutral-400" />
-                        )}
-                        {phase.color && (
-                          <span
-                            className="h-3 w-3 rounded-full shrink-0"
-                            style={{ backgroundColor: phase.color }}
-                          />
-                        )}
-                        <span className="flex-1 text-sm font-semibold">
-                          {phase.name}
-                        </span>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {phase.percentageOfTotal}%
-                        </Badge>
-                      </button>
+              {/* Auto-calc percentage toggle */}
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={autoCalcPercentage}
+                  onChange={(e) => handleToggleAutoCalc(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="text-sm font-medium text-neutral-700">
+                    Calcular percentual automaticamente
+                  </span>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    {autoCalcPercentage
+                      ? 'O percentual de cada fase será calculado com base na soma dos pesos das atividades. A coluna "Percentual (%)" da planilha será ignorada.'
+                      : 'O percentual de cada fase será lido da coluna "Percentual (%)" da planilha. A soma deve ser exatamente 100%.'}
+                  </p>
+                </div>
+              </label>
 
-                      {isExpanded && (
-                        <div className="pb-2">
-                          {phase.stages.map((stage) => (
-                            <div key={stage.name} className="px-4">
-                              <p className="py-1.5 pl-7 text-sm font-medium text-neutral-700">
-                                {stage.name}
-                              </p>
-                              {stage.activities.map((act) => (
-                                <div
-                                  key={act.name}
-                                  className="flex items-center gap-2 py-1 pl-14 text-sm text-neutral-600"
-                                >
-                                  <span className="flex-1">{act.name}</span>
-                                  <span className="text-xs text-neutral-400">
-                                    Peso: {act.weight}
-                                  </span>
-                                  {act.durationDays && (
-                                    <span className="text-xs text-neutral-400">
-                                      {act.durationDays}d
-                                    </span>
-                                  )}
-                                  {act.dependencies && act.dependencies.length > 0 && (
-                                    <Badge variant="outline" className="text-[10px]">
-                                      {act.dependencies.join(', ')}
-                                    </Badge>
-                                  )}
+              {/* Errors */}
+              {hasErrors && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <div className="flex items-center gap-2 text-red-700">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span className="text-sm font-medium">
+                      {parseErrors.length} problema(s) encontrado(s)
+                    </span>
+                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {parseErrors.slice(0, 10).map((err, i) => (
+                      <li key={i} className="text-xs text-red-600">
+                        {err.row > 0 ? `Linha ${err.row}: ` : ''}{err.message}
+                      </li>
+                    ))}
+                    {parseErrors.length > 10 && (
+                      <li className="text-xs text-red-500">
+                        ... e mais {parseErrors.length - 10} erro(s)
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* Preview */}
+              {hasData && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-neutral-700">
+                      {phases.length} fase(s), {totalStages} etapa(s), {totalActivities} atividade(s)
+                    </span>
+                  </div>
+
+                  <div className="max-h-[35vh] overflow-y-auto rounded-lg border">
+                    {phases.map((phase) => {
+                      const isExpanded = expandedPhases.has(phase.name)
+                      return (
+                        <div key={phase.name} className="border-b last:border-b-0">
+                          <button
+                            type="button"
+                            onClick={() => togglePhase(phase.name)}
+                            className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-neutral-50"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-neutral-400" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-neutral-400" />
+                            )}
+                            {phase.color && (
+                              <span
+                                className="h-3 w-3 rounded-full shrink-0"
+                                style={{ backgroundColor: phase.color }}
+                              />
+                            )}
+                            <span className="flex-1 text-sm font-semibold">
+                              {phase.name}
+                            </span>
+                            <Badge variant="secondary" className="text-[10px]">
+                              {phase.percentageOfTotal}%
+                            </Badge>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="pb-2">
+                              {phase.stages.map((stage) => (
+                                <div key={stage.name} className="px-4">
+                                  <p className="py-1.5 pl-7 text-sm font-medium text-neutral-700">
+                                    {stage.name}
+                                  </p>
+                                  {stage.activities.map((act) => (
+                                    <div
+                                      key={act.name}
+                                      className="flex items-center gap-2 py-1 pl-14 text-sm text-neutral-600"
+                                    >
+                                      <span className="flex-1">{act.name}</span>
+                                      <span className="text-xs text-neutral-400">
+                                        Peso: {act.weight}
+                                      </span>
+                                      {act.durationDays && (
+                                        <span className="text-xs text-neutral-400">
+                                          {act.durationDays}d
+                                        </span>
+                                      )}
+                                      {act.dependencies && act.dependencies.length > 0 && (
+                                        <Badge variant="outline" className="text-[10px]">
+                                          {act.dependencies.join(', ')}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                      )
+                    })}
+                  </div>
+                </>
+              )}
 
-          {/* Template name */}
-          {hasData && (
-            <div>
-              <Label htmlFor="template-name">Nome do Planejamento *</Label>
-              <Input
-                id="template-name"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="Ex: Construção Residencial"
-              />
-            </div>
+              {/* Template name - only when NOT in project mode */}
+              {hasData && !isProjectMode && (
+                <div>
+                  <Label htmlFor="template-name">Nome do Planejamento *</Label>
+                  <Input
+                    id="template-name"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="Ex: Construção Residencial"
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -801,13 +983,13 @@ export function ImportTemplateDialog({ open, onOpenChange, onLoad }: ImportTempl
             Cancelar
           </Button>
           <Button
-            disabled={!canSubmit || createMutation.isPending}
+            disabled={!canSubmit || isSubmitting}
             onClick={handleSubmit}
           >
-            {createMutation.isPending && (
+            {isSubmitting && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {onLoad ? 'Carregar no Editor' : 'Criar Planejamento'}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

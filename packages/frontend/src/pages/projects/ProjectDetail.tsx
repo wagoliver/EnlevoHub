@@ -16,6 +16,7 @@ import { ActivitiesTab } from './ActivitiesTab'
 import { MeasurementsTab } from './MeasurementsTab'
 import { UnitsTab } from './UnitsTab'
 import { ProgressOverview } from './ProgressOverview'
+import { MaterialsCalculator } from '@/pages/calculator'
 import {
   ArrowLeft,
   Edit,
@@ -237,6 +238,7 @@ export function ProjectDetail() {
           <TabsTrigger value="activities">Atividades</TabsTrigger>
           <TabsTrigger value="measurements">Medições</TabsTrigger>
           <TabsTrigger value="units">Unidades ({project._count?.units || 0})</TabsTrigger>
+          <TabsTrigger value="levantamento">Levantamento</TabsTrigger>
           {canViewFinancial && (
             <TabsTrigger value="financial">Financeiro</TabsTrigger>
           )}
@@ -413,6 +415,11 @@ export function ProjectDetail() {
         {/* Units Tab */}
         <TabsContent value="units" className="mt-6">
           <UnitsTab projectId={id!} />
+        </TabsContent>
+
+        {/* Levantamento Tab */}
+        <TabsContent value="levantamento" className="mt-6">
+          <MaterialsCalculator projectId={id!} />
         </TabsContent>
 
         {/* Financial Tab */}

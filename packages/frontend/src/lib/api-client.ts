@@ -579,6 +579,72 @@ export const activityTemplatesAPI = {
   }) => apiClient.post<any>(`/activity-templates/${id}/preview-schedule`, config),
 }
 
+export const sinapiAPI = {
+  searchInsumos: (params?: { search?: string; tipo?: string; page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') searchParams.set(key, String(value))
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/sinapi/insumos${qs ? `?${qs}` : ''}`)
+  },
+  getInsumo: (id: string) => apiClient.get<any>(`/sinapi/insumos/${id}`),
+  searchComposicoes: (params?: { search?: string; page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') searchParams.set(key, String(value))
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/sinapi/composicoes${qs ? `?${qs}` : ''}`)
+  },
+  getComposicao: (id: string) => apiClient.get<any>(`/sinapi/composicoes/${id}`),
+  calculateComposicao: (id: string, params: { uf: string; mesReferencia: string; quantidade?: number; desonerado?: boolean }) => {
+    const searchParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) searchParams.set(key, String(value))
+    })
+    return apiClient.get<any>(`/sinapi/composicoes/${id}/calculate?${searchParams.toString()}`)
+  },
+  importInsumos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/insumos', formData),
+  importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),
+  importPrecos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/precos', formData),
+}
+
+export const levantamentoAPI = {
+  list: (projectId: string, params?: { page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) searchParams.set(key, String(value))
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/projects/${projectId}/levantamentos${qs ? `?${qs}` : ''}`)
+  },
+  getById: (projectId: string, id: string) =>
+    apiClient.get<any>(`/projects/${projectId}/levantamentos/${id}`),
+  create: (projectId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/levantamentos`, data),
+  update: (projectId: string, id: string, data: any) =>
+    apiClient.patch<any>(`/projects/${projectId}/levantamentos/${id}`, data),
+  delete: (projectId: string, id: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/levantamentos/${id}`),
+  addItem: (projectId: string, levantamentoId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens`, data),
+  updateItem: (projectId: string, levantamentoId: string, itemId: string, data: any) =>
+    apiClient.patch<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens/${itemId}`, data),
+  deleteItem: (projectId: string, levantamentoId: string, itemId: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens/${itemId}`),
+  addFromComposicao: (projectId: string, levantamentoId: string, data: any) =>
+    apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/from-composicao`, data),
+  getResumo: (projectId: string, levantamentoId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/resumo`),
+}
+
 export const monitoringAPI = {
   getOverview: () => apiClient.get<any>('/monitoring/overview'),
   getSystem: () => apiClient.get<any>('/monitoring/system'),

@@ -1,0 +1,185 @@
+import { FastifyInstance } from 'fastify'
+import { createAuthMiddleware } from '../../core/auth/auth.middleware'
+import { JWTService } from '../../core/auth/jwt.service'
+import { hasPermission } from '../../core/rbac/permissions'
+import { SinapiService } from './sinapi.service'
+import { SinapiImportService } from './sinapi-import.service'
+import {
+  searchInsumosSchema,
+  searchComposicoesSchema,
+  calculateComposicaoSchema,
+} from './sinapi.schemas'
+
+function requirePermission(permission: string) {
+  return async (request: any, reply: any) => {
+    const userRole = request.user?.role
+    if (!userRole || !hasPermission(userRole, permission as any)) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'Você não tem permissão para esta ação',
+      })
+    }
+  }
+}
+
+function requireRoot() {
+  return async (request: any, reply: any) => {
+    if (request.user?.role !== 'ROOT') {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'Apenas ROOT pode importar dados SINAPI',
+      })
+    }
+  }
+}
+
+export async function sinapiRoutes(fastify: FastifyInstance) {
+  const jwtService = new JWTService(fastify)
+  const authMiddleware = createAuthMiddleware(jwtService)
+  const service = new SinapiService(fastify.prisma)
+  const importService = new SinapiImportService(fastify.prisma)
+
+  const getUserId = (request: any): string => request.user.userId
+
+  // ---- Insumos ----
+
+  fastify.get('/insumos', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const query = searchInsumosSchema.parse(request.query)
+      const result = await service.searchInsumos(query)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.get('/insumos/:id', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await service.getInsumo(id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Composicoes ----
+
+  fastify.get('/composicoes', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const query = searchComposicoesSchema.parse(request.query)
+      const result = await service.searchComposicoes(query)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.get('/composicoes/:id', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await service.getComposicao(id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.get('/composicoes/:id/calculate', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const query = calculateComposicaoSchema.parse(request.query)
+      const result = await service.calculateComposicao(id, query)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Import (ROOT only) ----
+
+  fastify.post('/import/insumos', {
+    preHandler: [authMiddleware, requireRoot()],
+    schema: { consumes: ['multipart/form-data'] },
+  }, async (request, reply) => {
+    try {
+      const data = await request.file()
+      if (!data) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Nenhum arquivo enviado' })
+      }
+      const buffer = await data.toBuffer()
+      const result = await importService.importInsumos(getUserId(request), data.filename, buffer)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/import/composicoes', {
+    preHandler: [authMiddleware, requireRoot()],
+    schema: { consumes: ['multipart/form-data'] },
+  }, async (request, reply) => {
+    try {
+      const data = await request.file()
+      if (!data) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Nenhum arquivo enviado' })
+      }
+      const buffer = await data.toBuffer()
+      const result = await importService.importComposicoes(getUserId(request), data.filename, buffer)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/import/precos', {
+    preHandler: [authMiddleware, requireRoot()],
+    schema: { consumes: ['multipart/form-data'] },
+  }, async (request, reply) => {
+    try {
+      const data = await request.file()
+      if (!data) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Nenhum arquivo enviado' })
+      }
+      const buffer = await data.toBuffer()
+      const result = await importService.importPrecos(getUserId(request), data.filename, buffer)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+}

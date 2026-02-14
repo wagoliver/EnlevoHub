@@ -11,6 +11,8 @@ import { financialRoutes } from '../modules/financial'
 import { monitoringRoutes } from '../modules/monitoring'
 import { supplierRoutes } from '../modules/suppliers'
 import { brokerRoutes } from '../modules/brokers'
+import { sinapiRoutes } from '../modules/sinapi'
+import { levantamentoRoutes } from '../modules/levantamento'
 
 export function registerRoutes(server: FastifyInstance) {
   // API v1 routes
@@ -39,6 +41,8 @@ export function registerRoutes(server: FastifyInstance) {
       api.register(monitoringRoutes, { prefix: '/monitoring' })
       api.register(supplierRoutes, { prefix: '/suppliers' })
       api.register(brokerRoutes, { prefix: '/brokers' })
+      api.register(sinapiRoutes, { prefix: '/sinapi' })
+      api.register(levantamentoRoutes, { prefix: '/projects' })
 
       // Placeholder route
       api.get('/', async () => {

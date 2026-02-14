@@ -87,18 +87,18 @@ const PHASES: Phase[] = [
     description:
       'Quantificação de materiais, serviços e insumos necessários para execução.',
     longDescription:
-      'Com o projeto definido, é hora de quantificar tudo o que será necessário: materiais, serviços e insumos. Revise as atividades do planejamento e detalhe os quantitativos dentro do projeto.',
+      'Com o projeto definido, é hora de quantificar tudo o que será necessário: materiais, serviços e insumos. Use a Calculadora de Materiais para criar levantamentos manuais ou baseados na tabela SINAPI, com preços de referência por estado e mês.',
     checklist: [
-      'Revisar atividades do planejamento',
       'Listar materiais por etapa da obra',
       'Quantificar serviços e mão de obra',
       'Levantar insumos e equipamentos',
+      'Consultar preços SINAPI de referência',
       'Validar quantitativos com engenheiro',
     ],
-    tip: 'Acesse o detalhe do projeto para revisar o planejamento e detalhar os quantitativos de cada atividade.',
+    tip: 'Use a Calculadora de Materiais na aba "Levantamento" do projeto para criar orçamentos com preços SINAPI ou valores próprios.',
     actions: [
+      { label: 'Calculadora de Materiais', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
       { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true },
-      { label: 'Detalhar quantitativos', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true },
     ],
   },
   {
@@ -239,10 +239,11 @@ const GRAY = '#d4d4d4'
 
 function getCurrentPhase(project?: any): number {
   if (!project) return 0
+  const hasUnits = (project._count?.units ?? 0) > 0
   const hasActivities = (project._count?.activities ?? 0) > 0
   switch (project.status) {
     case 'PLANNING':
-      return hasActivities ? 2 : 1
+      return hasUnits && hasActivities ? 2 : 1
     case 'IN_PROGRESS':
       return 6
     case 'PAUSED':
@@ -600,6 +601,7 @@ function PhaseDetailPanel({
   isCancelled,
   selectedProjectId,
   selectedProject,
+  onNext,
 }: {
   phase: Phase
   state: NodeState
@@ -607,6 +609,7 @@ function PhaseDetailPanel({
   isCancelled: boolean
   selectedProjectId: string | null
   selectedProject: any
+  onNext?: () => void
 }) {
   const navigate = useNavigate()
   const Icon = phase.icon
@@ -732,9 +735,15 @@ function PhaseDetailPanel({
 
                   {/* Action button */}
                   {done ? (
-                    <span className="text-[11px] text-green-600 font-medium flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 flex-shrink-0 h-8 text-[11px] font-medium"
+                      onClick={() => navigate(`${path}?phase=${phase.number}`)}
+                    >
                       Concluído
-                    </span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
                   ) : disabled ? (
                     <span className="text-[11px] text-neutral-400 italic flex-shrink-0">
                       Selecione um projeto
@@ -754,6 +763,21 @@ function PhaseDetailPanel({
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Next phase button */}
+      {onNext && (
+        <div className="flex justify-end pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-[#b8a378] border-[#b8a378]/30 hover:bg-[#b8a378]/5 hover:text-[#9a8a6a]"
+            onClick={onNext}
+          >
+            Próximo
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
         </div>
       )}
     </div>
@@ -1005,6 +1029,7 @@ export function Dashboard() {
               isCancelled={isCancelled}
               selectedProjectId={selectedProjectId}
               selectedProject={selectedProject}
+              onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
             />
           </Card>
         </div>
@@ -1024,6 +1049,7 @@ export function Dashboard() {
               isCancelled={isCancelled}
               selectedProjectId={selectedProjectId}
               selectedProject={selectedProject}
+              onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
             />
           </Card>
         </div>

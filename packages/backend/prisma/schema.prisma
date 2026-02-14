@@ -33,6 +33,7 @@ model Tenant {
   importBatches      ImportBatch[]
   activityTemplates  ActivityTemplate[]
   measurements       Measurement[]
+  levantamentos      ProjetoLevantamento[]
 
   @@map("tenants")
 }
@@ -151,6 +152,7 @@ model Project {
   financialTransactions FinancialTransaction[]
   contractorProjects  ContractorProject[]
   activities          ProjectActivity[]
+  levantamentos       ProjetoLevantamento[]
 
   @@index([tenantId])
   @@index([status])
@@ -851,4 +853,141 @@ model Measurement {
   @@index([contractorId])
   @@index([tenantId])
   @@map("measurements")
+}
+
+// ==================== SINAPI (Global - sem tenantId) ====================
+
+enum SinapiTipoInsumo {
+  MATERIAL
+  MAO_DE_OBRA
+  EQUIPAMENTO
+  SERVICO
+}
+
+enum LevantamentoTipo {
+  MANUAL
+  SINAPI
+}
+
+model SinapiInsumo {
+  id        String          @id @default(uuid())
+  codigo    String          @unique
+  descricao String          @db.Text
+  unidade   String
+  tipo      SinapiTipoInsumo
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  composicaoItens SinapiComposicaoInsumo[]
+  precos          SinapiPreco[]
+
+  @@index([codigo])
+  @@index([tipo])
+  @@map("sinapi_insumos")
+}
+
+model SinapiComposicao {
+  id        String   @id @default(uuid())
+  codigo    String   @unique
+  descricao String   @db.Text
+  unidade   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens SinapiComposicaoInsumo[]
+
+  @@index([codigo])
+  @@map("sinapi_composicoes")
+}
+
+model SinapiComposicaoInsumo {
+  id            String @id @default(uuid())
+  composicaoId  String
+  insumoId      String
+  coeficiente   Decimal @db.Decimal(12, 6)
+
+  composicao SinapiComposicao @relation(fields: [composicaoId], references: [id], onDelete: Cascade)
+  insumo     SinapiInsumo     @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+
+  @@unique([composicaoId, insumoId])
+  @@index([composicaoId])
+  @@index([insumoId])
+  @@map("sinapi_composicao_insumos")
+}
+
+model SinapiPreco {
+  id           String   @id @default(uuid())
+  insumoId     String
+  uf           String   @db.VarChar(2)
+  mesReferencia String  @db.VarChar(7) // "2024-01"
+  precoDesonerado    Decimal @db.Decimal(12, 2)
+  precoNaoDesonerado Decimal @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+
+  insumo SinapiInsumo @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+
+  @@unique([insumoId, uf, mesReferencia])
+  @@index([insumoId])
+  @@index([uf, mesReferencia])
+  @@map("sinapi_precos")
+}
+
+model SinapiImportLog {
+  id            String   @id @default(uuid())
+  tipo          String   // "INSUMOS" | "COMPOSICOES" | "PRECOS"
+  fileName      String
+  totalRecords  Int
+  importedCount Int
+  errorCount    Int      @default(0)
+  errors        Json?
+  importedBy    String
+  createdAt     DateTime @default(now())
+
+  @@index([tipo])
+  @@index([createdAt])
+  @@map("sinapi_import_logs")
+}
+
+// ==================== LEVANTAMENTO (Per-Tenant) ====================
+
+model ProjetoLevantamento {
+  id            String          @id @default(uuid())
+  tenantId      String
+  projectId     String
+  nome          String
+  tipo          LevantamentoTipo @default(MANUAL)
+  uf            String?         @db.VarChar(2)
+  mesReferencia String?         @db.VarChar(7)
+  observacoes   String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itens   LevantamentoItem[]
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@map("projeto_levantamentos")
+}
+
+model LevantamentoItem {
+  id              String  @id @default(uuid())
+  levantamentoId  String
+  nome            String
+  unidade         String
+  quantidade      Decimal @db.Decimal(12, 4)
+  precoUnitario   Decimal @db.Decimal(12, 2)
+  etapa           String?
+  sinapiInsumoId  String?
+  sinapiComposicaoId String?
+  observacoes     String? @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  levantamento ProjetoLevantamento @relation(fields: [levantamentoId], references: [id], onDelete: Cascade)
+
+  @@index([levantamentoId])
+  @@index([etapa])
+  @@map("levantamento_itens")
 }

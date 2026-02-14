@@ -68,7 +68,7 @@ const PHASES: Phase[] = [
       'Nesta fase inicial, o projeto ganha forma: são definidos escopo, cronograma macro, plantas baixas e o orçamento preliminar. Um bom planejamento reduz retrabalhos e garante previsibilidade ao longo de toda a obra.',
     checklist: [
       'Definir escopo e objetivos do projeto',
-      'Elaborar plantas e memorial descritivo',
+      'Definir plantas, blocos e unidades',
       'Estimar orçamento preliminar',
       'Criar cronograma macro de fases',
       'Registrar o projeto no sistema',
@@ -76,6 +76,7 @@ const PHASES: Phase[] = [
     tip: 'Comece criando o projeto — isso desbloqueia todas as outras funcionalidades da plataforma.',
     actions: [
       { label: 'Criar Projeto', path: '/projects', requiresProject: false, doneCheck: ({ projectId }) => !!projectId },
+      { label: 'Definir Plantas e Unidades', path: '/units', requiresProject: true, doneCheck: ({ project }) => (project?._count?.units ?? 0) > 0 },
       { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true, doneCheck: ({ project }) => (project?._count?.activities ?? 0) > 0 },
     ],
   },

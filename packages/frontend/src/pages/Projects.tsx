@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Loader2,
   FolderOpen,
+  ArrowLeft,
 } from 'lucide-react'
 
 const statusVariant: Record<string, any> = {
@@ -86,6 +87,10 @@ export function Projects() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
+          <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors mb-1">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Dashboard
+          </button>
           <h1 className="text-2xl font-bold text-neutral-900">Projetos</h1>
           <p className="mt-1 text-neutral-600">
             Gerencie seus projetos de construção

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { useAuthStore } from './stores/auth.store'
 import { PrivateRoute } from './components/auth/PrivateRoute'
@@ -108,8 +108,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 // Pending approval page
 function PendingApproval() {
   const { user, clearAuth } = useAuthStore()
+  const queryClient = useQueryClient()
 
   const handleLogout = () => {
+    queryClient.clear()
     clearAuth()
     window.location.href = '/login'
   }

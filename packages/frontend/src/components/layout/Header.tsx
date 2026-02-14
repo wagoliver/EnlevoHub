@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   LogOut,
   Settings,
@@ -44,12 +45,14 @@ const ROLE_COLORS: Record<Role, string> = {
 
 export function Header() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user, tenant, clearAuth } = useAuthStore()
   const { isCollapsed, toggleCollapsed, setMobileOpen } = useSidebarStore()
   const isMobile = useIsMobile()
   const canEditTenant = usePermission('tenant:edit')
 
   const handleLogout = () => {
+    queryClient.clear()
     clearAuth()
     navigate('/login')
   }

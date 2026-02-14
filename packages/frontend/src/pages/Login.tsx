@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -21,6 +22,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function Login() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { setAuth } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -37,6 +39,7 @@ export function Login() {
     setIsLoading(true)
     try {
       const response = await authAPI.login(data.email, data.password) as any
+      queryClient.clear()
       setAuth(response)
       toast.success('Login realizado com sucesso!')
       navigate('/')

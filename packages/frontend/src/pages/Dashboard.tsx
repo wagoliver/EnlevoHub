@@ -26,7 +26,6 @@ import {
   Check,
   Pause,
   XCircle,
-  ChevronsRight,
   Lightbulb,
   ArrowRight,
 } from 'lucide-react'
@@ -275,7 +274,7 @@ function stateBadgeClass(state: NodeState, isPaused: boolean): string {
 }
 
 // ---------------------------------------------------------------------------
-// Desktop flow node — rounded square with gradient
+// Desktop flow node — compact circle with animations
 // ---------------------------------------------------------------------------
 
 function FlowNode({
@@ -294,75 +293,73 @@ function FlowNode({
   isCancelled: boolean
 }) {
   const Icon = phase.icon
+  const isCompleted = state === 'completed' && !isCancelled
+  const isCurrent = state === 'current' && !isCancelled
 
-  let bgStyle: React.CSSProperties = {}
-  let borderClass = ''
   let iconEl: React.ReactNode
-
   if (isCancelled) {
-    bgStyle = { backgroundColor: '#d4d4d4' }
-    borderClass = 'border-neutral-400'
-    iconEl = <XCircle className="h-6 w-6 text-white" />
-  } else if (state === 'completed') {
-    bgStyle = { background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_DARK} 100%)` }
-    iconEl = <Check className="h-6 w-6 text-white" />
-  } else if (state === 'current') {
-    bgStyle = { borderColor: GOLD }
-    borderClass = 'border-2 bg-white'
-    iconEl = isPaused ? (
-      <Pause className="h-6 w-6" style={{ color: GOLD }} />
-    ) : (
-      <Icon className="h-6 w-6" style={{ color: GOLD }} />
-    )
+    iconEl = <XCircle className="h-4 w-4 text-white" />
+  } else if (isCompleted) {
+    iconEl = <Check className="h-4 w-4 text-white" />
+  } else if (isCurrent && isPaused) {
+    iconEl = <Pause className="h-4 w-4" style={{ color: GOLD }} />
+  } else if (isCurrent) {
+    iconEl = <Icon className="h-4 w-4" style={{ color: GOLD }} />
   } else {
-    borderClass = 'border border-dashed border-neutral-300 bg-neutral-50'
-    iconEl = <Icon className="h-6 w-6 text-neutral-300" />
+    iconEl = <Icon className="h-4 w-4 text-neutral-300" />
   }
-
-  const ringClass = isSelected
-    ? 'ring-2 ring-offset-2'
-    : ''
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2.5 focus:outline-none transition-transform duration-200 hover:scale-105 group"
+      className="flex flex-col items-center gap-1.5 focus:outline-none group"
     >
-      {/* Number badge */}
-      <span
-        className={`text-[10px] font-bold tracking-widest ${
-          state === 'future' && !isCancelled ? 'text-neutral-300' : 'text-neutral-400'
-        }`}
-      >
-        {String(phase.number).padStart(2, '0')}
-      </span>
+      <div className="relative">
+        {/* Animated glow ring for current phase */}
+        {isCurrent && (
+          <div
+            className="absolute -inset-1.5 rounded-full"
+            style={{ animation: 'glow-pulse 2.5s ease-in-out infinite' }}
+          />
+        )}
 
-      {/* Icon container */}
-      <div
-        className={`relative w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center
-          transition-all duration-300 shadow-sm ${borderClass} ${ringClass}
-          ${state === 'current' ? 'animate-pulse shadow-md' : ''}
-          ${state === 'completed' ? 'shadow-md' : ''}
-        `}
-        style={{
-          ...bgStyle,
-          ...(isSelected ? { ringColor: GOLD, '--tw-ring-color': GOLD } as React.CSSProperties : {}),
-        }}
-      >
-        {iconEl}
+        <div
+          className={`
+            relative w-10 h-10 lg:w-11 lg:h-11 rounded-full flex items-center justify-center
+            transition-all duration-300
+            ${isSelected ? 'scale-110' : 'group-hover:scale-105'}
+          `}
+          style={{
+            ...(isCancelled
+              ? { backgroundColor: '#e5e5e5' }
+              : isCompleted
+                ? { background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD_DARK} 100%)` }
+                : isCurrent
+                  ? { border: `2.5px solid ${GOLD}`, backgroundColor: 'white' }
+                  : { border: '2px dashed #d4d4d4', backgroundColor: '#fafafa' }),
+            ...(isSelected
+              ? { boxShadow: `0 0 0 3px rgba(184,163,120,0.2), 0 4px 14px rgba(184,163,120,0.15)` }
+              : isCompleted
+                ? { boxShadow: '0 2px 8px rgba(184,163,120,0.25)' }
+                : {}),
+          }}
+        >
+          {iconEl}
+        </div>
       </div>
 
-      {/* Name */}
       <span
-        className={`text-xs font-medium text-center leading-tight max-w-[80px] ${
+        className={`text-[11px] leading-tight text-center transition-all duration-200 ${
           isCancelled
             ? 'text-neutral-400'
-            : state === 'current'
+            : isSelected
               ? 'text-neutral-900 font-semibold'
-              : state === 'completed'
-                ? 'text-neutral-700'
-                : 'text-neutral-400'
+              : isCurrent
+                ? 'text-neutral-800 font-medium'
+                : isCompleted
+                  ? 'text-neutral-600 font-medium'
+                  : 'text-neutral-400'
         }`}
       >
         {phase.name}
@@ -372,22 +369,32 @@ function FlowNode({
 }
 
 // ---------------------------------------------------------------------------
-// Desktop horizontal connector
+// Desktop horizontal connector with shimmer animation
 // ---------------------------------------------------------------------------
 
 function FlowConnector({ filled }: { filled: boolean }) {
   return (
-    <div className="flex-1 flex items-center mx-0.5 lg:mx-1 -mt-3">
+    <div className="flex-1 flex items-center mx-0.5 mt-[18px] lg:mt-[20px]">
       {filled ? (
-        <div
-          className="h-[3px] w-full rounded-full"
-          style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_DARK})` }}
-        />
+        <div className="relative w-full h-[2px] rounded-full overflow-hidden">
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(90deg, ${GOLD}, ${GOLD_DARK})` }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'flow-shimmer 3s ease-in-out infinite',
+            }}
+          />
+        </div>
       ) : (
         <div
-          className="h-[3px] w-full"
+          className="h-[2px] w-full"
           style={{
-            backgroundImage: `repeating-linear-gradient(90deg, ${GRAY} 0px, ${GRAY} 6px, transparent 6px, transparent 12px)`,
+            backgroundImage: `repeating-linear-gradient(90deg, #e0e0e0 0px, #e0e0e0 4px, transparent 4px, transparent 8px)`,
           }}
         />
       )}
@@ -773,8 +780,9 @@ export function Dashboard() {
   const isPaused = selectedProject?.status === 'PAUSED'
   const isCancelled = selectedProject?.status === 'CANCELLED'
 
-  const row1 = PHASES.slice(0, 4)
-  const row2 = PHASES.slice(4, 8)
+  const completedPhases = selectedProject && !isCancelled
+    ? PHASES.filter(p => getNodeState(p.number, currentPhase) === 'completed').length
+    : 0
 
   return (
     <div className="space-y-8">
@@ -810,17 +818,26 @@ export function Dashboard() {
       </div>
 
       {/* ── Infographic Flow (Desktop) ─────────────────────────────── */}
+      <style>{`
+        @keyframes flow-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        @keyframes glow-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(184,163,120,0.4); }
+          50% { box-shadow: 0 0 0 10px rgba(184,163,120,0); }
+        }
+      `}</style>
       <div className="hidden md:block">
         <Card className="overflow-hidden border-0 shadow-lg">
-          {/* Gradient background */}
           <div
-            className="p-8 lg:p-10"
+            className="px-8 pt-7 pb-6 lg:px-10"
             style={{
               background:
                 'linear-gradient(135deg, #fafaf9 0%, #ffffff 40%, rgba(184,163,120,0.06) 100%)',
             }}
           >
-            <div className="flex items-center gap-2 mb-10">
+            <div className="flex items-center gap-2 mb-8">
               <h2 className="text-lg font-semibold text-neutral-800">
                 Fluxo da Obra
               </h2>
@@ -831,16 +848,16 @@ export function Dashboard() {
               )}
             </div>
 
-            {/* Row 1: phases 1-4 */}
+            {/* Single-row flow — all 8 phases */}
             <div className="flex items-start">
-              {row1.map((phase, idx) => {
+              {PHASES.map((phase, idx) => {
                 const phaseState = isCancelled
                   ? ('future' as NodeState)
                   : getNodeState(phase.number, currentPhase)
                 return (
                   <div
                     key={phase.number}
-                    className={`flex items-start ${idx < row1.length - 1 ? 'flex-1' : ''}`}
+                    className={`flex items-start ${idx < PHASES.length - 1 ? 'flex-1' : ''}`}
                   >
                     <FlowNode
                       phase={phase}
@@ -850,7 +867,7 @@ export function Dashboard() {
                       isPaused={isPaused && phase.number === currentPhase}
                       isCancelled={isCancelled}
                     />
-                    {idx < row1.length - 1 && (
+                    {idx < PHASES.length - 1 && (
                       <FlowConnector
                         filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
                       />
@@ -860,42 +877,27 @@ export function Dashboard() {
               })}
             </div>
 
-            {/* Row transition */}
-            <div className="flex items-center gap-3 my-6 px-2">
-              <div className="flex-1 h-px bg-neutral-200/80" />
-              <ChevronsRight className="h-4 w-4 text-neutral-300 rotate-90" />
-              <div className="flex-1 h-px bg-neutral-200/80" />
-            </div>
-
-            {/* Row 2: phases 5-8 */}
-            <div className="flex items-start">
-              {row2.map((phase, idx) => {
-                const globalIdx = idx + 4
-                const phaseState = isCancelled
-                  ? ('future' as NodeState)
-                  : getNodeState(phase.number, currentPhase)
-                return (
-                  <div
-                    key={phase.number}
-                    className={`flex items-start ${idx < row2.length - 1 ? 'flex-1' : ''}`}
-                  >
-                    <FlowNode
-                      phase={phase}
-                      state={phaseState}
-                      isSelected={selectedPhaseIdx === globalIdx}
-                      onClick={() => setSelectedPhaseIdx(globalIdx)}
-                      isPaused={isPaused && phase.number === currentPhase}
-                      isCancelled={isCancelled}
+            {/* Progress bar */}
+            {selectedProject && !isCancelled && (
+              <>
+                <Separator className="mt-6 mb-4 bg-neutral-100" />
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-neutral-400 flex-shrink-0">Progresso</span>
+                  <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700 ease-out"
+                      style={{
+                        width: `${(completedPhases / PHASES.length) * 100}%`,
+                        background: `linear-gradient(90deg, ${GOLD}, ${GOLD_DARK})`,
+                      }}
                     />
-                    {idx < row2.length - 1 && (
-                      <FlowConnector
-                        filled={!isCancelled && currentPhase > 0 && phase.number < currentPhase}
-                      />
-                    )}
                   </div>
-                )
-              })}
-            </div>
+                  <span className="text-xs font-medium text-neutral-400 flex-shrink-0">
+                    {completedPhases}/{PHASES.length}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </Card>
       </div>

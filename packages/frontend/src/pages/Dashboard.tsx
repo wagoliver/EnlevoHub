@@ -769,6 +769,13 @@ export function Dashboard() {
 
   const projects = projectsData?.data || []
 
+  // Auto-select when there's exactly one project and none is selected
+  useEffect(() => {
+    if (!selectedProjectId && projects.length === 1) {
+      setSelectedProjectId(projects[0].id)
+    }
+  }, [projects, selectedProjectId])
+
   const selectedProject = selectedProjectId
     ? projects.find((p: any) => p.id === selectedProjectId)
     : null

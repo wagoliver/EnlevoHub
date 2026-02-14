@@ -42,6 +42,8 @@ interface PhaseAction {
   projectPath?: string
   /** If true, this action requires a project to be selected */
   requiresProject: boolean
+  /** Optional tab to open in the target page */
+  tab?: string
 }
 
 interface Phase {
@@ -74,7 +76,7 @@ const PHASES: Phase[] = [
     tip: 'Comece criando o projeto — isso desbloqueia todas as outras funcionalidades da plataforma.',
     actions: [
       { label: 'Criar Projeto', path: '/projects', requiresProject: false },
-      { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true, tab: 'activities' },
     ],
   },
   {
@@ -94,8 +96,8 @@ const PHASES: Phase[] = [
     ],
     tip: 'Acesse o detalhe do projeto para revisar o planejamento e detalhar os quantitativos de cada atividade.',
     actions: [
-      { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
-      { label: 'Detalhar quantitativos', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true, tab: 'activities' },
+      { label: 'Detalhar quantitativos', path: '/projects', projectPath: '/projects/:id', requiresProject: true, tab: 'activities' },
     ],
   },
   {
@@ -177,7 +179,7 @@ const PHASES: Phase[] = [
     ],
     tip: 'Acesse o detalhe do projeto para acompanhar atividades e progresso em tempo real.',
     actions: [
-      { label: 'Acompanhar atividades do projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true },
+      { label: 'Acompanhar atividades do projeto', path: '/projects', projectPath: '/projects/:id', requiresProject: true, tab: 'activities' },
       { label: 'Gerenciar Empreiteiros em campo', path: '/contractors', requiresProject: false },
     ],
   },
@@ -726,7 +728,11 @@ function PhaseDetailPanel({
                       variant="ghost"
                       size="sm"
                       className="gap-1.5 text-[#b8a378] hover:text-[#9a8a6a] hover:bg-[#b8a378]/5 flex-shrink-0 h-8"
-                      onClick={() => navigate(`${path}?phase=${phase.number}`)}
+                      onClick={() => {
+                        const params = new URLSearchParams({ phase: String(phase.number) })
+                        if (action.tab) params.set('tab', action.tab)
+                        navigate(`${path}?${params.toString()}`)
+                      }}
                     >
                       Ir
                       <ArrowRight className="h-3.5 w-3.5" />

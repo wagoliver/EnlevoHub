@@ -396,13 +396,14 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
 
       {/* Activities Display */}
       {activities.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
-          <ClipboardList className="h-12 w-12 text-neutral-300" />
-          <h3 className="mt-4 text-lg font-medium text-neutral-900">
+        <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-16">
+          <ClipboardList className="h-16 w-16 text-neutral-300" />
+          <h3 className="mt-4 text-xl font-medium text-neutral-900">
             Nenhuma atividade cadastrada
           </h3>
-          <p className="mt-2 text-sm text-neutral-500">
-            Adicione atividades manualmente ou importe de um planejamento.
+          <p className="mt-2 text-sm text-neutral-500 text-center max-w-md">
+            As atividades representam as etapas da obra. Adicione manualmente ou
+            importe de um planejamento para acompanhar o progresso de cada fase.
           </p>
           {canEdit && (
             <Button className="mt-6" onClick={() => setShowAddDialog(true)}>

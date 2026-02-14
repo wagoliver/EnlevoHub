@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { WorkflowStepper } from '@/components/WorkflowStepper'
 import { ProjectFormDialog } from './ProjectFormDialog'
 import { ActivitiesTab } from './ActivitiesTab'
 import { MeasurementsTab } from './MeasurementsTab'
@@ -56,6 +57,7 @@ function formatCurrency(value: number) {
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const canEdit = usePermission('projects:edit')
   const canDelete = usePermission('projects:delete')
@@ -63,6 +65,21 @@ export function ProjectDetail() {
   const role = useRole()
   const isContractor = role === 'CONTRACTOR'
   const [showEditDialog, setShowEditDialog] = useState(false)
+
+  const phaseParam = searchParams.get('phase')
+  const activeTab = searchParams.get('tab') || 'overview'
+
+  const handleTabChange = (value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (value === 'overview') {
+        next.delete('tab')
+      } else {
+        next.set('tab', value)
+      }
+      return next
+    })
+  }
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', id],
@@ -116,29 +133,33 @@ export function ProjectDetail() {
 
   return (
     <div className="space-y-6">
+      {/* Workflow Stepper or Back button */}
+      {phaseParam ? (
+        <WorkflowStepper phase={parseInt(phaseParam, 10)} />
+      ) : (
+        <button
+          onClick={() => navigate('/projects')}
+          className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Projetos
+        </button>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/projects')}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-neutral-900">
-                {project.name}
-              </h1>
-              <Badge variant={statusVariant[project.status]}>
-                {statusLabel[project.status]}
-              </Badge>
-            </div>
-            {project.description && (
-              <p className="mt-1 text-neutral-600">{project.description}</p>
-            )}
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-neutral-900">
+              {project.name}
+            </h1>
+            <Badge variant={statusVariant[project.status]}>
+              {statusLabel[project.status]}
+            </Badge>
           </div>
+          {project.description && (
+            <p className="mt-1 text-neutral-600">{project.description}</p>
+          )}
         </div>
 
         {(canEdit || canDelete) && (
@@ -231,7 +252,7 @@ export function ProjectDetail() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="activities">Atividades</TabsTrigger>

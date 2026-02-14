@@ -33,7 +33,6 @@ import {
   Users,
   ShoppingCart,
   DollarSign,
-  FileText,
   Building2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'

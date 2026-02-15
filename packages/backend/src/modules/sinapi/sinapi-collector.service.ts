@@ -3,7 +3,8 @@ import ExcelJS from 'exceljs'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { execSync } from 'child_process'
+import * as https from 'https'
+import * as http from 'http'
 import * as unzipper from 'unzipper'
 
 const DOWNLOAD_URL_PATTERN =
@@ -703,26 +704,56 @@ export class SinapiCollectorService {
   // ---- Helpers ----
 
   private async downloadFile(url: string, dest: string): Promise<void> {
-    // Caixa CDN (Azion) returns 302→same URL loop for Node.js https.get
-    // but curl handles it correctly. Use curl for reliable downloads.
-    try {
-      execSync(
-        `curl -fsSL --max-time 180 -o "${dest}" "${url}"`,
-        { stdio: 'pipe', timeout: 200_000 },
-      )
-    } catch (err: any) {
-      const stderr = err.stderr?.toString() || ''
-      throw new Error(stderr || 'curl download failed')
-    }
+    return new Promise((resolve, reject) => {
+      const maxRedirects = 10
+      let redirectCount = 0
 
-    if (!fs.existsSync(dest)) {
-      throw new Error('Download completed but file not found')
-    }
+      const doRequest = (targetUrl: string) => {
+        const client = targetUrl.startsWith('https') ? https : http
+        const req = client.get(targetUrl, { timeout: 180_000 }, (res) => {
+          // Follow redirects
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            redirectCount++
+            if (redirectCount > maxRedirects) {
+              reject(new Error(`Too many redirects (${maxRedirects})`))
+              return
+            }
+            const next = new URL(res.headers.location, targetUrl).toString()
+            doRequest(next)
+            return
+          }
 
-    const stat = fs.statSync(dest)
-    if (stat.size < 1000) {
-      throw new Error(`Downloaded file too small (${stat.size} bytes)`)
-    }
+          if (res.statusCode !== 200) {
+            reject(new Error(`HTTP ${res.statusCode} ao baixar ${targetUrl}`))
+            return
+          }
+
+          const file = fs.createWriteStream(dest)
+          res.pipe(file)
+          file.on('finish', () => {
+            file.close()
+            const stat = fs.statSync(dest)
+            if (stat.size < 1000) {
+              reject(new Error(`Arquivo baixado muito pequeno (${stat.size} bytes)`))
+            } else {
+              resolve()
+            }
+          })
+          file.on('error', (err) => {
+            fs.unlinkSync(dest)
+            reject(err)
+          })
+        })
+
+        req.on('error', reject)
+        req.on('timeout', () => {
+          req.destroy()
+          reject(new Error('Download timeout (180s)'))
+        })
+      }
+
+      doRequest(url)
+    })
   }
 
   private async extractZip(zipPath: string, destDir: string): Promise<void> {

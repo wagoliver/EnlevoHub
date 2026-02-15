@@ -23,12 +23,13 @@ function requirePermission(permission: string) {
   }
 }
 
-function requireRoot() {
+function requireAdmin() {
   return async (request: any, reply: any) => {
-    if (request.user?.role !== 'ROOT') {
+    const role = request.user?.role
+    if (role !== 'ROOT' && role !== 'MASTER') {
       return reply.status(403).send({
         error: 'Forbidden',
-        message: 'Apenas ROOT pode importar dados SINAPI',
+        message: 'Apenas ROOT ou MASTER pode importar dados SINAPI',
       })
     }
   }
@@ -139,10 +140,10 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     }
   })
 
-  // ---- Import (ROOT only) ----
+  // ---- Import (ROOT/MASTER only) ----
 
   fastify.post('/import/insumos', {
-    preHandler: [authMiddleware, requireRoot()],
+    preHandler: [authMiddleware, requireAdmin()],
     schema: { consumes: ['multipart/form-data'] },
   }, async (request, reply) => {
     try {
@@ -162,7 +163,7 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
   })
 
   fastify.post('/import/composicoes', {
-    preHandler: [authMiddleware, requireRoot()],
+    preHandler: [authMiddleware, requireAdmin()],
     schema: { consumes: ['multipart/form-data'] },
   }, async (request, reply) => {
     try {
@@ -182,7 +183,7 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
   })
 
   fastify.post('/import/precos', {
-    preHandler: [authMiddleware, requireRoot()],
+    preHandler: [authMiddleware, requireAdmin()],
     schema: { consumes: ['multipart/form-data'] },
   }, async (request, reply) => {
     try {
@@ -201,10 +202,10 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     }
   })
 
-  // ---- Coleta Automática (ROOT only) ----
+  // ---- Coleta Automática (ROOT/MASTER only) ----
 
   fastify.post('/collect', {
-    preHandler: [authMiddleware, requireRoot()],
+    preHandler: [authMiddleware, requireAdmin()],
   }, async (request, reply) => {
     try {
       const { year, month } = request.body as { year: number; month: number }

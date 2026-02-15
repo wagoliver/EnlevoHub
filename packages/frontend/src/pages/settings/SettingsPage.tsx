@@ -8,7 +8,7 @@ import { SinapiSettings } from './SinapiSettings'
 export function SettingsPage() {
   const canEditTenant = usePermission('tenant:edit')
   const role = useRole()
-  const isRoot = role === 'ROOT'
+  const canManageSinapi = role === 'ROOT' || role === 'MASTER'
   const [searchParams, setSearchParams] = useSearchParams()
 
   if (!canEditTenant) {
@@ -36,7 +36,7 @@ export function SettingsPage() {
             <Mail className="h-4 w-4" />
             Email / SMTP
           </TabsTrigger>
-          {isRoot && (
+          {canManageSinapi && (
             <TabsTrigger value="sinapi" className="gap-2">
               <Database className="h-4 w-4" />
               Base SINAPI
@@ -48,7 +48,7 @@ export function SettingsPage() {
           <EmailSettings />
         </TabsContent>
 
-        {isRoot && (
+        {canManageSinapi && (
           <TabsContent value="sinapi" className="mt-6">
             <SinapiSettings />
           </TabsContent>

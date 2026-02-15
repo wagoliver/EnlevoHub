@@ -4,6 +4,7 @@ import { JWTService } from '../../core/auth/jwt.service'
 import { hasPermission } from '../../core/rbac/permissions'
 import { SinapiService } from './sinapi.service'
 import { SinapiImportService } from './sinapi-import.service'
+import { SinapiCollectorService } from './sinapi-collector.service'
 import {
   searchInsumosSchema,
   searchComposicoesSchema,
@@ -38,6 +39,7 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
   const authMiddleware = createAuthMiddleware(jwtService)
   const service = new SinapiService(fastify.prisma)
   const importService = new SinapiImportService(fastify.prisma)
+  const collectorService = new SinapiCollectorService(fastify.prisma)
 
   const getUserId = (request: any): string => request.user.userId
 
@@ -190,6 +192,35 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
       }
       const buffer = await data.toBuffer()
       const result = await importService.importPrecos(getUserId(request), data.filename, buffer)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Coleta Automática (ROOT only) ----
+
+  fastify.post('/collect', {
+    preHandler: [authMiddleware, requireRoot()],
+  }, async (request, reply) => {
+    try {
+      const { year, month } = request.body as { year: number; month: number }
+
+      if (!year || !month || month < 1 || month > 12) {
+        return reply.status(400).send({
+          error: 'Bad Request',
+          message: 'Informe year e month válidos',
+        })
+      }
+
+      const result = await collectorService.collect(
+        year,
+        month,
+        getUserId(request),
+      )
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

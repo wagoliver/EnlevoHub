@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { sinapiAPI } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
@@ -13,18 +13,68 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Upload, Loader2, CheckCircle2, AlertCircle, Database, Info } from 'lucide-react'
+import {
+  Upload,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Database,
+  Info,
+  Download,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
 
 type ImportType = 'insumos' | 'composicoes' | 'precos'
 
+function buildMonthOptions() {
+  const options: { label: string; year: number; month: number }[] = []
+  const now = new Date()
+  // from current month back 12 months
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const y = d.getFullYear()
+    const m = d.getMonth() + 1
+    const mm = String(m).padStart(2, '0')
+    options.push({ label: `${mm}/${y}`, year: y, month: m })
+  }
+  return options
+}
+
 export function SinapiSettings() {
+  const queryClient = useQueryClient()
+
+  // Coleta automatica
+  const monthOptions = buildMonthOptions()
+  const [selectedMonth, setSelectedMonth] = useState(
+    `${monthOptions[0].year}-${monthOptions[0].month}`,
+  )
+  const [collectResult, setCollectResult] = useState<any>(null)
+
+  // Import manual
+  const [showManualImport, setShowManualImport] = useState(false)
   const [importType, setImportType] = useState<ImportType>('insumos')
   const [file, setFile] = useState<File | null>(null)
-  const [result, setResult] = useState<any>(null)
+  const [importResult, setImportResult] = useState<any>(null)
 
   const { data: meses } = useQuery({
     queryKey: ['sinapi-meses'],
     queryFn: () => sinapiAPI.getMesesReferencia(),
+  })
+
+  const collectMutation = useMutation({
+    mutationFn: async () => {
+      const [y, m] = selectedMonth.split('-').map(Number)
+      return sinapiAPI.collect(y, m)
+    },
+    onSuccess: (data) => {
+      setCollectResult(data)
+      queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
+      toast.success('Coleta SINAPI finalizada com sucesso')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
   })
 
   const importMutation = useMutation({
@@ -39,18 +89,14 @@ export function SinapiSettings() {
       }
     },
     onSuccess: (data) => {
-      setResult(data)
+      setImportResult(data)
+      queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
       toast.success(`Importacao concluida: ${data.importedCount} registros importados`)
     },
     onError: (error: Error) => {
       toast.error(error.message)
     },
   })
-
-  const handleReset = () => {
-    setFile(null)
-    setResult(null)
-  }
 
   const mesesList = Array.isArray(meses) ? meses : []
 
@@ -81,79 +127,98 @@ export function SinapiSettings() {
             </div>
           ) : (
             <p className="text-sm text-neutral-500">
-              Nenhum dado importado ainda. Importe os arquivos CSV abaixo.
+              Nenhum dado importado ainda. Use a coleta automatica abaixo.
             </p>
           )}
         </CardContent>
       </Card>
 
-      {/* Importacao */}
+      {/* Coleta automatica */}
       <Card>
         <CardHeader>
-          <CardTitle>Importar Dados SINAPI</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5" />
+            Coleta Automatica
+          </CardTitle>
           <CardDescription>
-            Importe os dados do SINAPI a partir de arquivos CSV disponibilizados pela Caixa
+            Baixa e importa automaticamente todos os dados (insumos, composicoes e precos) direto do site da Caixa
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <CardContent className="space-y-4">
+          <div className="flex items-end gap-4">
             <div className="space-y-2">
-              <Label>Tipo de Importacao</Label>
-              <Select value={importType} onValueChange={(v) => { setImportType(v as ImportType); handleReset() }}>
-                <SelectTrigger>
+              <Label>Mes de referencia</Label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="insumos">Insumos (materiais, mao de obra, equipamentos)</SelectItem>
-                  <SelectItem value="composicoes">Composicoes (receitas de servicos)</SelectItem>
-                  <SelectItem value="precos">Precos por UF/mes</SelectItem>
+                  {monthOptions.map((opt) => (
+                    <SelectItem key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Arquivo CSV</Label>
-              <Input
-                type="file"
-                accept=".csv,.txt"
-                onChange={(e) => { setFile(e.target.files?.[0] || null); setResult(null) }}
-              />
+            <Button
+              onClick={() => { setCollectResult(null); collectMutation.mutate() }}
+              disabled={collectMutation.isPending}
+              size="lg"
+            >
+              {collectMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {collectMutation.isPending ? 'Coletando...' : 'Coletar Base SINAPI'}
+            </Button>
+          </div>
+
+          {collectMutation.isPending && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Coletando dados do SINAPI...
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Baixando ZIP, extraindo XLSX e importando insumos, composicoes e precos.
+                    Isso pode levar alguns minutos.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Colunas esperadas */}
-          <div className="text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
-            <p className="font-medium mb-1">Colunas esperadas para "{importType}":</p>
-            {importType === 'insumos' && (
-              <code className="text-neutral-700">codigo; descricao; unidade; tipo</code>
-            )}
-            {importType === 'composicoes' && (
-              <code className="text-neutral-700">composicao_codigo; composicao_descricao; composicao_unidade; insumo_codigo; coeficiente</code>
-            )}
-            {importType === 'precos' && (
-              <code className="text-neutral-700">codigo; uf; mes_referencia; preco_desonerado; preco_nao_desonerado</code>
-            )}
-          </div>
-
-          {/* Result */}
-          {result && (
-            <div className={`rounded-lg p-4 ${result.errorCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'} border`}>
+          {collectResult && (
+            <div className={`rounded-lg p-4 border ${collectResult.errors?.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
               <div className="flex items-start gap-2">
-                {result.errorCount > 0 ? (
+                {collectResult.errors?.length > 0 ? (
                   <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
                 ) : (
                   <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                 )}
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <p className="text-sm font-medium">
-                    {result.importedCount} de {result.totalRecords} registros importados
+                    Coleta {collectResult.mesReferencia} finalizada
                   </p>
-                  {result.errorCount > 0 && (
-                    <p className="text-xs text-amber-600">{result.errorCount} erro(s)</p>
-                  )}
-                  {result.errors?.length > 0 && (
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                    <span className="text-neutral-600">Insumos:</span>
+                    <span className="font-medium">{collectResult.insumos?.imported ?? 0} de {collectResult.insumos?.total ?? 0}</span>
+                    <span className="text-neutral-600">Precos:</span>
+                    <span className="font-medium">{collectResult.precos?.imported ?? 0} de {collectResult.precos?.total ?? 0}</span>
+                    <span className="text-neutral-600">Composicoes:</span>
+                    <span className="font-medium">{collectResult.composicoes?.imported ?? 0} de {collectResult.composicoes?.total ?? 0}</span>
+                    <span className="text-neutral-600">Itens analiticos:</span>
+                    <span className="font-medium">{collectResult.analitico?.imported ?? 0} de {collectResult.analitico?.total ?? 0}</span>
+                  </div>
+                  {collectResult.errors?.length > 0 && (
                     <div className="mt-2 max-h-32 overflow-y-auto text-xs text-neutral-600 space-y-0.5">
-                      {result.errors.map((err: string, i: number) => (
+                      <p className="text-amber-600 font-medium">{collectResult.errors.length} erro(s):</p>
+                      {collectResult.errors.map((err: string, i: number) => (
                         <p key={i}>{err}</p>
                       ))}
                     </div>
@@ -162,43 +227,117 @@ export function SinapiSettings() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          <div className="flex items-center gap-3">
+      {/* Dica */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="flex gap-3 pt-6">
+          <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-medium text-blue-900">Como funciona</h3>
+            <p className="mt-1 text-sm text-blue-700">
+              A coleta automatica baixa o arquivo XLSX oficial da Caixa para o mes selecionado e
+              importa tudo de uma vez: insumos, precos por UF (com e sem desoneracao) e composicoes
+              analiticas com coeficientes. O processo pode levar alguns minutos dependendo da conexao.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Import manual (collapsible) */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none"
+          onClick={() => setShowManualImport(!showManualImport)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Upload className="h-4 w-4" />
+                Importacao Manual (CSV)
+              </CardTitle>
+              <CardDescription>
+                Alternativa para importar arquivos CSV individualmente
+              </CardDescription>
+            </div>
+            {showManualImport ? (
+              <ChevronUp className="h-5 w-5 text-neutral-400" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-neutral-400" />
+            )}
+          </div>
+        </CardHeader>
+
+        {showManualImport && (
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de Importacao</Label>
+                <Select value={importType} onValueChange={(v) => { setImportType(v as ImportType); setFile(null); setImportResult(null) }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="insumos">Insumos</SelectItem>
+                    <SelectItem value="composicoes">Composicoes</SelectItem>
+                    <SelectItem value="precos">Precos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Arquivo CSV</Label>
+                <Input
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={(e) => { setFile(e.target.files?.[0] || null); setImportResult(null) }}
+                />
+              </div>
+            </div>
+
+            <div className="text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
+              <p className="font-medium mb-1">Colunas esperadas:</p>
+              {importType === 'insumos' && (
+                <code className="text-neutral-700">codigo; descricao; unidade; tipo</code>
+              )}
+              {importType === 'composicoes' && (
+                <code className="text-neutral-700">composicao_codigo; composicao_descricao; composicao_unidade; insumo_codigo; coeficiente</code>
+              )}
+              {importType === 'precos' && (
+                <code className="text-neutral-700">codigo; uf; mes_referencia; preco_desonerado; preco_nao_desonerado</code>
+              )}
+            </div>
+
+            {importResult && (
+              <div className={`rounded-lg p-4 ${importResult.errorCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'} border`}>
+                <div className="flex items-start gap-2">
+                  {importResult.errorCount > 0 ? (
+                    <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                  )}
+                  <p className="text-sm font-medium">
+                    {importResult.importedCount} de {importResult.totalRecords} registros importados
+                  </p>
+                </div>
+              </div>
+            )}
+
             <Button
               onClick={() => importMutation.mutate()}
               disabled={!file || importMutation.isPending}
+              variant="outline"
             >
               {importMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <Upload className="h-4 w-4 mr-2" />
               )}
-              Importar
+              Importar CSV
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Dica de ordem de importacao */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="flex gap-3 pt-6">
-          <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-medium text-blue-900">Ordem de Importacao</h3>
-            <p className="mt-1 text-sm text-blue-700">
-              Para importar a base completa, siga esta ordem:
-            </p>
-            <ol className="mt-2 space-y-1 text-sm text-blue-700 list-decimal list-inside">
-              <li><strong>Insumos</strong> — materiais, mao de obra e equipamentos</li>
-              <li><strong>Composicoes</strong> — receitas de servicos com coeficientes</li>
-              <li><strong>Precos</strong> — precos por UF e mes de referencia</li>
-            </ol>
-            <p className="mt-2 text-xs text-blue-600">
-              Os precos referenciam insumos, e as composicoes referenciam insumos.
-              Importar nesta ordem evita erros de referencia.
-            </p>
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
     </div>
   )

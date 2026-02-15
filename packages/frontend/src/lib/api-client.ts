@@ -613,6 +613,7 @@ export const sinapiAPI = {
   importInsumos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/insumos', formData),
   importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),
   importPrecos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/precos', formData),
+  collect: (year: number, month: number) => apiClient.post<any>('/sinapi/collect', { year, month }),
 }
 
 export const levantamentoAPI = {

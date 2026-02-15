@@ -31,13 +31,12 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
       0,
     )
 
-    const totalGeral = itens.reduce(
-      (sum: number, i: any) => sum + Number(i.quantidade) * Number(i.precoUnitario),
-      0,
-    )
+    const totalAmbientes = ambientesData.reduce((sum, a) => sum + a.total, 0)
+    const totalGeral = totalAmbientes + totalSemAmbiente
+    const itensEmAmbientes = ambientesData.reduce((sum, a) => sum + a.itemCount, 0)
     const areaTotal = ambientesData.reduce((sum, a) => sum + a.area, 0)
 
-    return { ambientesData, itensSemAmbiente, totalSemAmbiente, totalGeral, areaTotal }
+    return { ambientesData, itensSemAmbiente, totalSemAmbiente, totalAmbientes, totalGeral, itensEmAmbientes, areaTotal }
   }, [ambientes, itens])
 
   return (
@@ -57,8 +56,11 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
         </Card>
         <Card>
           <CardContent className="py-3 px-4 text-center">
-            <p className="text-2xl font-bold">{itens.length}</p>
+            <p className="text-2xl font-bold">{resumo.itensEmAmbientes}</p>
             <p className="text-xs text-neutral-500">Itens</p>
+            {resumo.itensSemAmbiente.length > 0 && (
+              <p className="text-[10px] text-amber-500">+{resumo.itensSemAmbiente.length} sem ambiente</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -69,8 +71,11 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
         </Card>
         <Card>
           <CardContent className="py-3 px-4 text-center">
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(resumo.totalGeral)}</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(resumo.totalAmbientes)}</p>
             <p className="text-xs text-neutral-500">Custo Total</p>
+            {resumo.totalSemAmbiente > 0 && (
+              <p className="text-[10px] text-amber-500">+{formatCurrency(resumo.totalSemAmbiente)} sem amb.</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -84,7 +89,7 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
           <CardContent>
             <div className="space-y-2">
               {resumo.ambientesData.map((amb) => {
-                const pct = resumo.totalGeral > 0 ? (amb.total / resumo.totalGeral) * 100 : 0
+                const pct = resumo.totalAmbientes > 0 ? (amb.total / resumo.totalAmbientes) * 100 : 0
                 return (
                   <div key={amb.id} className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">

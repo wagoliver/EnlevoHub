@@ -43,11 +43,17 @@ export function AmbienteSidebar({
     })
   }, [ambientes, itens])
 
-  // Summary
-  const totalGeral = useMemo(
-    () => itens.reduce((sum: number, i: any) => sum + Number(i.quantidade) * Number(i.precoUnitario), 0),
-    [itens],
-  )
+  // Summary — only items that belong to ambientes
+  const { totalAmbientes, totalItensAmbientes, itensOrfaos } = useMemo(() => {
+    const ambienteIds = new Set(ambientes.map((a: any) => a.id))
+    const comAmbiente = itens.filter((i: any) => i.ambienteId && ambienteIds.has(i.ambienteId))
+    const semAmbiente = itens.filter((i: any) => !i.ambienteId || !ambienteIds.has(i.ambienteId))
+    return {
+      totalAmbientes: comAmbiente.reduce((sum: number, i: any) => sum + Number(i.quantidade) * Number(i.precoUnitario), 0),
+      totalItensAmbientes: comAmbiente.length,
+      itensOrfaos: semAmbiente.length,
+    }
+  }, [ambientes, itens])
 
   return (
     <div className="flex flex-col h-full">
@@ -135,12 +141,17 @@ export function AmbienteSidebar({
       <div className="border-t px-3 py-3 bg-neutral-50/80 space-y-1">
         <div className="flex justify-between text-xs text-neutral-500">
           <span>{ambientes.length} ambiente{ambientes.length !== 1 ? 's' : ''}</span>
-          <span>{itens.length} ite{itens.length === 1 ? 'm' : 'ns'}</span>
+          <span>{totalItensAmbientes} ite{totalItensAmbientes === 1 ? 'm' : 'ns'}</span>
         </div>
         <div className="flex justify-between items-baseline">
           <span className="text-xs text-neutral-500">Total:</span>
-          <span className="text-sm font-bold text-green-700">{formatCurrency(totalGeral)}</span>
+          <span className="text-sm font-bold text-green-700">{formatCurrency(totalAmbientes)}</span>
         </div>
+        {itensOrfaos > 0 && (
+          <div className="text-[10px] text-amber-500 text-right">
+            +{itensOrfaos} ite{itensOrfaos === 1 ? 'm' : 'ns'} sem ambiente
+          </div>
+        )}
       </div>
     </div>
   )

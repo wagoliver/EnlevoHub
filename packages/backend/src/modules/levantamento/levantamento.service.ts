@@ -219,6 +219,7 @@ export class LevantamentoService {
       precoUnitario: item.precoUnitario,
       etapa: item.etapa || null,
       ambienteId: item.ambienteId || null,
+      sinapiComposicaoId: item.sinapiComposicaoId || null,
       observacoes: item.observacoes || null,
     }))
 

@@ -85,6 +85,7 @@ export const batchCreateItemsSchema = z.object({
     precoUnitario: z.number().min(0),
     etapa: z.string().max(200).optional(),
     ambienteId: z.string().uuid().optional(),
+    sinapiComposicaoId: z.string().uuid().optional(),
     observacoes: z.string().optional(),
   })).min(1).max(50),
 })

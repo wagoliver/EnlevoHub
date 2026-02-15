@@ -66,7 +66,8 @@ JWT_SECRET=$JWT_SECRET
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 NODE_ENV=production
-UPLOAD_MAX_SIZE=10485760
+UPLOAD_MAX_SIZE=52428800
+APP_PORT=3000
 FRONTEND_URL=https://$DOMAIN
 LOG_LEVEL=info
 ENVEOF
@@ -157,8 +158,8 @@ server {
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
     gzip_min_length 1000;
 
-    # Upload size
-    client_max_body_size 10M;
+    # Upload size (ZIP do SINAPI ~15-20 MB)
+    client_max_body_size 50M;
 
     # Proxy to frontend container
     location / {
@@ -171,6 +172,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+
+        # Timeout for long-running operations (SINAPI import)
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+
+        # Disable buffering for SSE streaming
+        proxy_buffering off;
     }
 }
 NGINXEOF

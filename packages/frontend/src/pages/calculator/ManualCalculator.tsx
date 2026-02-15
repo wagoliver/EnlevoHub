@@ -20,7 +20,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Plus, Trash2, Loader2, Save } from 'lucide-react'
-import { ETAPAS_LISTA } from './servicosCatalogo'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -31,6 +30,7 @@ interface ManualCalculatorProps {
   levantamentoId: string
   itens: any[]
   ambienteId?: string
+  etapas?: string[]
 }
 
 interface EditingItem {
@@ -44,7 +44,7 @@ interface EditingItem {
 
 const emptyItem: EditingItem = { nome: '', unidade: 'UN', quantidade: '', precoUnitario: '', etapa: '' }
 
-export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId }: ManualCalculatorProps) {
+export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [] }: ManualCalculatorProps) {
   const queryClient = useQueryClient()
   const [newItem, setNewItem] = useState<EditingItem>({ ...emptyItem })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -172,7 +172,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId 
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="_none">—</SelectItem>
-                          {ETAPAS_LISTA.map((e) => (
+                          {etapas.map((e) => (
                             <SelectItem key={e} value={e}>{e}</SelectItem>
                           ))}
                         </SelectContent>
@@ -267,7 +267,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId 
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">—</SelectItem>
-                    {ETAPAS_LISTA.map((e) => (
+                    {etapas.map((e) => (
                       <SelectItem key={e} value={e}>{e}</SelectItem>
                     ))}
                   </SelectContent>

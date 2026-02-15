@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { levantamentoAPI } from '@/lib/api-client'
+import { levantamentoAPI, projectsAPI } from '@/lib/api-client'
 import { usePermission } from '@/hooks/usePermission'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,28 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     queryFn: () => levantamentoAPI.getById(projectId, selectedLevId!),
     enabled: !!selectedLevId,
   })
+
+  // Buscar atividades do projeto para extrair etapas (PHASE/STAGE)
+  const { data: activities } = useQuery({
+    queryKey: ['project-activities', projectId],
+    queryFn: () => projectsAPI.listActivities(projectId),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const etapas = useMemo(() => {
+    if (!activities || !Array.isArray(activities)) return []
+    const nomes: string[] = []
+    function extract(items: any[]) {
+      for (const item of items) {
+        if (item.level === 'PHASE' || item.level === 'STAGE') {
+          nomes.push(item.name)
+        }
+        if (item.children?.length) extract(item.children)
+      }
+    }
+    extract(activities)
+    return nomes
+  }, [activities])
 
   const createMutation = useMutation({
     mutationFn: (data: any) => levantamentoAPI.create(projectId, data),
@@ -229,6 +251,7 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
                 projectId={projectId}
                 levantamentoId={selectedLev.id}
                 itens={itens}
+                etapas={etapas}
               />
             ) : (
               <AmbienteResumo

@@ -25,26 +25,27 @@ interface UpdateTemplateInput {
 // Templates with tags=[] apply to ALL rooms. Templates with tags=['AREA_MOLHADA'] only for wet areas.
 const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Base services (all rooms) ---
-  { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Alvenaria', order: 10 },
-  { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 20 },
-  { sinapiCodigo: '87535', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 21 },
-  { sinapiCodigo: '87620', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 40 },
-  { sinapiCodigo: '87263', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 41 },
-  { sinapiCodigo: '88648', areaTipo: 'PERIMETRO', tags: [], padrao: true, etapa: 'Piso', order: 42 },
-  { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Pintura', order: 50 },
-  { sinapiCodigo: '88488', areaTipo: 'TETO', tags: [], padrao: true, etapa: 'Pintura', order: 51 },
-  { sinapiCodigo: '91947', areaTipo: 'MANUAL', tags: [], padrao: false, etapa: 'Instalações', order: 70 },
+  // nomeCustom serves as fallback when SINAPI data is not yet imported
+  { sinapiCodigo: '103324', nomeCustom: 'Alvenaria de vedação', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Alvenaria', order: 10 },
+  { sinapiCodigo: '87879', nomeCustom: 'Chapisco interno', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 20 },
+  { sinapiCodigo: '87535', nomeCustom: 'Emboço / massa única interno', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 21 },
+  { sinapiCodigo: '87620', nomeCustom: 'Contrapiso', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 40 },
+  { sinapiCodigo: '87263', nomeCustom: 'Piso cerâmico / porcelanato', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 41 },
+  { sinapiCodigo: '88648', nomeCustom: 'Rodapé cerâmico', areaTipo: 'PERIMETRO', tags: [], padrao: true, etapa: 'Piso', order: 42 },
+  { sinapiCodigo: '88489', nomeCustom: 'Pintura interna (paredes)', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Pintura', order: 50 },
+  { sinapiCodigo: '88488', nomeCustom: 'Pintura de teto', areaTipo: 'TETO', tags: [], padrao: true, etapa: 'Pintura', order: 51 },
+  { sinapiCodigo: '91947', nomeCustom: 'Ponto de instalação elétrica', areaTipo: 'MANUAL', tags: [], padrao: false, etapa: 'Instalações', order: 70 },
 
   // --- Área Molhada (banheiro, cozinha, etc.) ---
-  { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Impermeabilização', order: 30 },
-  { sinapiCodigo: '87265', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Revestimento', order: 22 },
+  { sinapiCodigo: '98555', nomeCustom: 'Impermeabilização', areaTipo: 'PISO', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Impermeabilização', order: 30 },
+  { sinapiCodigo: '87265', nomeCustom: 'Revestimento cerâmico (azulejo)', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Revestimento', order: 22 },
   { nomeCustom: 'Ponto de instalação hidráulica', areaTipo: 'MANUAL', tags: ['AREA_MOLHADA'], padrao: false, etapa: 'Instalações', order: 71 },
 
   // --- Área Externa (varanda, terraço, etc.) ---
-  { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_EXTERNA'], padrao: true, etapa: 'Impermeabilização', order: 31 },
+  { sinapiCodigo: '98555', nomeCustom: 'Impermeabilização externa', areaTipo: 'PISO', tags: ['AREA_EXTERNA'], padrao: true, etapa: 'Impermeabilização', order: 31 },
 
   // --- Opcional (não padrão) ---
-  { sinapiCodigo: '96109', areaTipo: 'TETO', tags: [], padrao: false, etapa: 'Teto', order: 60 },
+  { sinapiCodigo: '96109', nomeCustom: 'Forro de gesso', areaTipo: 'TETO', tags: [], padrao: false, etapa: 'Teto', order: 60 },
 ]
 
 // Default tags for room characteristics
@@ -160,16 +161,30 @@ export class ServicoTemplateService {
   }
 
   async seedDefaults(tenantId: string) {
-    const existing = await this.prisma.servicoTemplate.count({
+    // Seed tags first
+    await this.seedTags(tenantId)
+
+    const existing = await this.prisma.servicoTemplate.findMany({
       where: { tenantId },
     })
 
-    if (existing > 0) {
-      return { seeded: false, count: existing, message: 'Templates já existem' }
+    if (existing.length > 0) {
+      // Backfill: update templates that have sinapiCodigo but no nomeCustom
+      let patched = 0
+      for (const tpl of existing) {
+        if (tpl.sinapiCodigo && !tpl.nomeCustom) {
+          const def = DEFAULT_TEMPLATES.find((d) => d.sinapiCodigo === tpl.sinapiCodigo)
+          if (def?.nomeCustom) {
+            await this.prisma.servicoTemplate.update({
+              where: { id: tpl.id },
+              data: { nomeCustom: def.nomeCustom },
+            })
+            patched++
+          }
+        }
+      }
+      return { seeded: false, count: existing.length, patched, message: 'Templates já existem' }
     }
-
-    // Seed tags first
-    await this.seedTags(tenantId)
 
     const data = DEFAULT_TEMPLATES.map((t) => ({
       tenantId,

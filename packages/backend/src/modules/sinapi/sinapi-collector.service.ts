@@ -104,23 +104,24 @@ export class SinapiCollectorService {
   ): Promise<CollectResult> {
     const errors: string[] = []
 
-    // Find the Referência XLSX
-    const files = fs.readdirSync(tmpDir)
-    const refFile = files.find(
-      (f) => f.toLowerCase().includes('refer') && f.endsWith('.xlsx'),
+    // Find the Referência XLSX (search recursively — ZIP may extract into subfolder)
+    const xlsxPath = this.findFileRecursive(tmpDir, (f) =>
+      f.toLowerCase().includes('refer') && f.endsWith('.xlsx'),
     )
-    if (!refFile) {
+    if (!xlsxPath) {
+      const allFiles = this.listAllFiles(tmpDir)
       throw new Error(
         'Arquivo de referência não encontrado no ZIP. Arquivos: ' +
-          files.join(', '),
+          allFiles.join(', '),
       )
     }
+
+    const refFile = path.basename(xlsxPath)
 
     // Extract mesRef from filename (e.g. "SINAPI_Referência_2026_01.xlsx" → "2026-01")
     const mesRefMatch = refFile.match(/(\d{4})[_-](\d{2})/)
     const mesRef = mesRefMatch ? `${mesRefMatch[1]}-${mesRefMatch[2]}` : 'desconhecido'
 
-    const xlsxPath = path.join(tmpDir, refFile)
     log(`Processando ${refFile} (${mesRef})...`)
 
     const workbook = new ExcelJS.Workbook()
@@ -797,5 +798,36 @@ export class SinapiCollectorService {
     const str = String(val).trim().replace(/\./g, '').replace(',', '.')
     const num = parseFloat(str)
     return isNaN(num) ? 0 : num
+  }
+
+  /** Recursively search for a file matching predicate */
+  private findFileRecursive(dir: string, predicate: (name: string) => boolean): string | null {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isFile() && predicate(entry.name)) {
+        return fullPath
+      }
+      if (entry.isDirectory()) {
+        const found = this.findFileRecursive(fullPath, predicate)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  /** List all files recursively (for error messages) */
+  private listAllFiles(dir: string): string[] {
+    const result: string[] = []
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        result.push(entry.name)
+      } else if (entry.isDirectory()) {
+        const sub = this.listAllFiles(path.join(dir, entry.name))
+        result.push(...sub.map((f) => `${entry.name}/${f}`))
+      }
+    }
+    return result
   }
 }

@@ -207,6 +207,20 @@ export function SinapiSettings() {
             </div>
           )}
 
+          {collectMutation.isError && !collectResult && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-900">Falha na coleta</p>
+                  <p className="text-xs text-red-700 mt-1">
+                    {collectMutation.error?.message || 'Erro desconhecido'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {collectResult && (
             <div className={`rounded-lg p-4 border ${collectResult.errors?.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
               <div className="flex items-start gap-2">
@@ -304,6 +318,20 @@ export function SinapiSettings() {
                   <p className="text-xs text-blue-700 mt-1">
                     Extraindo XLSX e importando insumos, composicoes e precos.
                     Isso pode levar alguns minutos.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {zipUploadMutation.isError && !zipResult && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-900">Falha na importacao</p>
+                  <p className="text-xs text-red-700 mt-1">
+                    {zipUploadMutation.error?.message || 'Erro desconhecido'}
                   </p>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { ServicoTemplateService } from './servico-template.service'
 
 function normalize(str: string): string {
   return str
@@ -9,7 +10,11 @@ function normalize(str: string): string {
 }
 
 export class ActivityServiceLinkService {
-  constructor(private prisma: PrismaClient) {}
+  private templateService: ServicoTemplateService
+
+  constructor(private prisma: PrismaClient) {
+    this.templateService = new ServicoTemplateService(prisma)
+  }
 
   /**
    * Auto-link: match project STAGEs with ServicoTemplates by name similarity.
@@ -25,6 +30,9 @@ export class ActivityServiceLinkService {
     if (stages.length === 0) {
       return { linked: 0, message: 'Nenhuma etapa (STAGE) encontrada no projeto' }
     }
+
+    // Ensure templates exist (auto-seed on first use)
+    await this.templateService.seedDefaults(tenantId)
 
     // Get all active templates for this tenant
     const templates = await this.prisma.servicoTemplate.findMany({
@@ -98,6 +106,9 @@ export class ActivityServiceLinkService {
       },
       orderBy: { order: 'asc' },
     })
+
+    // Ensure templates exist (auto-seed on first use)
+    await this.templateService.seedDefaults(tenantId)
 
     // Get all active templates for this tenant (enriched)
     const templates = await this.prisma.servicoTemplate.findMany({

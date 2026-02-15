@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
 import { projectsAPI } from '@/lib/api-client'
+import { useWorkflowStatus, type WorkflowStatus } from '@/hooks/useWorkflowStatus'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -604,6 +605,7 @@ function PhaseDetailPanel({
   selectedProject,
   onNext,
   onPrev,
+  workflowStatus,
 }: {
   phase: Phase
   state: NodeState
@@ -613,6 +615,7 @@ function PhaseDetailPanel({
   selectedProject: any
   onNext?: () => void
   onPrev?: () => void
+  workflowStatus?: WorkflowStatus
 }) {
   const navigate = useNavigate()
   const Icon = phase.icon
@@ -698,7 +701,9 @@ function PhaseDetailPanel({
           <div className="rounded-lg border border-neutral-200 divide-y divide-neutral-100 overflow-hidden">
             {phase.actions.map((action, idx) => {
               const disabled = action.requiresProject && !selectedProjectId
-              const done = action.doneCheck?.({ projectId: selectedProjectId, project: selectedProject }) ?? false
+              const done = action.doneCheck?.({ projectId: selectedProjectId, project: selectedProject })
+                ?? workflowStatus?.[phase.number]?.fulfilled
+                ?? false
               const path = action.projectPath && selectedProjectId
                 ? action.projectPath.replace(':id', selectedProjectId)
                 : action.path
@@ -849,6 +854,7 @@ export function Dashboard() {
 
   const isPaused = selectedProject?.status === 'PAUSED'
   const isCancelled = selectedProject?.status === 'CANCELLED'
+  const workflowStatus = useWorkflowStatus()
 
   const completedPhases = selectedProject && !isCancelled
     ? PHASES.filter(p => getNodeState(p.number, currentPhase) === 'completed').length
@@ -1054,6 +1060,7 @@ export function Dashboard() {
               selectedProject={selectedProject}
               onPrev={selectedPhaseIdx > 0 ? () => setSelectedPhaseIdx(selectedPhaseIdx - 1) : undefined}
               onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
+              workflowStatus={workflowStatus}
             />
           </Card>
         </div>
@@ -1075,6 +1082,7 @@ export function Dashboard() {
               selectedProject={selectedProject}
               onPrev={selectedPhaseIdx > 0 ? () => setSelectedPhaseIdx(selectedPhaseIdx - 1) : undefined}
               onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
+              workflowStatus={workflowStatus}
             />
           </Card>
         </div>

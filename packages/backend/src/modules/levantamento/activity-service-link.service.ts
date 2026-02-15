@@ -36,23 +36,28 @@ export class ActivityServiceLinkService {
       return { linked: 0, message: 'Nenhum template de servico encontrado' }
     }
 
-    // Build normalized map: activity name -> activity id
-    const stageMap = new Map<string, string>()
-    for (const stage of stages) {
-      stageMap.set(normalize(stage.name), stage.id)
-    }
+    // Build normalized list of stages
+    const normalizedStages = stages.map((stage) => ({
+      id: stage.id,
+      normalized: normalize(stage.name),
+    }))
 
-    // Match templates to activities by comparing template.etapa ≈ activity.name
+    // Match templates to activities using substring matching:
+    // template.etapa "Revestimento" matches stage "Revestimento Interno"
+    // stage "Alvenaria" matches template.etapa "Alvenaria"
     const linksToCreate: { projectActivityId: string; servicoTemplateId: string }[] = []
 
     for (const template of templates) {
       const normalizedEtapa = normalize(template.etapa)
-      const activityId = stageMap.get(normalizedEtapa)
-      if (activityId) {
-        linksToCreate.push({
-          projectActivityId: activityId,
-          servicoTemplateId: template.id,
-        })
+
+      for (const stage of normalizedStages) {
+        // Match if one contains the other (e.g. "revestimento" ⊂ "revestimento interno")
+        if (stage.normalized.includes(normalizedEtapa) || normalizedEtapa.includes(stage.normalized)) {
+          linksToCreate.push({
+            projectActivityId: stage.id,
+            servicoTemplateId: template.id,
+          })
+        }
       }
     }
 

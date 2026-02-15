@@ -49,6 +49,7 @@ export const createItemSchema = z.object({
   ambienteId: z.string().uuid().optional(),
   sinapiInsumoId: z.string().uuid().optional(),
   sinapiComposicaoId: z.string().uuid().optional(),
+  projectActivityId: z.string().uuid().optional().nullable(),
   observacoes: z.string().optional(),
 })
 
@@ -58,6 +59,7 @@ export const updateItemSchema = z.object({
   quantidade: z.number().positive().optional(),
   precoUnitario: z.number().min(0).optional(),
   etapa: z.string().max(200).optional().nullable(),
+  projectActivityId: z.string().uuid().optional().nullable(),
   observacoes: z.string().optional().nullable(),
 })
 

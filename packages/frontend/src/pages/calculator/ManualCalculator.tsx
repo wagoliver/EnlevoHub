@@ -49,15 +49,41 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
   const queryClient = useQueryClient()
 
   // Derive dropdown options from activityGroups (STAGE names) or fallback to etapas
+  // value = "activityId::name" when activity exists, or plain "name" for fallback
   const etapaOptions = useMemo(() => {
     if (activityGroups?.activityGroups?.length > 0) {
       return activityGroups.activityGroups.map((g: any) => ({
-        value: g.activity.name,
+        value: `${g.activity.id}::${g.activity.name}`,
         label: g.activity.parentName ? `${g.activity.parentName} > ${g.activity.name}` : g.activity.name,
       }))
     }
     return etapas.map((e: string) => ({ value: e, label: e }))
   }, [activityGroups, etapas])
+
+  // Parse etapa dropdown value into { etapa, projectActivityId }
+  const parseEtapaValue = (v: string): { etapa: string; projectActivityId: string | null } => {
+    if (v === '_none' || !v) return { etapa: '', projectActivityId: null }
+    const sep = v.indexOf('::')
+    if (sep > 0) {
+      return { etapa: v.substring(sep + 2), projectActivityId: v.substring(0, sep) }
+    }
+    return { etapa: v, projectActivityId: null }
+  }
+
+  // Build the reverse: from etapa string or projectActivityId -> dropdown value
+  const toEtapaValue = (etapa: string, projectActivityId?: string | null): string => {
+    if (!etapa && !projectActivityId) return '_none'
+    if (projectActivityId) {
+      const found = etapaOptions.find((o: any) => o.value.startsWith(projectActivityId + '::'))
+      if (found) return found.value
+    }
+    // Try match by name
+    const found = etapaOptions.find((o: any) => {
+      const parsed = parseEtapaValue(o.value)
+      return parsed.etapa === etapa
+    })
+    return found?.value || etapa || '_none'
+  }
 
   const [newItem, setNewItem] = useState<EditingItem>({ ...emptyItem })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -102,12 +128,14 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
       toast.error('Preencha nome, quantidade e preço')
       return
     }
+    const parsed = parseEtapaValue(newItem.etapa)
     addMutation.mutate({
       nome: newItem.nome,
       unidade: newItem.unidade || 'UN',
       quantidade: qtd,
       precoUnitario: preco,
-      etapa: newItem.etapa || undefined,
+      etapa: parsed.etapa || undefined,
+      projectActivityId: parsed.projectActivityId || undefined,
       ambienteId: ambienteId || undefined,
     })
   }
@@ -120,6 +148,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
       toast.error('Preencha nome, quantidade e preço')
       return
     }
+    const parsed = parseEtapaValue(editingData.etapa)
     updateMutation.mutate({
       itemId: editingId,
       data: {
@@ -127,7 +156,8 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
         unidade: editingData.unidade,
         quantidade: qtd,
         precoUnitario: preco,
-        etapa: editingData.etapa || null,
+        etapa: parsed.etapa || null,
+        projectActivityId: parsed.projectActivityId || null,
       },
     })
   }
@@ -140,7 +170,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
       unidade: item.unidade,
       quantidade: String(item.quantidade),
       precoUnitario: String(item.precoUnitario),
-      etapa: item.etapa || '',
+      etapa: toEtapaValue(item.etapa || '', item.projectActivityId),
     })
   }
 
@@ -279,8 +309,8 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">—</SelectItem>
-                    {etapas.map((e) => (
-                      <SelectItem key={e} value={e}>{e}</SelectItem>
+                    {etapaOptions.map((opt: any) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

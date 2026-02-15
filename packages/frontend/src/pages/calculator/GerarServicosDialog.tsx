@@ -21,8 +21,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Loader2, Wand2, Search, Link2, X, RefreshCw } from 'lucide-react'
+import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
+import { ComposicaoTree } from './ComposicaoTree'
 import { calcularAreas, getQuantidadePorArea, AREA_LABELS, templateAplicaAoAmbiente, type AreaTipo } from './servicosCatalogo'
 
 const UFS = [
@@ -90,6 +91,11 @@ export function GerarServicosDialog({
   const [rows, setRows] = useState<ServicoRow[]>([])
   const [pricesLoaded, setPricesLoaded] = useState(false)
 
+  // Tree expand state
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+  const [treeData, setTreeData] = useState<any>(null)
+  const [treeLoading, setTreeLoading] = useState(false)
+
   const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
 
   // Fetch templates from DB
@@ -134,6 +140,8 @@ export function GerarServicosDialog({
     })
     setRows(newRows)
     setPricesLoaded(false)
+    setExpandedIdx(null)
+    setTreeData(null)
   }, [open, templates, ambiente.id, ambiente.tags])
 
   // Auto-resolve SINAPI prices when rows are built and month is available
@@ -284,6 +292,10 @@ export function GerarServicosDialog({
       sinapiDescricao: undefined,
       precoUnitario: 0,
     } : r))
+    if (expandedIdx === idx) {
+      setExpandedIdx(null)
+      setTreeData(null)
+    }
   }
 
   // Recalculate all linked prices
@@ -293,6 +305,8 @@ export function GerarServicosDialog({
       return
     }
     setPricesLoaded(false)
+    setExpandedIdx(null)
+    setTreeData(null)
     // Reset prices and re-resolve
     setRows((prev) => prev.map((r) => ({
       ...r,
@@ -302,6 +316,36 @@ export function GerarServicosDialog({
       loadingPreco: false,
     })))
     // Will trigger useEffect
+  }
+
+  // Toggle tree expand for a row
+  const handleToggleTree = async (idx: number) => {
+    if (expandedIdx === idx) {
+      setExpandedIdx(null)
+      setTreeData(null)
+      return
+    }
+
+    const row = rows[idx]
+    if (!row.sinapiComposicaoId || !mesReferencia) return
+
+    setExpandedIdx(idx)
+    setTreeData(null)
+    setTreeLoading(true)
+
+    try {
+      const tree = await sinapiAPI.getComposicaoTree(row.sinapiComposicaoId, {
+        uf,
+        mesReferencia,
+        desonerado,
+      })
+      setTreeData(tree)
+    } catch {
+      toast.error('Erro ao carregar arvore de composicao')
+      setExpandedIdx(null)
+    } finally {
+      setTreeLoading(false)
+    }
   }
 
   const handleSubmit = () => {
@@ -343,7 +387,7 @@ export function GerarServicosDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wand2 className="h-5 w-5" />
@@ -441,19 +485,40 @@ export function GerarServicosDialog({
                   <div className="space-y-1">
                     {indices.map((idx) => {
                       const row = rows[idx]
+                      const isExpanded = expandedIdx === idx
+                      const canExpand = !!row.sinapiComposicaoId && !!mesReferencia
+
                       return (
                         <div
                           key={row.template.id}
-                          className={`px-3 py-2 rounded-md border transition-colors ${
+                          className={`rounded-md border transition-colors ${
                             row.checked ? 'bg-primary/5 border-primary/20' : 'bg-neutral-50 border-transparent'
                           }`}
                         >
                           {/* Main row */}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 px-3 py-2">
                             <Checkbox
                               checked={row.checked}
                               onChange={() => handleToggle(idx)}
                             />
+                            {/* Tree expand button */}
+                            {canExpand ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 shrink-0"
+                                onClick={() => handleToggleTree(idx)}
+                                title="Ver composicao detalhada"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5 text-orange-500" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 text-neutral-400" />
+                                )}
+                              </Button>
+                            ) : (
+                              <div className="w-6 shrink-0" />
+                            )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-sm font-medium">{row.template.nome}</span>
@@ -521,7 +586,7 @@ export function GerarServicosDialog({
                           </div>
                           {/* SINAPI linked info */}
                           {row.sinapiComposicaoId && (
-                            <div className="mt-1.5 ml-7 flex items-center gap-2">
+                            <div className="mt-0.5 mb-1 ml-14 mr-3 flex items-center gap-2">
                               <Link2 className="h-3 w-3 text-blue-500" />
                               <Badge variant="secondary" className="text-[10px] font-mono">
                                 {row.sinapiCodigo}
@@ -536,7 +601,7 @@ export function GerarServicosDialog({
                           )}
                           {/* SINAPI code not found warning */}
                           {row.sinapiCodigo && !row.sinapiComposicaoId && !row.loadingPreco && pricesLoaded && (
-                            <div className="mt-1 ml-7 flex items-center gap-1.5">
+                            <div className="mt-1 mb-1 ml-14 mr-3 flex items-center gap-1.5">
                               <span className="text-[10px] text-amber-500">
                                 Codigo {row.sinapiCodigo} nao encontrado na base SINAPI
                               </span>
@@ -548,6 +613,19 @@ export function GerarServicosDialog({
                               >
                                 Buscar
                               </Button>
+                            </div>
+                          )}
+                          {/* Composition tree (expanded) */}
+                          {isExpanded && (
+                            <div className="mx-3 mb-2 mt-1">
+                              {treeLoading ? (
+                                <div className="flex items-center gap-2 py-4 justify-center text-xs text-neutral-500">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Carregando arvore de composicao...
+                                </div>
+                              ) : treeData ? (
+                                <ComposicaoTree data={treeData} />
+                              ) : null}
                             </div>
                           )}
                         </div>

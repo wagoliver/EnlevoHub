@@ -169,11 +169,15 @@ export class ServicoTemplateService {
     })
 
     if (existing.length > 0) {
-      // Backfill: update templates that have sinapiCodigo but no nomeCustom
+      // Backfill: update templates that have no nomeCustom
       let patched = 0
       for (const tpl of existing) {
-        if (tpl.sinapiCodigo && !tpl.nomeCustom) {
-          const def = DEFAULT_TEMPLATES.find((d) => d.sinapiCodigo === tpl.sinapiCodigo)
+        if (!tpl.nomeCustom) {
+          // Match by sinapiCodigo first, then by etapa+areaTipo combination
+          const def = DEFAULT_TEMPLATES.find((d) =>
+            (tpl.sinapiCodigo && d.sinapiCodigo === tpl.sinapiCodigo) ||
+            (!tpl.sinapiCodigo && !d.sinapiCodigo && d.etapa === tpl.etapa && d.areaTipo === tpl.areaTipo),
+          )
           if (def?.nomeCustom) {
             await this.prisma.servicoTemplate.update({
               where: { id: tpl.id },

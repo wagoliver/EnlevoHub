@@ -610,6 +610,13 @@ export const sinapiAPI = {
     })
     return apiClient.get<any>(`/sinapi/composicoes/${id}/calculate?${searchParams.toString()}`)
   },
+  getComposicaoTree: (id: string, params: { uf: string; mesReferencia: string; desonerado?: boolean }) => {
+    const searchParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) searchParams.set(key, String(value))
+    })
+    return apiClient.get<any>(`/sinapi/composicoes/${id}/tree?${searchParams.toString()}`)
+  },
   getStats: () => apiClient.get<{ insumos: number; composicoes: number; precos: number; meses: string[] }>('/sinapi/stats'),
   importInsumos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/insumos', formData),
   importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),

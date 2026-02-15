@@ -181,4 +181,101 @@ export class SinapiService {
       itensSemPreco: itensCalculados.filter((i) => !i.temPreco).length,
     }
   }
+
+  /**
+   * Returns the full composition tree (insumos + sub-compositions recursively) with prices.
+   */
+  async getComposicaoTree(id: string, query: CalculateComposicaoQuery) {
+    const { uf, mesReferencia, desonerado } = query
+    const visited = new Set<string>()
+    const tree = await this.buildTree(id, uf, mesReferencia, desonerado, 1, visited)
+    if (!tree) throw new Error('Composição SINAPI não encontrada')
+    return tree
+  }
+
+  private async buildTree(
+    composicaoId: string,
+    uf: string,
+    mesReferencia: string,
+    desonerado: boolean,
+    coeficiente: number,
+    visited: Set<string>,
+    depth = 0,
+  ): Promise<any | null> {
+    if (depth > 5 || visited.has(composicaoId)) return null
+    visited.add(composicaoId)
+
+    const comp = await this.prisma.sinapiComposicao.findUnique({
+      where: { id: composicaoId },
+      include: {
+        itens: {
+          include: {
+            insumo: {
+              include: {
+                precos: {
+                  where: { uf, mesReferencia },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+        filhos: {
+          include: {
+            filho: true,
+          },
+        },
+      },
+    })
+
+    if (!comp) return null
+
+    const children: any[] = []
+
+    // Add direct insumos
+    for (const item of comp.itens) {
+      const preco = item.insumo.precos[0]
+      const precoUnitario = preco
+        ? Number(desonerado ? preco.precoDesonerado : preco.precoNaoDesonerado)
+        : 0
+      const coef = Number(item.coeficiente)
+      children.push({
+        type: 'insumo',
+        codigo: item.insumo.codigo,
+        descricao: item.insumo.descricao,
+        unidade: item.insumo.unidade,
+        tipo: item.insumo.tipo,
+        coeficiente: coef,
+        precoUnitario,
+        custoUnitario: Math.round(precoUnitario * coef * 100) / 100,
+        temPreco: !!preco,
+      })
+    }
+
+    // Add sub-compositions recursively
+    for (const filho of comp.filhos) {
+      const coef = Number(filho.coeficiente)
+      const subTree = await this.buildTree(
+        filho.filhoId, uf, mesReferencia, desonerado, coef, visited, depth + 1,
+      )
+      if (subTree) {
+        children.push(subTree)
+      }
+    }
+
+    const custoUnitario = children.reduce((sum, c) => {
+      if (c.type === 'insumo') return sum + c.custoUnitario
+      return sum + (c.custoUnitario || 0)
+    }, 0)
+
+    return {
+      type: 'composicao',
+      codigo: comp.codigo,
+      descricao: comp.descricao,
+      unidade: comp.unidade,
+      coeficiente,
+      custoUnitario: Math.round(custoUnitario * 100) / 100,
+      children,
+    }
+  }
 }

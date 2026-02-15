@@ -156,6 +156,24 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ---- Tree (full composition breakdown) ----
+
+  fastify.get('/composicoes/:id/tree', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const query = calculateComposicaoSchema.parse(request.query)
+      const result = await service.getComposicaoTree(id, query)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Import (ROOT/MASTER only) ----
 
   fastify.post('/import/insumos', {

@@ -614,6 +614,11 @@ export const sinapiAPI = {
   importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),
   importPrecos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/precos', formData),
   collect: (year: number, month: number) => apiClient.post<any>('/sinapi/collect', { year, month }),
+  collectFromZip: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return apiClient.upload<any>('/sinapi/collect-from-zip', formData)
+  },
 }
 
 export const levantamentoAPI = {

@@ -202,6 +202,41 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ---- Upload ZIP (ROOT/MASTER only) ----
+
+  fastify.post('/collect-from-zip', {
+    preHandler: [authMiddleware, requireAdmin()],
+    schema: { consumes: ['multipart/form-data'] },
+  }, async (request, reply) => {
+    try {
+      const data = await request.file()
+      if (!data) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Nenhum arquivo enviado' })
+      }
+
+      const fileName = data.filename || ''
+      if (!fileName.toLowerCase().endsWith('.zip')) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Envie um arquivo .zip do SINAPI' })
+      }
+
+      const buffer = await data.toBuffer()
+      if (buffer.length < 1000) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Arquivo muito pequeno' })
+      }
+
+      const result = await collectorService.collectFromZip(
+        buffer,
+        getUserId(request),
+      )
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Coleta Automática (ROOT/MASTER only) ----
 
   fastify.post('/collect', {

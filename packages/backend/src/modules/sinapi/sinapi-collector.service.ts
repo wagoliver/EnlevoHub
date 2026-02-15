@@ -52,7 +52,6 @@ export class SinapiCollectorService {
       .replace('{MM}', mm)
 
     const log = (msg: string) => onProgress?.(msg)
-    const errors: string[] = []
 
     // 1. Download ZIP
     log('Baixando ZIP da Caixa...')
@@ -66,11 +65,46 @@ export class SinapiCollectorService {
       throw new Error(`Falha ao baixar: ${err.message}. URL: ${url}`)
     }
 
-    // 2. Extract ZIP
+    // 2. Extract and process
     log('Extraindo ZIP...')
     await this.extractZip(zipPath, tmpDir)
 
-    // 3. Find the Referência XLSX
+    return this.processExtractedDir(tmpDir, userId, log)
+  }
+
+  /**
+   * Import from a ZIP buffer uploaded by the user (skips download).
+   */
+  async collectFromZip(
+    zipBuffer: Buffer,
+    userId: string,
+    onProgress?: (msg: string) => void,
+  ): Promise<CollectResult> {
+    const log = (msg: string) => onProgress?.(msg)
+
+    const tmpDir = path.join(os.tmpdir(), `sinapi-upload-${Date.now()}`)
+    fs.mkdirSync(tmpDir, { recursive: true })
+
+    const zipPath = path.join(tmpDir, 'sinapi.zip')
+    fs.writeFileSync(zipPath, zipBuffer)
+
+    log('Extraindo ZIP...')
+    await this.extractZip(zipPath, tmpDir)
+
+    return this.processExtractedDir(tmpDir, userId, log)
+  }
+
+  /**
+   * Shared logic: process an extracted SINAPI directory (find XLSX, parse, import).
+   */
+  private async processExtractedDir(
+    tmpDir: string,
+    userId: string,
+    log: (msg: string) => void,
+  ): Promise<CollectResult> {
+    const errors: string[] = []
+
+    // Find the Referência XLSX
     const files = fs.readdirSync(tmpDir)
     const refFile = files.find(
       (f) => f.toLowerCase().includes('refer') && f.endsWith('.xlsx'),
@@ -82,59 +116,43 @@ export class SinapiCollectorService {
       )
     }
 
-    const xlsxPath = path.join(tmpDir, refFile)
-    log(`Processando ${refFile}...`)
+    // Extract mesRef from filename (e.g. "SINAPI_Referência_2026_01.xlsx" → "2026-01")
+    const mesRefMatch = refFile.match(/(\d{4})[_-](\d{2})/)
+    const mesRef = mesRefMatch ? `${mesRefMatch[1]}-${mesRefMatch[2]}` : 'desconhecido'
 
-    // 4. Open workbook
+    const xlsxPath = path.join(tmpDir, refFile)
+    log(`Processando ${refFile} (${mesRef})...`)
+
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.readFile(xlsxPath)
 
-    // 5. Parse insumos from ISD (sem desoneração)
     log('Importando insumos e preços sem desoneração...')
     const isdResult = await this.parseInsumosSheet(
-      workbook,
-      'ISD',
-      mesRef,
-      false,
-      errors,
-      log,
+      workbook, 'ISD', mesRef, false, errors, log,
     )
 
-    // 6. Parse precos from ICD (com desoneração)
     log('Importando preços com desoneração...')
     const icdResult = await this.parsePrecosDesonerados(
-      workbook,
-      'ICD',
-      mesRef,
-      errors,
-      log,
+      workbook, 'ICD', mesRef, errors, log,
     )
 
-    // 7. Parse composições analíticas
     log('Importando composições analíticas (coeficientes)...')
     const analiticoResult = await this.parseAnalitico(
-      workbook,
-      errors,
-      log,
+      workbook, errors, log,
     )
 
-    // 8. Parse custos de composições from CSD
-    log('Importando custos de composições sem desoneração...')
-    // CSD gives us the total cost per UF — we store this info if needed
-    // For now, the system calculates costs from insumo prices + coeficientes
-
-    // 9. Cleanup
+    // Cleanup
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })
     } catch {
       // ignore cleanup errors
     }
 
-    // 10. Log import
+    // Log import
     await this.prisma.sinapiImportLog.create({
       data: {
         tipo: 'COLETA_AUTOMATICA',
-        fileName: `SINAPI-${year}-${mm}`,
+        fileName: refFile,
         totalRecords:
           isdResult.totalInsumos +
           isdResult.totalPrecos +

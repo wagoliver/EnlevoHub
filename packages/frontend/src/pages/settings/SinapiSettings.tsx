@@ -62,6 +62,10 @@ export function SinapiSettings() {
     queryFn: () => sinapiAPI.getMesesReferencia(),
   })
 
+  // Upload ZIP
+  const [zipFile, setZipFile] = useState<File | null>(null)
+  const [zipResult, setZipResult] = useState<any>(null)
+
   const collectMutation = useMutation({
     mutationFn: async () => {
       const [y, m] = selectedMonth.split('-').map(Number)
@@ -71,6 +75,22 @@ export function SinapiSettings() {
       setCollectResult(data)
       queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
       toast.success('Coleta SINAPI finalizada com sucesso')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const zipUploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!zipFile) throw new Error('Selecione um arquivo ZIP')
+      return sinapiAPI.collectFromZip(zipFile)
+    },
+    onSuccess: (data) => {
+      setZipResult(data)
+      setZipFile(null)
+      queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
+      toast.success('Importacao do ZIP finalizada com sucesso')
     },
     onError: (error: Error) => {
       toast.error(error.message)
@@ -223,6 +243,101 @@ export function SinapiSettings() {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Upload ZIP */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Importar ZIP do SINAPI
+          </CardTitle>
+          <CardDescription>
+            Baixe o ZIP oficial do site da Caixa no seu computador e faca o upload aqui.
+            Util quando o servidor nao consegue baixar diretamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-end gap-4">
+            <div className="space-y-2 flex-1">
+              <Label>Arquivo ZIP do SINAPI</Label>
+              <Input
+                type="file"
+                accept=".zip"
+                onChange={(e) => { setZipFile(e.target.files?.[0] || null); setZipResult(null) }}
+              />
+              <p className="text-xs text-neutral-500">
+                Baixe de{' '}
+                <a
+                  href="https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  caixa.gov.br/sinapi
+                </a>
+                {' '}o arquivo "Referencia de Precos" no formato XLSX (ZIP).
+              </p>
+            </div>
+
+            <Button
+              onClick={() => { setZipResult(null); zipUploadMutation.mutate() }}
+              disabled={!zipFile || zipUploadMutation.isPending}
+              size="lg"
+            >
+              {zipUploadMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
+              {zipUploadMutation.isPending ? 'Importando...' : 'Importar ZIP'}
+            </Button>
+          </div>
+
+          {zipUploadMutation.isPending && (
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Processando ZIP do SINAPI...
+                  </p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Extraindo XLSX e importando insumos, composicoes e precos.
+                    Isso pode levar alguns minutos.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {zipResult && (
+            <div className={`rounded-lg p-4 border ${zipResult.errors?.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+              <div className="flex items-start gap-2">
+                {zipResult.errors?.length > 0 ? (
+                  <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                )}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    Importacao {zipResult.mesReferencia} finalizada
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                    <span className="text-neutral-600">Insumos:</span>
+                    <span className="font-medium">{zipResult.insumos?.imported ?? 0} de {zipResult.insumos?.total ?? 0}</span>
+                    <span className="text-neutral-600">Precos:</span>
+                    <span className="font-medium">{zipResult.precos?.imported ?? 0} de {zipResult.precos?.total ?? 0}</span>
+                    <span className="text-neutral-600">Composicoes:</span>
+                    <span className="font-medium">{zipResult.composicoes?.imported ?? 0} de {zipResult.composicoes?.total ?? 0}</span>
+                    <span className="text-neutral-600">Itens analiticos:</span>
+                    <span className="font-medium">{zipResult.analitico?.imported ?? 0} de {zipResult.analitico?.total ?? 0}</span>
+                  </div>
                 </div>
               </div>
             </div>

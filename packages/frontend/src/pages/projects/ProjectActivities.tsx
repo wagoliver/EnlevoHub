@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { projectsAPI } from '@/lib/api-client'
 import { WorkflowStepper } from '@/components/WorkflowStepper'
 import { ActivitiesTab } from './ActivitiesTab'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 export function ProjectActivities() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const phaseParam = searchParams.get('phase')
 
@@ -68,6 +69,7 @@ export function ProjectActivities() {
               background: 'linear-gradient(135deg, #b8a378, #9a8a6a)',
             }}
             onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['workflow-check'] })
               const nextPhase = parseInt(phaseParam, 10) + 1
               navigate(nextPhase <= 8 ? `/?phase=${nextPhase}` : '/')
             }}

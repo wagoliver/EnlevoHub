@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { projectsAPI } from '@/lib/api-client'
 import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
@@ -56,6 +56,7 @@ function formatCurrency(value: number) {
 
 export function Projects() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const phaseParam = searchParams.get('phase')
   const canCreate = usePermission('projects:create')
@@ -296,6 +297,7 @@ export function Projects() {
               background: 'linear-gradient(135deg, #b8a378, #9a8a6a)',
             }}
             onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['workflow-check'] })
               const nextPhase = parseInt(phaseParam, 10) + 1
               navigate(nextPhase <= 8 ? `/?phase=${nextPhase}` : '/')
             }}

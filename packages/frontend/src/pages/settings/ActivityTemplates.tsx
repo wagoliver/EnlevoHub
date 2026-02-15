@@ -337,6 +337,7 @@ export function ActivityTemplates() {
               background: 'linear-gradient(135deg, #b8a378, #9a8a6a)',
             }}
             onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['workflow-check'] })
               const nextPhase = parseInt(phaseParam, 10) + 1
               navigate(nextPhase <= 8 ? `/?phase=${nextPhase}` : '/')
             }}

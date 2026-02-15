@@ -34,41 +34,27 @@ import { Settings, Plus, Pencil, Trash2, RotateCcw, Loader2 } from 'lucide-react
 const AREA_TIPO_LABELS: Record<string, string> = {
   PISO: 'Piso',
   PAREDE_LIQ: 'Parede liq.',
+  PAREDE_BRUTA: 'Parede bruta',
   TETO: 'Teto',
   PERIMETRO: 'Perimetro',
+  MANUAL: 'Manual',
 }
 
-const AMBIENTE_TIPO_OPTIONS = [
-  { value: 'SALA', label: 'Sala' },
-  { value: 'QUARTO', label: 'Quarto' },
-  { value: 'COZINHA', label: 'Cozinha' },
-  { value: 'BANHEIRO', label: 'Banheiro' },
-  { value: 'AREA_SERVICO', label: 'Area Servico' },
-  { value: 'VARANDA', label: 'Varanda' },
-  { value: 'GARAGEM', label: 'Garagem' },
-  { value: 'HALL', label: 'Hall' },
-  { value: 'CORREDOR', label: 'Corredor' },
-  { value: 'AREA_COMUM', label: 'Area Comum' },
-  { value: 'OUTRO', label: 'Outro' },
-]
-
 interface TemplateFormData {
-  nome: string
   sinapiCodigo: string
-  unidade: string
+  nomeCustom: string
   areaTipo: string
-  aplicaEm: string[]
+  tags: string[]
   padrao: boolean
   etapa: string
   order: number
 }
 
 const emptyForm: TemplateFormData = {
-  nome: '',
   sinapiCodigo: '',
-  unidade: 'm²',
+  nomeCustom: '',
   areaTipo: 'PISO',
-  aplicaEm: [],
+  tags: [],
   padrao: true,
   etapa: '',
   order: 0,
@@ -88,6 +74,14 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
   const { data: templates, isLoading } = useQuery({
     queryKey: ['servico-templates'],
     queryFn: () => levantamentoAPI.listTemplates(),
+    enabled: open,
+  })
+
+  // Fetch available tags for the tag selector
+  const { data: availableTags } = useQuery({
+    queryKey: ['ambiente-tags'],
+    queryFn: () => levantamentoAPI.listTags(),
+    staleTime: 5 * 60 * 1000,
     enabled: open,
   })
 
@@ -139,11 +133,10 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
   const handleEdit = (t: any) => {
     setEditingId(t.id)
     setForm({
-      nome: t.nome,
       sinapiCodigo: t.sinapiCodigo || '',
-      unidade: t.unidade,
+      nomeCustom: t.nomeCustom || '',
       areaTipo: t.areaTipo,
-      aplicaEm: Array.isArray(t.aplicaEm) ? t.aplicaEm : [],
+      tags: Array.isArray(t.tags) ? t.tags : [],
       padrao: t.padrao,
       etapa: t.etapa,
       order: t.order,
@@ -152,13 +145,22 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
   }
 
   const handleSubmit = () => {
-    if (!form.nome || !form.etapa) {
-      toast.error('Preencha nome e etapa')
+    if (!form.sinapiCodigo && !form.nomeCustom) {
+      toast.error('Preencha o codigo SINAPI ou um nome customizado')
+      return
+    }
+    if (!form.etapa) {
+      toast.error('Preencha a etapa')
       return
     }
     const data = {
-      ...form,
       sinapiCodigo: form.sinapiCodigo || null,
+      nomeCustom: form.nomeCustom || null,
+      areaTipo: form.areaTipo,
+      tags: form.tags,
+      padrao: form.padrao,
+      etapa: form.etapa,
+      order: form.order,
     }
     if (editingId) {
       updateMutation.mutate({ id: editingId, data })
@@ -167,16 +169,17 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
     }
   }
 
-  const handleToggleAplicaEm = (tipo: string) => {
+  const handleToggleTag = (slug: string) => {
     setForm((prev) => ({
       ...prev,
-      aplicaEm: prev.aplicaEm.includes(tipo)
-        ? prev.aplicaEm.filter((t) => t !== tipo)
-        : [...prev.aplicaEm, tipo],
+      tags: prev.tags.includes(slug)
+        ? prev.tags.filter((t) => t !== slug)
+        : [...prev.tags, slug],
     }))
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
+  const activeTags = (availableTags || []).filter((t: any) => t.ativo !== false)
 
   return (
     <>
@@ -233,7 +236,7 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
                     <TableHead className="text-xs w-16">Un.</TableHead>
                     <TableHead className="text-xs w-24">Area</TableHead>
                     <TableHead className="text-xs w-28">Etapa</TableHead>
-                    <TableHead className="text-xs w-32">Aplica em</TableHead>
+                    <TableHead className="text-xs w-32">Tags</TableHead>
                     <TableHead className="text-xs w-16">Padrao</TableHead>
                     <TableHead className="text-xs w-20" />
                   </TableRow>
@@ -241,25 +244,27 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
                 <TableBody>
                   {(templates || []).map((t: any) => (
                     <TableRow key={t.id} className={t.ativo === false ? 'opacity-50' : ''}>
-                      <TableCell className="text-xs font-medium">{t.nome}</TableCell>
+                      <TableCell className="text-xs font-medium">
+                        {t.nome || t.nomeCustom || '(sem nome)'}
+                      </TableCell>
                       <TableCell>
                         {t.sinapiCodigo ? (
                           <Badge variant="secondary" className="text-[10px] font-mono">
                             {t.sinapiCodigo}
                           </Badge>
                         ) : (
-                          <span className="text-[10px] text-neutral-400">—</span>
+                          <span className="text-[10px] text-neutral-400">custom</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs">{t.unidade}</TableCell>
+                      <TableCell className="text-xs">{t.unidade || 'UN'}</TableCell>
                       <TableCell className="text-xs">{AREA_TIPO_LABELS[t.areaTipo] || t.areaTipo}</TableCell>
                       <TableCell className="text-xs text-neutral-500">{t.etapa}</TableCell>
                       <TableCell>
-                        {Array.isArray(t.aplicaEm) && t.aplicaEm.length > 0 ? (
+                        {Array.isArray(t.tags) && t.tags.length > 0 ? (
                           <div className="flex flex-wrap gap-0.5">
-                            {t.aplicaEm.map((a: string) => (
-                              <Badge key={a} variant="outline" className="text-[8px] px-1">
-                                {a}
+                            {t.tags.map((tag: string) => (
+                              <Badge key={tag} variant="outline" className="text-[8px] px-1">
+                                {tag}
                               </Badge>
                             ))}
                           </div>
@@ -268,7 +273,7 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {t.padrao ? '✓' : ''}
+                        {t.padrao ? 'sim' : ''}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -285,7 +290,7 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
                             size="sm"
                             className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
                             onClick={() => {
-                              if (confirm(`Remover "${t.nome}"?`)) {
+                              if (confirm(`Remover "${t.nome || t.nomeCustom}"?`)) {
                                 deleteMutation.mutate(t.id)
                               }
                             }}
@@ -311,32 +316,28 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label className="text-xs">Nome</Label>
-                <Input
-                  placeholder="Ex: Alvenaria de vedação"
-                  value={form.nome}
-                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                />
-              </div>
               <div>
                 <Label className="text-xs">Codigo SINAPI</Label>
                 <Input
-                  placeholder="Ex: 87292"
+                  placeholder="Ex: 103324"
                   value={form.sinapiCodigo}
                   onChange={(e) => setForm({ ...form, sinapiCodigo: e.target.value })}
                 />
                 <p className="text-[10px] text-neutral-400 mt-0.5">
-                  Codigo da composicao SINAPI para calculo automatico
+                  Nome e unidade vem automaticamente do SINAPI
                 </p>
               </div>
               <div>
-                <Label className="text-xs">Unidade</Label>
+                <Label className="text-xs">Nome customizado</Label>
                 <Input
-                  placeholder="m², m, un"
-                  value={form.unidade}
-                  onChange={(e) => setForm({ ...form, unidade: e.target.value })}
+                  placeholder="Somente se nao usar SINAPI"
+                  value={form.nomeCustom}
+                  onChange={(e) => setForm({ ...form, nomeCustom: e.target.value })}
+                  disabled={!!form.sinapiCodigo}
                 />
+                <p className="text-[10px] text-neutral-400 mt-0.5">
+                  Para servicos sem composicao SINAPI
+                </p>
               </div>
               <div>
                 <Label className="text-xs">Tipo de Area</Label>
@@ -345,10 +346,12 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PISO">Piso (comp × larg)</SelectItem>
+                    <SelectItem value="PISO">Piso (comp x larg)</SelectItem>
                     <SelectItem value="PAREDE_LIQ">Parede liquida</SelectItem>
+                    <SelectItem value="PAREDE_BRUTA">Parede bruta</SelectItem>
                     <SelectItem value="TETO">Teto</SelectItem>
                     <SelectItem value="PERIMETRO">Perimetro</SelectItem>
+                    <SelectItem value="MANUAL">Manual (qtd livre)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -379,25 +382,29 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
             </div>
 
             <div>
-              <Label className="text-xs mb-2 block">Aplica em (vazio = todos)</Label>
+              <Label className="text-xs mb-2 block">Tags (vazio = todos os ambientes)</Label>
               <div className="flex flex-wrap gap-2">
-                {AMBIENTE_TIPO_OPTIONS.map((opt) => (
+                {activeTags.map((tag: any) => (
                   <button
-                    key={opt.value}
+                    key={tag.slug}
                     type="button"
-                    className={`text-xs px-2 py-1 rounded border transition-colors ${
-                      form.aplicaEm.includes(opt.value)
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${
+                      form.tags.includes(tag.slug)
                         ? 'bg-primary text-white border-primary'
                         : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400'
                     }`}
-                    onClick={() => handleToggleAplicaEm(opt.value)}
+                    onClick={() => handleToggleTag(tag.slug)}
                   >
-                    {opt.label}
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: form.tags.includes(tag.slug) ? '#fff' : (tag.cor || '#3b82f6') }}
+                    />
+                    {tag.nome}
                   </button>
                 ))}
               </div>
               <p className="text-[10px] text-neutral-400 mt-1">
-                Selecione os ambientes onde este servico se aplica. Vazio = aplica em todos.
+                Selecione as tags dos ambientes onde este servico se aplica. Vazio = aplica em todos.
               </p>
             </div>
 

@@ -16,6 +16,8 @@ import {
   listLevantamentosSchema,
   createTemplateSchema,
   updateTemplateSchema,
+  createAmbienteTagSchema,
+  updateAmbienteTagSchema,
 } from './levantamento.schemas'
 
 function requirePermission(permission: string) {
@@ -371,6 +373,71 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const result = await templateService.resetDefaults(getTenantId(request))
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Ambiente Tags ----
+
+  fastify.get('/ambiente-tags', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const tenantId = getTenantId(request)
+      // Auto-seed defaults on first access
+      await templateService.seedTags(tenantId)
+      const result = await templateService.listTags(tenantId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/ambiente-tags', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const data = createAmbienteTagSchema.parse(request.body)
+      const result = await templateService.createTag(getTenantId(request), data)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.patch('/ambiente-tags/:id', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const data = updateAmbienteTagSchema.parse(request.body)
+      const result = await templateService.updateTag(getTenantId(request), id, data)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.delete('/ambiente-tags/:id', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await templateService.deleteTag(getTenantId(request), id)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

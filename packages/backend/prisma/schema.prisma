@@ -35,6 +35,7 @@ model Tenant {
   measurements       Measurement[]
   levantamentos      ProjetoLevantamento[]
   servicoTemplates   ServicoTemplate[]
+  ambienteTags       AmbienteTag[]
 
   @@map("tenants")
 }
@@ -896,10 +897,27 @@ model SinapiComposicao {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  itens SinapiComposicaoInsumo[]
+  itens  SinapiComposicaoInsumo[]
+  filhos SinapiComposicaoFilho[]  @relation("ComposicaoPai")
+  pais   SinapiComposicaoFilho[]  @relation("ComposicaoFilho")
 
   @@index([codigo])
   @@map("sinapi_composicoes")
+}
+
+model SinapiComposicaoFilho {
+  id           String  @id @default(uuid())
+  composicaoId String
+  filhoId      String
+  coeficiente  Decimal @db.Decimal(12, 6)
+
+  composicao SinapiComposicao @relation("ComposicaoPai", fields: [composicaoId], references: [id], onDelete: Cascade)
+  filho      SinapiComposicao @relation("ComposicaoFilho", fields: [filhoId], references: [id], onDelete: Cascade)
+
+  @@unique([composicaoId, filhoId])
+  @@index([composicaoId])
+  @@index([filhoId])
+  @@map("sinapi_composicao_filhos")
 }
 
 model SinapiComposicaoInsumo {
@@ -982,7 +1000,7 @@ model Ambiente {
   id              String       @id @default(uuid())
   levantamentoId  String
   nome            String
-  tipo            AmbienteTipo
+  tags            String[]     @default([])
   comprimento     Decimal      @db.Decimal(8, 2)
   largura         Decimal      @db.Decimal(8, 2)
   peDireito       Decimal      @db.Decimal(4, 2) @default(2.80)
@@ -1000,18 +1018,23 @@ model Ambiente {
   @@map("ambientes")
 }
 
-enum AmbienteTipo {
-  SALA
-  QUARTO
-  COZINHA
-  BANHEIRO
-  AREA_SERVICO
-  VARANDA
-  GARAGEM
-  HALL
-  CORREDOR
-  AREA_COMUM
-  OUTRO
+model AmbienteTag {
+  id        String   @id @default(uuid())
+  tenantId  String
+  nome      String
+  slug      String
+  descricao String?
+  cor       String?  @default("#3b82f6")
+  order     Int      @default(0)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("ambiente_tags")
 }
 
 model LevantamentoItem {
@@ -1043,18 +1066,19 @@ model LevantamentoItem {
 enum AreaTipo {
   PISO
   PAREDE_LIQ
+  PAREDE_BRUTA
   TETO
   PERIMETRO
+  MANUAL
 }
 
 model ServicoTemplate {
   id           String   @id @default(uuid())
   tenantId     String
-  nome         String
   sinapiCodigo String?  @db.VarChar(20)
-  unidade      String   @db.VarChar(20)
+  nomeCustom   String?
   areaTipo     AreaTipo
-  aplicaEm     Json     @default("[]")
+  tags         String[] @default([])
   padrao       Boolean  @default(true)
   etapa        String
   order        Int      @default(0)
@@ -1065,5 +1089,6 @@ model ServicoTemplate {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([sinapiCodigo])
   @@map("servico_templates")
 }

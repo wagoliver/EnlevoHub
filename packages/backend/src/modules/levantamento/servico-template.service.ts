@@ -1,181 +1,81 @@
 import { PrismaClient } from '@prisma/client'
 
 interface CreateTemplateInput {
-  nome: string
   sinapiCodigo?: string | null
-  unidade: string
-  areaTipo: 'PISO' | 'PAREDE_LIQ' | 'TETO' | 'PERIMETRO'
-  aplicaEm: string[]
+  nomeCustom?: string | null
+  areaTipo: 'PISO' | 'PAREDE_LIQ' | 'PAREDE_BRUTA' | 'TETO' | 'PERIMETRO' | 'MANUAL'
+  tags: string[]
   padrao?: boolean
   etapa: string
   order?: number
 }
 
 interface UpdateTemplateInput {
-  nome?: string
   sinapiCodigo?: string | null
-  unidade?: string
-  areaTipo?: 'PISO' | 'PAREDE_LIQ' | 'TETO' | 'PERIMETRO'
-  aplicaEm?: string[]
+  nomeCustom?: string | null
+  areaTipo?: 'PISO' | 'PAREDE_LIQ' | 'PAREDE_BRUTA' | 'TETO' | 'PERIMETRO' | 'MANUAL'
+  tags?: string[]
   padrao?: boolean
   etapa?: string
   order?: number
   ativo?: boolean
 }
 
-// Default templates with validated SINAPI composition codes (base 2026-01)
-//
-// Codes validated against sinapi_composicoes table:
-// 103324 - Alvenaria vedação bloco cerâmico 14cm, betoneira (M2)
-// 87879  - Chapisco interno, colher de pedreiro, betoneira 400L (M2)
-// 87535  - Emboço parede interna, área >10m², e=17.5mm, betoneira (M2)
-// 87265  - Revestimento cerâmico parede interna, esmaltada 20x20cm (M2)
-// 88489  - Pintura látex acrílica premium, paredes, 2 demãos (M2)
-// 88488  - Pintura látex acrílica premium, teto, 2 demãos (M2)
-// 87620  - Contrapiso argamassa 1:4, betoneira 400L, e=2cm (M2)
-// 87263  - Piso porcelanato 60x60cm, área >10m² (M2)
-// 88648  - Rodapé cerâmico 7cm, esmaltada 35x35cm (M)
-// 96109  - Forro placas de gesso, residencial (M2)
-// 98555  - Impermeabilização argamassa polimérica, 3 demãos (M2)
-// 91947  - Suporte c/ placa 4x2" baixo p/ ponto elétrico (UN)
-// (ponto hidráulico) - sem composição unitária no SINAPI
+// Default templates: sinapiCodigo is the identity. Name/unit come from SINAPI at query time.
+// Templates with tags=[] apply to ALL rooms. Templates with tags=['AREA_MOLHADA'] only for wet areas.
 const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
-  // --- Alvenaria ---
+  // --- Base services (all rooms) ---
+  { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Alvenaria', order: 10 },
+  { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 20 },
+  { sinapiCodigo: '87535', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 21 },
+  { sinapiCodigo: '87620', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 40 },
+  { sinapiCodigo: '87263', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 41 },
+  { sinapiCodigo: '88648', areaTipo: 'PERIMETRO', tags: [], padrao: true, etapa: 'Piso', order: 42 },
+  { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Pintura', order: 50 },
+  { sinapiCodigo: '88488', areaTipo: 'TETO', tags: [], padrao: true, etapa: 'Pintura', order: 51 },
+  { sinapiCodigo: '91947', areaTipo: 'MANUAL', tags: [], padrao: false, etapa: 'Instalações', order: 70 },
+
+  // --- Área Molhada (banheiro, cozinha, etc.) ---
+  { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Impermeabilização', order: 30 },
+  { sinapiCodigo: '87265', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Revestimento', order: 22 },
+  { nomeCustom: 'Ponto de instalação hidráulica', areaTipo: 'MANUAL', tags: ['AREA_MOLHADA'], padrao: false, etapa: 'Instalações', order: 71 },
+
+  // --- Área Externa (varanda, terraço, etc.) ---
+  { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_EXTERNA'], padrao: true, etapa: 'Impermeabilização', order: 31 },
+
+  // --- Opcional (não padrão) ---
+  { sinapiCodigo: '96109', areaTipo: 'TETO', tags: [], padrao: false, etapa: 'Teto', order: 60 },
+]
+
+// Default tags for room characteristics
+const DEFAULT_TAGS = [
   {
-    nome: 'Alvenaria de vedação',
-    sinapiCodigo: '103324',
-    unidade: 'm²',
-    areaTipo: 'PAREDE_LIQ',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Alvenaria',
-    order: 10,
-  },
-  // --- Revestimento ---
-  {
-    nome: 'Chapisco interno',
-    sinapiCodigo: '87879',
-    unidade: 'm²',
-    areaTipo: 'PAREDE_LIQ',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Revestimento',
-    order: 20,
-  },
-  {
-    nome: 'Emboço / massa única',
-    sinapiCodigo: '87535',
-    unidade: 'm²',
-    areaTipo: 'PAREDE_LIQ',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Revestimento',
-    order: 21,
-  },
-  {
-    nome: 'Revestimento cerâmico (azulejo)',
-    sinapiCodigo: '87265',
-    unidade: 'm²',
-    areaTipo: 'PAREDE_LIQ',
-    aplicaEm: ['BANHEIRO', 'COZINHA', 'AREA_SERVICO'],
-    padrao: true,
-    etapa: 'Revestimento',
-    order: 22,
-  },
-  // --- Pintura ---
-  {
-    nome: 'Pintura interna (paredes)',
-    sinapiCodigo: '88489',
-    unidade: 'm²',
-    areaTipo: 'PAREDE_LIQ',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Pintura',
-    order: 30,
+    nome: 'Área Molhada',
+    slug: 'AREA_MOLHADA',
+    descricao: 'Ambientes com piso molhado: banheiros, cozinhas, áreas de serviço',
+    cor: '#3b82f6',
+    order: 1,
   },
   {
-    nome: 'Pintura de teto',
-    sinapiCodigo: '88488',
-    unidade: 'm²',
-    areaTipo: 'TETO',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Pintura',
-    order: 31,
-  },
-  // --- Piso ---
-  {
-    nome: 'Contrapiso',
-    sinapiCodigo: '87620',
-    unidade: 'm²',
-    areaTipo: 'PISO',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Piso',
-    order: 40,
+    nome: 'Área Externa',
+    slug: 'AREA_EXTERNA',
+    descricao: 'Ambientes expostos ao tempo: varandas, terraços, áreas descobertas',
+    cor: '#f59e0b',
+    order: 2,
   },
   {
-    nome: 'Piso cerâmico / porcelanato',
-    sinapiCodigo: '87263',
-    unidade: 'm²',
-    areaTipo: 'PISO',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Piso',
-    order: 41,
+    nome: 'Tráfego Pesado',
+    slug: 'TRAFEGO_PESADO',
+    descricao: 'Ambientes com tráfego intenso: garagens, depósitos, galpões',
+    cor: '#ef4444',
+    order: 3,
   },
   {
-    nome: 'Rodapé cerâmico',
-    sinapiCodigo: '88648',
-    unidade: 'm',
-    areaTipo: 'PERIMETRO',
-    aplicaEm: [],
-    padrao: true,
-    etapa: 'Piso',
-    order: 42,
-  },
-  // --- Teto ---
-  {
-    nome: 'Forro de gesso',
-    sinapiCodigo: '96109',
-    unidade: 'm²',
-    areaTipo: 'TETO',
-    aplicaEm: [],
-    padrao: false,
-    etapa: 'Teto',
-    order: 50,
-  },
-  // --- Impermeabilização ---
-  {
-    nome: 'Impermeabilização',
-    sinapiCodigo: '98555',
-    unidade: 'm²',
-    areaTipo: 'PISO',
-    aplicaEm: ['BANHEIRO', 'AREA_SERVICO', 'VARANDA'],
-    padrao: true,
-    etapa: 'Impermeabilização',
-    order: 60,
-  },
-  // --- Instalações ---
-  {
-    nome: 'Ponto de instalação elétrica',
-    sinapiCodigo: '91947',
-    unidade: 'un',
-    areaTipo: 'PISO',
-    aplicaEm: [],
-    padrao: false,
-    etapa: 'Instalações',
-    order: 70,
-  },
-  {
-    nome: 'Ponto de instalação hidráulica',
-    sinapiCodigo: null,
-    unidade: 'un',
-    areaTipo: 'PISO',
-    aplicaEm: ['BANHEIRO', 'COZINHA', 'AREA_SERVICO'],
-    padrao: false,
-    etapa: 'Instalações',
-    order: 71,
+    nome: 'Área Técnica',
+    slug: 'AREA_TECNICA',
+    descricao: 'Ambientes técnicos: CPD, casa de máquinas, subestação',
+    cor: '#8b5cf6',
+    order: 4,
   },
 ]
 
@@ -183,9 +83,33 @@ export class ServicoTemplateService {
   constructor(private prisma: PrismaClient) {}
 
   async list(tenantId: string) {
-    return this.prisma.servicoTemplate.findMany({
+    const templates = await this.prisma.servicoTemplate.findMany({
       where: { tenantId },
-      orderBy: [{ order: 'asc' }, { etapa: 'asc' }, { nome: 'asc' }],
+      orderBy: [{ order: 'asc' }, { etapa: 'asc' }],
+    })
+
+    // Enrich with SINAPI composition data
+    const codigos = templates
+      .map((t) => t.sinapiCodigo)
+      .filter((c): c is string => !!c)
+
+    const composicoes = codigos.length > 0
+      ? await this.prisma.sinapiComposicao.findMany({
+          where: { codigo: { in: codigos } },
+          select: { codigo: true, descricao: true, unidade: true },
+        })
+      : []
+
+    const compMap = new Map(composicoes.map((c) => [c.codigo, c]))
+
+    return templates.map((t) => {
+      const comp = t.sinapiCodigo ? compMap.get(t.sinapiCodigo) : null
+      return {
+        ...t,
+        nome: comp?.descricao || t.nomeCustom || '(sem nome)',
+        unidade: comp?.unidade || 'UN',
+        sinapiDescricao: comp?.descricao || null,
+      }
     })
   }
 
@@ -193,11 +117,10 @@ export class ServicoTemplateService {
     return this.prisma.servicoTemplate.create({
       data: {
         tenantId,
-        nome: input.nome,
         sinapiCodigo: input.sinapiCodigo || null,
-        unidade: input.unidade,
+        nomeCustom: input.nomeCustom || null,
         areaTipo: input.areaTipo,
-        aplicaEm: input.aplicaEm,
+        tags: input.tags,
         padrao: input.padrao ?? true,
         etapa: input.etapa,
         order: input.order ?? 0,
@@ -214,11 +137,10 @@ export class ServicoTemplateService {
     return this.prisma.servicoTemplate.update({
       where: { id },
       data: {
-        ...(input.nome !== undefined && { nome: input.nome }),
         ...(input.sinapiCodigo !== undefined && { sinapiCodigo: input.sinapiCodigo }),
-        ...(input.unidade !== undefined && { unidade: input.unidade }),
+        ...(input.nomeCustom !== undefined && { nomeCustom: input.nomeCustom }),
         ...(input.areaTipo !== undefined && { areaTipo: input.areaTipo }),
-        ...(input.aplicaEm !== undefined && { aplicaEm: input.aplicaEm }),
+        ...(input.tags !== undefined && { tags: input.tags }),
         ...(input.padrao !== undefined && { padrao: input.padrao }),
         ...(input.etapa !== undefined && { etapa: input.etapa }),
         ...(input.order !== undefined && { order: input.order }),
@@ -237,10 +159,6 @@ export class ServicoTemplateService {
     return { deleted: true }
   }
 
-  /**
-   * Seeds default templates for a tenant if none exist.
-   * Returns the count of created templates.
-   */
   async seedDefaults(tenantId: string) {
     const existing = await this.prisma.servicoTemplate.count({
       where: { tenantId },
@@ -250,13 +168,15 @@ export class ServicoTemplateService {
       return { seeded: false, count: existing, message: 'Templates já existem' }
     }
 
+    // Seed tags first
+    await this.seedTags(tenantId)
+
     const data = DEFAULT_TEMPLATES.map((t) => ({
       tenantId,
-      nome: t.nome,
       sinapiCodigo: t.sinapiCodigo || null,
-      unidade: t.unidade,
+      nomeCustom: t.nomeCustom || null,
       areaTipo: t.areaTipo,
-      aplicaEm: t.aplicaEm,
+      tags: t.tags,
       padrao: t.padrao ?? true,
       etapa: t.etapa,
       order: t.order ?? 0,
@@ -266,19 +186,18 @@ export class ServicoTemplateService {
     return { seeded: true, count: result.count, message: `${result.count} templates criados` }
   }
 
-  /**
-   * Resets templates to defaults (deletes all and re-creates).
-   */
   async resetDefaults(tenantId: string) {
     await this.prisma.servicoTemplate.deleteMany({ where: { tenantId } })
 
+    // Re-seed tags
+    await this.seedTags(tenantId)
+
     const data = DEFAULT_TEMPLATES.map((t) => ({
       tenantId,
-      nome: t.nome,
       sinapiCodigo: t.sinapiCodigo || null,
-      unidade: t.unidade,
+      nomeCustom: t.nomeCustom || null,
       areaTipo: t.areaTipo,
-      aplicaEm: t.aplicaEm,
+      tags: t.tags,
       padrao: t.padrao ?? true,
       etapa: t.etapa,
       order: t.order ?? 0,
@@ -286,5 +205,66 @@ export class ServicoTemplateService {
 
     const result = await this.prisma.servicoTemplate.createMany({ data })
     return { count: result.count, message: `${result.count} templates restaurados` }
+  }
+
+  // --- Ambiente Tags ---
+
+  async listTags(tenantId: string) {
+    return this.prisma.ambienteTag.findMany({
+      where: { tenantId },
+      orderBy: [{ order: 'asc' }, { nome: 'asc' }],
+    })
+  }
+
+  async createTag(tenantId: string, input: { nome: string; slug: string; descricao?: string; cor?: string; order?: number }) {
+    return this.prisma.ambienteTag.create({
+      data: {
+        tenantId,
+        nome: input.nome,
+        slug: input.slug,
+        descricao: input.descricao || null,
+        cor: input.cor || '#3b82f6',
+        order: input.order ?? 0,
+      },
+    })
+  }
+
+  async updateTag(tenantId: string, id: string, input: { nome?: string; descricao?: string | null; cor?: string; order?: number; ativo?: boolean }) {
+    const tag = await this.prisma.ambienteTag.findFirst({
+      where: { id, tenantId },
+    })
+    if (!tag) throw new Error('Tag não encontrada')
+
+    return this.prisma.ambienteTag.update({
+      where: { id },
+      data: {
+        ...(input.nome !== undefined && { nome: input.nome }),
+        ...(input.descricao !== undefined && { descricao: input.descricao }),
+        ...(input.cor !== undefined && { cor: input.cor }),
+        ...(input.order !== undefined && { order: input.order }),
+        ...(input.ativo !== undefined && { ativo: input.ativo }),
+      },
+    })
+  }
+
+  async deleteTag(tenantId: string, id: string) {
+    const tag = await this.prisma.ambienteTag.findFirst({
+      where: { id, tenantId },
+    })
+    if (!tag) throw new Error('Tag não encontrada')
+
+    await this.prisma.ambienteTag.delete({ where: { id } })
+    return { deleted: true }
+  }
+
+  async seedTags(tenantId: string) {
+    const existing = await this.prisma.ambienteTag.count({
+      where: { tenantId },
+    })
+    if (existing > 0) return { seeded: false, count: existing }
+
+    const data = DEFAULT_TAGS.map((t) => ({ tenantId, ...t }))
+    const result = await this.prisma.ambienteTag.createMany({ data })
+    return { seeded: true, count: result.count }
   }
 }

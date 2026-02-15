@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Loader2, Wand2, Search, Link2, X, RefreshCw } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
-import { calcularAreas, getQuantidadePorArea, AREA_LABELS, type AreaTipo } from './servicosCatalogo'
+import { calcularAreas, getQuantidadePorArea, AREA_LABELS, templateAplicaAoAmbiente, type AreaTipo } from './servicosCatalogo'
 
 const UFS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -46,12 +46,14 @@ interface TemplateData {
   id: string
   nome: string
   sinapiCodigo: string | null
+  nomeCustom: string | null
   unidade: string
   areaTipo: AreaTipo
-  aplicaEm: string[]
+  tags: string[]
   padrao: boolean
   etapa: string
   order: number
+  sinapiDescricao: string | null
 }
 
 interface ServicoRow {
@@ -118,8 +120,9 @@ export function GerarServicosDialog({
     if (!open || !templates || !Array.isArray(templates)) return
 
     const activeTemplates = templates.filter((t: any) => t.ativo !== false)
+    const ambienteTags: string[] = ambiente.tags || []
     const newRows: ServicoRow[] = activeTemplates.map((t: any) => {
-      const sugerido = t.aplicaEm.length === 0 || t.aplicaEm.includes(ambiente.tipo)
+      const sugerido = templateAplicaAoAmbiente(t.tags || [], ambienteTags)
       return {
         template: t,
         checked: sugerido && t.padrao,
@@ -131,7 +134,7 @@ export function GerarServicosDialog({
     })
     setRows(newRows)
     setPricesLoaded(false)
-  }, [open, templates, ambiente.id, ambiente.tipo])
+  }, [open, templates, ambiente.id, ambiente.tags])
 
   // Auto-resolve SINAPI prices when rows are built and month is available
   const resolveAllPrices = useCallback(async (currentRows: ServicoRow[], mes: string) => {
@@ -309,8 +312,8 @@ export function GerarServicosDialog({
     }
 
     const itens = selected.map((r) => ({
-      nome: r.sinapiDescricao || r.template.nome,
-      unidade: r.template.unidade,
+      nome: r.sinapiDescricao || r.template.nome || r.template.nomeCustom || '(sem nome)',
+      unidade: r.template.unidade || 'UN',
       quantidade: Math.round(r.quantidade * 100) / 100,
       precoUnitario: Math.round(r.precoUnitario * 100) / 100,
       etapa: r.template.etapa,

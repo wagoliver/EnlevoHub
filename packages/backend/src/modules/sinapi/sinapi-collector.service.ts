@@ -3,8 +3,7 @@ import ExcelJS from 'exceljs'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import * as https from 'https'
-import * as http from 'http'
+import { execSync } from 'child_process'
 import * as unzipper from 'unzipper'
 
 const DOWNLOAD_URL_PATTERN =
@@ -471,9 +470,6 @@ export class SinapiCollectorService {
     const ws = workbook.getWorksheet('Analítico')
     if (!ws) throw new Error('Sheet Analítico não encontrada')
 
-    // Row 10 (1-based) = header:
-    // Grupo | Código Composição | Tipo Item | Código Item | Descrição | Unidade | Coeficiente | Situação
-
     // Find header row
     let headerRow = 0
     ws.eachRow((row, rowNum) => {
@@ -495,7 +491,8 @@ export class SinapiCollectorService {
       {
         descricao: string
         unidade: string
-        itens: { tipo: string; codigo: string; coeficiente: number }[]
+        insumos: { codigo: string; coeficiente: number }[]
+        subComposicoes: { codigo: string; coeficiente: number }[]
       }
     >()
 
@@ -507,7 +504,7 @@ export class SinapiCollectorService {
       if (!compCodigoRaw) continue
 
       const compCodigo = String(compCodigoRaw).trim()
-      const tipoItem = String(row.getCell(3).value || '').trim()
+      const tipoItem = String(row.getCell(3).value || '').trim().toUpperCase()
       const itemCodigoRaw = row.getCell(4).value
       const descricao = String(row.getCell(5).value || '').trim()
       const unidade = String(row.getCell(6).value || '').trim()
@@ -516,178 +513,216 @@ export class SinapiCollectorService {
       if (!tipoItem && !itemCodigoRaw) {
         // Header line of a composição
         if (!composicaoMap.has(compCodigo)) {
-          composicaoMap.set(compCodigo, { descricao, unidade, itens: [] })
+          composicaoMap.set(compCodigo, {
+            descricao,
+            unidade,
+            insumos: [],
+            subComposicoes: [],
+          })
         }
       } else if (tipoItem && itemCodigoRaw) {
-        // Item of a composição
         const itemCodigo = String(itemCodigoRaw).trim()
         if (!composicaoMap.has(compCodigo)) {
-          composicaoMap.set(compCodigo, { descricao: '', unidade: '', itens: [] })
+          composicaoMap.set(compCodigo, {
+            descricao: '',
+            unidade: '',
+            insumos: [],
+            subComposicoes: [],
+          })
         }
-        composicaoMap.get(compCodigo)!.itens.push({
-          tipo: tipoItem,
-          codigo: itemCodigo,
-          coeficiente,
-        })
+        const entry = composicaoMap.get(compCodigo)!
+
+        if (tipoItem === 'COMPOSICAO' || tipoItem === 'COMPOSIÇÃO') {
+          entry.subComposicoes.push({ codigo: itemCodigo, coeficiente })
+        } else {
+          // INSUMO or any other type
+          entry.insumos.push({ codigo: itemCodigo, coeficiente })
+        }
         totalItens++
       }
     }
 
     const totalComposicoes = composicaoMap.size
-    log(`  Analítico: ${totalComposicoes} composições, ${totalItens} itens`)
+    log(
+      `  Analítico: ${totalComposicoes} composições, ${totalItens} itens`,
+    )
 
-    // Upsert composições and their items
+    // Phase 1: Upsert all composições first (needed for sub-composition references)
     let importedComposicoes = 0
-    let importedItens = 0
+    const codigoToIdMap = new Map<string, string>()
 
     const entries = [...composicaoMap.entries()]
-    const batchSize = 50
+    const batchSize = 100
 
+    log('  Fase 1: criando composições...')
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize)
+      const ops = batch.map(([codigo, data]) =>
+        this.prisma.sinapiComposicao.upsert({
+          where: { codigo },
+          create: { codigo, descricao: data.descricao, unidade: data.unidade },
+          update: {
+            descricao: data.descricao || undefined,
+            unidade: data.unidade || undefined,
+          },
+        }),
+      )
+      try {
+        const results = await this.prisma.$transaction(ops)
+        for (const r of results) {
+          codigoToIdMap.set(r.codigo, r.id)
+          importedComposicoes++
+        }
+      } catch (err: any) {
+        // Fallback: one by one
+        for (const [codigo, data] of batch) {
+          try {
+            const r = await this.prisma.sinapiComposicao.upsert({
+              where: { codigo },
+              create: {
+                codigo,
+                descricao: data.descricao,
+                unidade: data.unidade,
+              },
+              update: {
+                descricao: data.descricao || undefined,
+                unidade: data.unidade || undefined,
+              },
+            })
+            codigoToIdMap.set(r.codigo, r.id)
+            importedComposicoes++
+          } catch (e: any) {
+            errors.push(`Composição ${codigo}: ${e.message}`)
+          }
+        }
+      }
+
+      if (i % 2000 === 0 && i > 0) {
+        log(`  Fase 1: ${i}/${totalComposicoes} composições...`)
+      }
+    }
+
+    // Also load existing composição IDs (for sub-compositions that reference
+    // compositions not in the Analítico sheet but already in the DB)
+    const allComps = await this.prisma.sinapiComposicao.findMany({
+      select: { id: true, codigo: true },
+    })
+    for (const c of allComps) {
+      if (!codigoToIdMap.has(c.codigo)) {
+        codigoToIdMap.set(c.codigo, c.id)
+      }
+    }
+
+    // Phase 2: Import insumo links and sub-composition links
+    let importedInsumoLinks = 0
+    let importedFilhoLinks = 0
+
+    log('  Fase 2: vinculando insumos e sub-composições...')
     for (let i = 0; i < entries.length; i += batchSize) {
       const batch = entries.slice(i, i + batchSize)
 
       for (const [codigo, data] of batch) {
+        const composicaoId = codigoToIdMap.get(codigo)
+        if (!composicaoId) continue
+
         try {
-          // Upsert composição
-          const composicao = await this.prisma.sinapiComposicao.upsert({
-            where: { codigo },
-            create: {
-              codigo,
-              descricao: data.descricao,
-              unidade: data.unidade,
-            },
-            update: {
-              descricao: data.descricao || undefined,
-              unidade: data.unidade || undefined,
-            },
-          })
-          importedComposicoes++
+          // --- Insumo links ---
+          if (data.insumos.length > 0) {
+            const insumoCodigos = data.insumos.map((it) => it.codigo)
+            const insumos = await this.prisma.sinapiInsumo.findMany({
+              where: { codigo: { in: insumoCodigos } },
+              select: { id: true, codigo: true },
+            })
+            const insumoIdMap = new Map(
+              insumos.map((ins) => [ins.codigo, ins.id]),
+            )
 
-          if (data.itens.length > 0) {
-            // Get all referenced item codes (both INSUMO and COMPOSICAO types)
-            const insumoCodigos = data.itens
-              .filter((it) => it.tipo === 'INSUMO')
-              .map((it) => it.codigo)
-            const compCodigos = data.itens
-              .filter((it) => it.tipo === 'COMPOSICAO')
-              .map((it) => it.codigo)
+            // Delete existing and recreate
+            await this.prisma.sinapiComposicaoInsumo.deleteMany({
+              where: { composicaoId },
+            })
 
-            // For COMPOSICAO type items, they reference other compositions
-            // but in our model they are stored as insumos in the junction table.
-            // We need to find their insumo equivalent or create a virtual insumo.
-            // For now, we only import INSUMO type items to the junction table.
+            const validInsumos = data.insumos
+              .filter((it) => insumoIdMap.has(it.codigo))
+              .map((it) => ({
+                composicaoId,
+                insumoId: insumoIdMap.get(it.codigo)!,
+                coeficiente: it.coeficiente,
+              }))
 
-            if (insumoCodigos.length > 0) {
-              const insumos = await this.prisma.sinapiInsumo.findMany({
-                where: { codigo: { in: insumoCodigos } },
-                select: { id: true, codigo: true },
+            if (validInsumos.length > 0) {
+              await this.prisma.sinapiComposicaoInsumo.createMany({
+                data: validInsumos,
               })
-              const insumoIdMap = new Map(
-                insumos.map((ins) => [ins.codigo, ins.id]),
-              )
+              importedInsumoLinks += validInsumos.length
+            }
+          }
 
-              // Delete existing and recreate
-              await this.prisma.sinapiComposicaoInsumo.deleteMany({
-                where: { composicaoId: composicao.id },
+          // --- Sub-composition links ---
+          if (data.subComposicoes.length > 0) {
+            // Delete existing and recreate
+            await this.prisma.sinapiComposicaoFilho.deleteMany({
+              where: { composicaoId },
+            })
+
+            const validFilhos = data.subComposicoes
+              .filter((it) => codigoToIdMap.has(it.codigo))
+              .map((it) => ({
+                composicaoId,
+                filhoId: codigoToIdMap.get(it.codigo)!,
+                coeficiente: it.coeficiente,
+              }))
+
+            if (validFilhos.length > 0) {
+              await this.prisma.sinapiComposicaoFilho.createMany({
+                data: validFilhos,
               })
-
-              const validItens = data.itens
-                .filter(
-                  (it) =>
-                    it.tipo === 'INSUMO' && insumoIdMap.has(it.codigo),
-                )
-                .map((it) => ({
-                  composicaoId: composicao.id,
-                  insumoId: insumoIdMap.get(it.codigo)!,
-                  coeficiente: it.coeficiente,
-                }))
-
-              if (validItens.length > 0) {
-                await this.prisma.sinapiComposicaoInsumo.createMany({
-                  data: validItens,
-                })
-                importedItens += validItens.length
-              }
+              importedFilhoLinks += validFilhos.length
             }
           }
         } catch (err: any) {
-          errors.push(`Composição ${codigo}: ${err.message}`)
+          errors.push(`Links ${codigo}: ${err.message}`)
         }
       }
 
       if (i % 500 === 0 && i > 0) {
-        log(`  Analítico: ${i}/${totalComposicoes} composições processadas...`)
+        log(
+          `  Fase 2: ${i}/${totalComposicoes} (${importedInsumoLinks} insumos, ${importedFilhoLinks} sub-comp)...`,
+        )
       }
     }
 
-    return { totalComposicoes, importedComposicoes, totalItens, importedItens }
+    return {
+      totalComposicoes,
+      importedComposicoes,
+      totalItens,
+      importedItens: importedInsumoLinks + importedFilhoLinks,
+    }
   }
 
   // ---- Helpers ----
 
-  private async downloadFile(url: string, dest: string, maxRedirects = 5): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const doRequest = (reqUrl: string, redirectsLeft: number) => {
-        const mod = reqUrl.startsWith('https') ? https : http
-        const req = mod.get(
-          reqUrl,
-          {
-            headers: {
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              Accept: '*/*',
-            },
-          },
-          (res) => {
-            // Handle redirects (301, 302, 303, 307, 308)
-            if (
-              res.statusCode &&
-              res.statusCode >= 300 &&
-              res.statusCode < 400 &&
-              res.headers.location
-            ) {
-              if (redirectsLeft <= 0) {
-                reject(new Error('Too many redirects'))
-                return
-              }
-              const redirectUrl = new URL(
-                res.headers.location,
-                reqUrl,
-              ).toString()
-              res.resume() // consume response to free socket
-              doRequest(redirectUrl, redirectsLeft - 1)
-              return
-            }
+  private async downloadFile(url: string, dest: string): Promise<void> {
+    // Caixa CDN (Azion) returns 302→same URL loop for Node.js https.get
+    // but curl handles it correctly. Use curl for reliable downloads.
+    try {
+      execSync(
+        `curl -fsSL --max-time 180 -o "${dest}" "${url}"`,
+        { stdio: 'pipe', timeout: 200_000 },
+      )
+    } catch (err: any) {
+      const stderr = err.stderr?.toString() || ''
+      throw new Error(stderr || 'curl download failed')
+    }
 
-            if (res.statusCode && res.statusCode >= 400) {
-              res.resume()
-              reject(
-                new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`),
-              )
-              return
-            }
+    if (!fs.existsSync(dest)) {
+      throw new Error('Download completed but file not found')
+    }
 
-            const file = fs.createWriteStream(dest)
-            res.pipe(file)
-            file.on('finish', () => {
-              file.close()
-              resolve()
-            })
-            file.on('error', (err) => {
-              fs.unlinkSync(dest)
-              reject(err)
-            })
-          },
-        )
-        req.on('error', reject)
-        req.setTimeout(120_000, () => {
-          req.destroy()
-          reject(new Error('Download timeout (120s)'))
-        })
-      }
-
-      doRequest(url, maxRedirects)
-    })
+    const stat = fs.statSync(dest)
+    if (stat.size < 1000) {
+      throw new Error(`Downloaded file too small (${stat.size} bytes)`)
+    }
   }
 
   private async extractZip(zipPath: string, destDir: string): Promise<void> {

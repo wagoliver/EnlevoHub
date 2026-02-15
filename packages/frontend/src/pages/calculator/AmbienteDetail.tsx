@@ -9,19 +9,6 @@ import { GerarServicosDialog } from './GerarServicosDialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { calcularAreas } from './servicosCatalogo'
 
-const TIPO_LABELS: Record<string, string> = {
-  SALA: 'Sala',
-  QUARTO: 'Quarto',
-  COZINHA: 'Cozinha',
-  BANHEIRO: 'Banheiro',
-  AREA_SERVICO: 'Area de Servico',
-  VARANDA: 'Varanda',
-  GARAGEM: 'Garagem',
-  HALL: 'Hall',
-  CORREDOR: 'Corredor',
-  AREA_COMUM: 'Area Comum',
-  OUTRO: 'Outro',
-}
 
 interface AmbienteDetailProps {
   ambiente: any
@@ -46,7 +33,9 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, eta
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-lg font-semibold">{ambiente.nome}</h3>
-          <Badge variant="secondary">{TIPO_LABELS[ambiente.tipo] || ambiente.tipo}</Badge>
+          {(ambiente.tags || []).map((tag: string) => (
+            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+          ))}
           <span className="text-sm text-neutral-500">
             {Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m
             &middot; Pe-dir: {Number(ambiente.peDireito).toFixed(2)} m

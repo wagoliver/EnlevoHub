@@ -18,10 +18,7 @@ export const updateLevantamentoSchema = z.object({
 
 export const createAmbienteSchema = z.object({
   nome: z.string().min(1).max(200),
-  tipo: z.enum([
-    'SALA', 'QUARTO', 'COZINHA', 'BANHEIRO', 'AREA_SERVICO',
-    'VARANDA', 'GARAGEM', 'HALL', 'CORREDOR', 'AREA_COMUM', 'OUTRO',
-  ]),
+  tags: z.array(z.string().max(50)).default([]),
   comprimento: z.number().positive(),
   largura: z.number().positive(),
   peDireito: z.number().positive().default(2.80),
@@ -33,10 +30,7 @@ export const createAmbienteSchema = z.object({
 
 export const updateAmbienteSchema = z.object({
   nome: z.string().min(1).max(200).optional(),
-  tipo: z.enum([
-    'SALA', 'QUARTO', 'COZINHA', 'BANHEIRO', 'AREA_SERVICO',
-    'VARANDA', 'GARAGEM', 'HALL', 'CORREDOR', 'AREA_COMUM', 'OUTRO',
-  ]).optional(),
+  tags: z.array(z.string().max(50)).optional(),
   comprimento: z.number().positive().optional(),
   largura: z.number().positive().optional(),
   peDireito: z.number().positive().optional(),
@@ -97,32 +91,43 @@ export const listLevantamentosSchema = z.object({
 
 // --- Servico Templates ---
 
-const areaTipoEnum = z.enum(['PISO', 'PAREDE_LIQ', 'TETO', 'PERIMETRO'])
-
-const ambienteTipoValues = [
-  'SALA', 'QUARTO', 'COZINHA', 'BANHEIRO', 'AREA_SERVICO',
-  'VARANDA', 'GARAGEM', 'HALL', 'CORREDOR', 'AREA_COMUM', 'OUTRO',
-] as const
+const areaTipoEnum = z.enum(['PISO', 'PAREDE_LIQ', 'PAREDE_BRUTA', 'TETO', 'PERIMETRO', 'MANUAL'])
 
 export const createTemplateSchema = z.object({
-  nome: z.string().min(1).max(200),
   sinapiCodigo: z.string().max(20).optional().nullable(),
-  unidade: z.string().min(1).max(20),
+  nomeCustom: z.string().min(1).max(200).optional().nullable(),
   areaTipo: areaTipoEnum,
-  aplicaEm: z.array(z.enum(ambienteTipoValues)).default([]),
+  tags: z.array(z.string().max(50)).default([]),
   padrao: z.boolean().default(true),
   etapa: z.string().min(1).max(200),
   order: z.number().int().min(0).default(0),
 })
 
 export const updateTemplateSchema = z.object({
-  nome: z.string().min(1).max(200).optional(),
   sinapiCodigo: z.string().max(20).optional().nullable(),
-  unidade: z.string().min(1).max(20).optional(),
+  nomeCustom: z.string().max(200).optional().nullable(),
   areaTipo: areaTipoEnum.optional(),
-  aplicaEm: z.array(z.enum(ambienteTipoValues)).optional(),
+  tags: z.array(z.string().max(50)).optional(),
   padrao: z.boolean().optional(),
   etapa: z.string().min(1).max(200).optional(),
+  order: z.number().int().min(0).optional(),
+  ativo: z.boolean().optional(),
+})
+
+// --- Ambiente Tags ---
+
+export const createAmbienteTagSchema = z.object({
+  nome: z.string().min(1).max(100),
+  slug: z.string().min(1).max(50).regex(/^[A-Z_]+$/),
+  descricao: z.string().max(500).optional(),
+  cor: z.string().max(20).optional(),
+  order: z.number().int().min(0).default(0),
+})
+
+export const updateAmbienteTagSchema = z.object({
+  nome: z.string().min(1).max(100).optional(),
+  descricao: z.string().max(500).optional().nullable(),
+  cor: z.string().max(20).optional(),
   order: z.number().int().min(0).optional(),
   ativo: z.boolean().optional(),
 })

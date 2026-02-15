@@ -672,6 +672,16 @@ export const levantamentoAPI = {
     apiClient.delete<any>(`/projects/servico-templates/${id}`),
   resetTemplates: () =>
     apiClient.post<any>('/projects/servico-templates/reset', {}),
+
+  // Ambiente Tags
+  listTags: () =>
+    apiClient.get<any[]>('/projects/ambiente-tags'),
+  createTag: (data: any) =>
+    apiClient.post<any>('/projects/ambiente-tags', data),
+  updateTag: (id: string, data: any) =>
+    apiClient.patch<any>(`/projects/ambiente-tags/${id}`, data),
+  deleteTag: (id: string) =>
+    apiClient.delete<any>(`/projects/ambiente-tags/${id}`),
 }
 
 export const monitoringAPI = {

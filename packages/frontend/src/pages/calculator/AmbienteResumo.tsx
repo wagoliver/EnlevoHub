@@ -22,7 +22,7 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
         (sum: number, i: any) => sum + Number(i.quantidade) * Number(i.precoUnitario),
         0,
       )
-      return { id: amb.id, nome: amb.nome, tipo: amb.tipo, area, itemCount: ambItens.length, total }
+      return { id: amb.id, nome: amb.nome, area, itemCount: ambItens.length, total }
     })
 
     const itensSemAmbiente = itens.filter((i: any) => !i.ambienteId)

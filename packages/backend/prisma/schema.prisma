@@ -34,6 +34,7 @@ model Tenant {
   activityTemplates  ActivityTemplate[]
   measurements       Measurement[]
   levantamentos      ProjetoLevantamento[]
+  servicoTemplates   ServicoTemplate[]
 
   @@map("tenants")
 }
@@ -1030,4 +1031,34 @@ model LevantamentoItem {
   @@index([ambienteId])
   @@index([etapa])
   @@map("levantamento_itens")
+}
+
+// ==================== SERVICO TEMPLATES (Per-Tenant) ====================
+
+enum AreaTipo {
+  PISO
+  PAREDE_LIQ
+  TETO
+  PERIMETRO
+}
+
+model ServicoTemplate {
+  id           String   @id @default(uuid())
+  tenantId     String
+  nome         String
+  sinapiCodigo String?  @db.VarChar(20)
+  unidade      String   @db.VarChar(20)
+  areaTipo     AreaTipo
+  aplicaEm     Json     @default("[]")
+  padrao       Boolean  @default(true)
+  etapa        String
+  order        Int      @default(0)
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("servico_templates")
 }

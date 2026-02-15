@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI, sinapiAPI } from '@/lib/api-client'
@@ -21,16 +21,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Loader2, Wand2, Search, Link2, X } from 'lucide-react'
+import { Loader2, Wand2, Search, Link2, X, RefreshCw } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
-import {
-  SERVICOS_CATALOGO,
-  getServicosPorTipo,
-  calcularAreas,
-  getQuantidadePorArea,
-  AREA_LABELS,
-  type ServicoSugerido,
-} from './servicosCatalogo'
+import { calcularAreas, getQuantidadePorArea, AREA_LABELS, type AreaTipo } from './servicosCatalogo'
 
 const UFS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -49,11 +42,22 @@ interface GerarServicosDialogProps {
   levantamentoId: string
 }
 
+interface TemplateData {
+  id: string
+  nome: string
+  sinapiCodigo: string | null
+  unidade: string
+  areaTipo: AreaTipo
+  aplicaEm: string[]
+  padrao: boolean
+  etapa: string
+  order: number
+}
+
 interface ServicoRow {
-  servico: ServicoSugerido
+  template: TemplateData
   checked: boolean
   quantidade: number
-  areaLabel: string
   sugerido: boolean
   precoUnitario: number
   sinapiComposicaoId?: string
@@ -76,20 +80,25 @@ export function GerarServicosDialog({
   const [mesReferencia, setMesReferencia] = useState('')
   const [desonerado, setDesonerado] = useState(false)
 
-  // SINAPI search
+  // SINAPI search (manual override)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTargetIdx, setSearchTargetIdx] = useState<number | null>(null)
 
+  // State
+  const [rows, setRows] = useState<ServicoRow[]>([])
+  const [pricesLoaded, setPricesLoaded] = useState(false)
+
   const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
 
-  const sugeridosIds = useMemo(() => {
-    const sugeridos = getServicosPorTipo(ambiente.tipo)
-    return new Set(sugeridos.map((s) => s.id))
-  }, [ambiente.tipo])
+  // Fetch templates from DB
+  const { data: templates, isLoading: templatesLoading } = useQuery({
+    queryKey: ['servico-templates'],
+    queryFn: () => levantamentoAPI.listTemplates(),
+    staleTime: 5 * 60 * 1000,
+    enabled: open,
+  })
 
-  const [rows, setRows] = useState<ServicoRow[]>(() => buildRows(SERVICOS_CATALOGO, areas, sugeridosIds))
-
-  // Fetch available months
+  // Fetch available SINAPI months
   const { data: mesesDisponiveis } = useQuery({
     queryKey: ['sinapi-meses-referencia'],
     queryFn: () => sinapiAPI.getMesesReferencia(),
@@ -104,12 +113,85 @@ export function GerarServicosDialog({
     }
   }, [mesesDisponiveis, mesReferencia])
 
-  // Rebuild rows when dialog opens with different ambiente
-  useMemo(() => {
-    if (open) {
-      setRows(buildRows(SERVICOS_CATALOGO, areas, sugeridosIds))
+  // Build rows from templates when they load or ambiente changes
+  useEffect(() => {
+    if (!open || !templates || !Array.isArray(templates)) return
+
+    const activeTemplates = templates.filter((t: any) => t.ativo !== false)
+    const newRows: ServicoRow[] = activeTemplates.map((t: any) => {
+      const sugerido = t.aplicaEm.length === 0 || t.aplicaEm.includes(ambiente.tipo)
+      return {
+        template: t,
+        checked: sugerido && t.padrao,
+        quantidade: Math.round(getQuantidadePorArea(t.areaTipo, areas) * 100) / 100,
+        sugerido,
+        precoUnitario: 0,
+        sinapiCodigo: t.sinapiCodigo || undefined,
+      }
+    })
+    setRows(newRows)
+    setPricesLoaded(false)
+  }, [open, templates, ambiente.id, ambiente.tipo])
+
+  // Auto-resolve SINAPI prices when rows are built and month is available
+  const resolveAllPrices = useCallback(async (currentRows: ServicoRow[], mes: string) => {
+    if (!mes) return
+
+    const rowsWithCodigo = currentRows
+      .map((r, i) => ({ row: r, idx: i }))
+      .filter((x) => x.row.sinapiCodigo)
+
+    if (rowsWithCodigo.length === 0) return
+
+    // Mark all as loading
+    setRows((prev) => prev.map((r) => r.sinapiCodigo ? { ...r, loadingPreco: true } : r))
+
+    // Resolve codes to compositions in parallel (batch search)
+    for (const { row, idx } of rowsWithCodigo) {
+      try {
+        // Search SINAPI by code
+        const searchResult = await sinapiAPI.searchComposicoes({
+          search: row.sinapiCodigo!,
+          page: 1,
+          limit: 1,
+        })
+
+        const composicao = searchResult?.data?.[0]
+        if (!composicao || composicao.codigo !== row.sinapiCodigo) {
+          // Code not found in SINAPI database
+          setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
+          continue
+        }
+
+        // Calculate unit cost
+        const calculo = await sinapiAPI.calculateComposicao(composicao.id, {
+          uf,
+          mesReferencia: mes,
+          quantidade: 1,
+          desonerado,
+        })
+
+        setRows((prev) => prev.map((r, i) => i === idx ? {
+          ...r,
+          sinapiComposicaoId: composicao.id,
+          sinapiDescricao: composicao.descricao,
+          precoUnitario: Math.round(calculo.custoUnitarioTotal * 100) / 100,
+          loadingPreco: false,
+        } : r))
+      } catch {
+        setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
+      }
     }
-  }, [open, ambiente.id])
+
+    setPricesLoaded(true)
+  }, [uf, desonerado])
+
+  // Trigger auto-resolve when rows are built and month is ready
+  useEffect(() => {
+    if (rows.length > 0 && mesReferencia && !pricesLoaded) {
+      resolveAllPrices(rows, mesReferencia)
+    }
+  }, [rows.length, mesReferencia, pricesLoaded])
 
   const batchMutation = useMutation({
     mutationFn: (itens: any[]) =>
@@ -123,7 +205,7 @@ export function GerarServicosDialog({
   })
 
   const selectedCount = rows.filter((r) => r.checked).length
-  const linkedCount = rows.filter((r) => r.checked && r.sinapiComposicaoId).length
+  const loadingCount = rows.filter((r) => r.loadingPreco).length
 
   const handleToggle = (idx: number) => {
     setRows((prev) => prev.map((r, i) => i === idx ? { ...r, checked: !r.checked } : r))
@@ -146,18 +228,17 @@ export function GerarServicosDialog({
     setRows((prev) => prev.map((r) => ({ ...r, checked: !allChecked })))
   }
 
-  // Open SINAPI search for a specific row
+  // Open SINAPI search for manual override
   const handleOpenSinapiSearch = (idx: number) => {
     setSearchTargetIdx(idx)
     setSearchOpen(true)
   }
 
-  // When a SINAPI composition is selected from search
+  // Manual SINAPI composition selection (override)
   const handleSelectComposicao = async (composicao: any) => {
     if (searchTargetIdx === null) return
     const idx = searchTargetIdx
 
-    // Mark row as loading
     setRows((prev) => prev.map((r, i) => i === idx ? {
       ...r,
       sinapiComposicaoId: composicao.id,
@@ -166,7 +247,6 @@ export function GerarServicosDialog({
       loadingPreco: true,
     } : r))
 
-    // Calculate unit cost
     if (mesReferencia) {
       try {
         const calculo = await sinapiAPI.calculateComposicao(composicao.id, {
@@ -189,7 +269,6 @@ export function GerarServicosDialog({
       }
     } else {
       setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
-      toast.warning('Selecione o mes de referencia para calcular o preco')
     }
   }
 
@@ -198,50 +277,28 @@ export function GerarServicosDialog({
     setRows((prev) => prev.map((r, i) => i === idx ? {
       ...r,
       sinapiComposicaoId: undefined,
-      sinapiCodigo: undefined,
+      sinapiCodigo: rows[idx].template.sinapiCodigo || undefined,
       sinapiDescricao: undefined,
       precoUnitario: 0,
     } : r))
   }
 
-  // Recalculate all SINAPI-linked prices when UF/month/regime changes
+  // Recalculate all linked prices
   const handleRecalculateAll = async () => {
     if (!mesReferencia) {
       toast.warning('Selecione o mes de referencia')
       return
     }
-
-    const linked = rows
-      .map((r, i) => ({ row: r, idx: i }))
-      .filter((x) => x.row.sinapiComposicaoId)
-
-    if (linked.length === 0) {
-      toast.info('Nenhum servico vinculado ao SINAPI')
-      return
-    }
-
-    // Mark all as loading
-    setRows((prev) => prev.map((r) => r.sinapiComposicaoId ? { ...r, loadingPreco: true } : r))
-
-    for (const { row, idx } of linked) {
-      try {
-        const calculo = await sinapiAPI.calculateComposicao(row.sinapiComposicaoId!, {
-          uf,
-          mesReferencia,
-          quantidade: 1,
-          desonerado,
-        })
-        setRows((prev) => prev.map((r, i) => i === idx ? {
-          ...r,
-          precoUnitario: Math.round(calculo.custoUnitarioTotal * 100) / 100,
-          loadingPreco: false,
-        } : r))
-      } catch {
-        setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
-      }
-    }
-
-    toast.success(`Precos recalculados para ${uf}/${mesReferencia}`)
+    setPricesLoaded(false)
+    // Reset prices and re-resolve
+    setRows((prev) => prev.map((r) => ({
+      ...r,
+      sinapiComposicaoId: undefined,
+      sinapiDescricao: undefined,
+      precoUnitario: 0,
+      loadingPreco: false,
+    })))
+    // Will trigger useEffect
   }
 
   const handleSubmit = () => {
@@ -252,11 +309,11 @@ export function GerarServicosDialog({
     }
 
     const itens = selected.map((r) => ({
-      nome: r.servico.nome,
-      unidade: r.servico.unidade,
+      nome: r.sinapiDescricao || r.template.nome,
+      unidade: r.template.unidade,
       quantidade: Math.round(r.quantidade * 100) / 100,
       precoUnitario: Math.round(r.precoUnitario * 100) / 100,
-      etapa: r.servico.etapa,
+      etapa: r.template.etapa,
       ambienteId: ambiente.id,
       sinapiComposicaoId: r.sinapiComposicaoId || undefined,
     }))
@@ -273,7 +330,7 @@ export function GerarServicosDialog({
   const etapas = useMemo(() => {
     const map = new Map<string, number[]>()
     rows.forEach((r, i) => {
-      const key = r.servico.etapa
+      const key = r.template.etapa
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(i)
     })
@@ -290,8 +347,8 @@ export function GerarServicosDialog({
               Gerar Servicos — {ambiente.nome}
             </DialogTitle>
             <DialogDescription>
-              Selecione os servicos e vincule composicoes SINAPI para precos de referencia.
-              Quantidades calculadas a partir das dimensoes ({Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m).
+              Servicos pre-configurados com composicoes SINAPI. Precos calculados automaticamente.
+              Quantidades baseadas nas dimensoes ({Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m).
             </DialogDescription>
           </DialogHeader>
 
@@ -338,11 +395,16 @@ export function GerarServicosDialog({
                 </SelectContent>
               </Select>
             </div>
-            {linkedCount > 0 && (
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleRecalculateAll}>
-                Recalcular Precos
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={handleRecalculateAll}
+              disabled={loadingCount > 0}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loadingCount > 0 ? 'animate-spin' : ''}`} />
+              Recalcular
+            </Button>
           </div>
 
           {/* Areas summary */}
@@ -362,111 +424,137 @@ export function GerarServicosDialog({
           </div>
 
           {/* Service list */}
-          <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-2">
-            {etapas.map(([etapa, indices]) => (
-              <div key={etapa}>
-                <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">
-                  {etapa}
-                </h4>
-                <div className="space-y-1">
-                  {indices.map((idx) => {
-                    const row = rows[idx]
-                    return (
-                      <div
-                        key={row.servico.id}
-                        className={`px-3 py-2 rounded-md border transition-colors ${
-                          row.checked ? 'bg-primary/5 border-primary/20' : 'bg-neutral-50 border-transparent'
-                        }`}
-                      >
-                        {/* Main row */}
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={row.checked}
-                            onChange={() => handleToggle(idx)}
-                          />
-                          <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                            <span className="text-sm font-medium">{row.servico.nome}</span>
-                            {!row.sugerido && (
-                              <Badge variant="outline" className="text-[9px] text-neutral-400 border-neutral-200">
-                                opcional
-                              </Badge>
-                            )}
-                          </div>
-                          <Badge variant="secondary" className="text-[10px] shrink-0">
-                            {AREA_LABELS[row.servico.areaTipo]}
-                          </Badge>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Input
-                              className="h-7 w-16 text-xs text-right"
-                              type="number"
-                              step="0.01"
-                              value={row.quantidade}
-                              onChange={(e) => handleQuantidadeChange(idx, e.target.value)}
-                              disabled={!row.checked}
+          {templatesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-2">
+              {etapas.map(([etapa, indices]) => (
+                <div key={etapa}>
+                  <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">
+                    {etapa}
+                  </h4>
+                  <div className="space-y-1">
+                    {indices.map((idx) => {
+                      const row = rows[idx]
+                      return (
+                        <div
+                          key={row.template.id}
+                          className={`px-3 py-2 rounded-md border transition-colors ${
+                            row.checked ? 'bg-primary/5 border-primary/20' : 'bg-neutral-50 border-transparent'
+                          }`}
+                        >
+                          {/* Main row */}
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={row.checked}
+                              onChange={() => handleToggle(idx)}
                             />
-                            <span className="text-xs text-neutral-400 w-6">{row.servico.unidade}</span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {row.loadingPreco ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />
-                            ) : (
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-medium">{row.template.nome}</span>
+                                {!row.sugerido && (
+                                  <Badge variant="outline" className="text-[9px] text-neutral-400 border-neutral-200">
+                                    opcional
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                              {AREA_LABELS[row.template.areaTipo]}
+                            </Badge>
+                            <div className="flex items-center gap-1 shrink-0">
                               <Input
-                                className="h-7 w-20 text-xs text-right"
+                                className="h-7 w-16 text-xs text-right"
                                 type="number"
                                 step="0.01"
-                                placeholder="R$ 0,00"
-                                value={row.precoUnitario || ''}
-                                onChange={(e) => handlePrecoChange(idx, e.target.value)}
+                                value={row.quantidade}
+                                onChange={(e) => handleQuantidadeChange(idx, e.target.value)}
                                 disabled={!row.checked}
                               />
+                              <span className="text-xs text-neutral-400 w-6">{row.template.unidade}</span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {row.loadingPreco ? (
+                                <div className="w-20 flex justify-center">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />
+                                </div>
+                              ) : (
+                                <Input
+                                  className="h-7 w-20 text-xs text-right"
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="R$ 0,00"
+                                  value={row.precoUnitario || ''}
+                                  onChange={(e) => handlePrecoChange(idx, e.target.value)}
+                                  disabled={!row.checked}
+                                />
+                              )}
+                            </div>
+                            {/* SINAPI manual link button (only if no code or unresolved) */}
+                            {row.checked && !row.sinapiComposicaoId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700 shrink-0"
+                                onClick={() => handleOpenSinapiSearch(idx)}
+                                title="Buscar composicao SINAPI"
+                              >
+                                <Search className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {row.sinapiComposicaoId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-red-400 hover:text-red-600 shrink-0"
+                                onClick={() => handleUnlinkSinapi(idx)}
+                                title="Desvincular SINAPI"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
                             )}
                           </div>
-                          {/* SINAPI link button */}
-                          {row.checked && !row.sinapiComposicaoId && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-blue-500 hover:text-blue-700 shrink-0"
-                              onClick={() => handleOpenSinapiSearch(idx)}
-                              title="Vincular composicao SINAPI"
-                            >
-                              <Search className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                          {/* SINAPI linked info */}
                           {row.sinapiComposicaoId && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-red-400 hover:text-red-600 shrink-0"
-                              onClick={() => handleUnlinkSinapi(idx)}
-                              title="Desvincular SINAPI"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="mt-1.5 ml-7 flex items-center gap-2">
+                              <Link2 className="h-3 w-3 text-blue-500" />
+                              <Badge variant="secondary" className="text-[10px] font-mono">
+                                {row.sinapiCodigo}
+                              </Badge>
+                              <span className="text-[11px] text-neutral-500 truncate max-w-[300px]">
+                                {row.sinapiDescricao}
+                              </span>
+                              <span className="text-[11px] font-medium text-green-700 ml-auto shrink-0">
+                                {formatCurrency(row.precoUnitario)}/{row.template.unidade}
+                              </span>
+                            </div>
+                          )}
+                          {/* SINAPI code not found warning */}
+                          {row.sinapiCodigo && !row.sinapiComposicaoId && !row.loadingPreco && pricesLoaded && (
+                            <div className="mt-1 ml-7 flex items-center gap-1.5">
+                              <span className="text-[10px] text-amber-500">
+                                Codigo {row.sinapiCodigo} nao encontrado na base SINAPI
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 px-1.5 text-[10px] text-blue-500"
+                                onClick={() => handleOpenSinapiSearch(idx)}
+                              >
+                                Buscar
+                              </Button>
+                            </div>
                           )}
                         </div>
-                        {/* SINAPI linked info */}
-                        {row.sinapiComposicaoId && (
-                          <div className="mt-1.5 ml-7 flex items-center gap-2">
-                            <Link2 className="h-3 w-3 text-blue-500" />
-                            <Badge variant="secondary" className="text-[10px] font-mono">
-                              {row.sinapiCodigo}
-                            </Badge>
-                            <span className="text-[11px] text-neutral-500 truncate max-w-[300px]">
-                              {row.sinapiDescricao}
-                            </span>
-                            <span className="text-[11px] font-medium text-green-700 ml-auto shrink-0">
-                              {formatCurrency(row.precoUnitario)}/{row.servico.unidade}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-between pt-3 border-t">
@@ -482,7 +570,7 @@ export function GerarServicosDialog({
                   </span>
                 )}
               </div>
-              <Button onClick={handleSubmit} disabled={selectedCount === 0 || batchMutation.isPending}>
+              <Button onClick={handleSubmit} disabled={selectedCount === 0 || batchMutation.isPending || loadingCount > 0}>
                 {batchMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Gerar {selectedCount} Ite{selectedCount === 1 ? 'm' : 'ns'}
               </Button>
@@ -491,7 +579,7 @@ export function GerarServicosDialog({
         </DialogContent>
       </Dialog>
 
-      {/* SINAPI Search Dialog (reused) */}
+      {/* SINAPI Search Dialog (for manual override) */}
       <SinapiSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
@@ -500,22 +588,4 @@ export function GerarServicosDialog({
       />
     </>
   )
-}
-
-function buildRows(
-  servicos: ServicoSugerido[],
-  areas: ReturnType<typeof calcularAreas>,
-  sugeridosIds: Set<string>,
-): ServicoRow[] {
-  return servicos.map((s) => {
-    const sugerido = sugeridosIds.has(s.id)
-    return {
-      servico: s,
-      checked: sugerido && s.padrao,
-      quantidade: Math.round(getQuantidadePorArea(s.areaTipo, areas) * 100) / 100,
-      areaLabel: AREA_LABELS[s.areaTipo],
-      sugerido,
-      precoUnitario: 0,
-    }
-  })
 }

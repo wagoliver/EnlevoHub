@@ -3,6 +3,7 @@ import { createAuthMiddleware } from '../../core/auth/auth.middleware'
 import { JWTService } from '../../core/auth/jwt.service'
 import { hasPermission } from '../../core/rbac/permissions'
 import { LevantamentoService } from './levantamento.service'
+import { ServicoTemplateService } from './servico-template.service'
 import {
   createLevantamentoSchema,
   updateLevantamentoSchema,
@@ -13,6 +14,8 @@ import {
   fromComposicaoSchema,
   batchCreateItemsSchema,
   listLevantamentosSchema,
+  createTemplateSchema,
+  updateTemplateSchema,
 } from './levantamento.schemas'
 
 function requirePermission(permission: string) {
@@ -31,6 +34,7 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
   const jwtService = new JWTService(fastify)
   const authMiddleware = createAuthMiddleware(jwtService)
   const service = new LevantamentoService(fastify.prisma)
+  const templateService = new ServicoTemplateService(fastify.prisma)
 
   const getTenantId = (request: any): string => request.user.tenantId
 
@@ -271,6 +275,85 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     try {
       const { projectId, id } = request.params as { projectId: string; id: string }
       const result = await service.getResumo(getTenantId(request), projectId, id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Servico Templates ----
+
+  fastify.get('/servico-templates', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const tenantId = getTenantId(request)
+      // Auto-seed defaults on first access
+      await templateService.seedDefaults(tenantId)
+      const result = await templateService.list(tenantId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/servico-templates', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const data = createTemplateSchema.parse(request.body)
+      const result = await templateService.create(getTenantId(request), data)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.patch('/servico-templates/:id', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const data = updateTemplateSchema.parse(request.body)
+      const result = await templateService.update(getTenantId(request), id, data)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.delete('/servico-templates/:id', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await templateService.delete(getTenantId(request), id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/servico-templates/reset', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const result = await templateService.resetDefaults(getTenantId(request))
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

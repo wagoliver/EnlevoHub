@@ -95,6 +95,38 @@ export const listLevantamentosSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
 
+// --- Servico Templates ---
+
+const areaTipoEnum = z.enum(['PISO', 'PAREDE_LIQ', 'TETO', 'PERIMETRO'])
+
+const ambienteTipoValues = [
+  'SALA', 'QUARTO', 'COZINHA', 'BANHEIRO', 'AREA_SERVICO',
+  'VARANDA', 'GARAGEM', 'HALL', 'CORREDOR', 'AREA_COMUM', 'OUTRO',
+] as const
+
+export const createTemplateSchema = z.object({
+  nome: z.string().min(1).max(200),
+  sinapiCodigo: z.string().max(20).optional().nullable(),
+  unidade: z.string().min(1).max(20),
+  areaTipo: areaTipoEnum,
+  aplicaEm: z.array(z.enum(ambienteTipoValues)).default([]),
+  padrao: z.boolean().default(true),
+  etapa: z.string().min(1).max(200),
+  order: z.number().int().min(0).default(0),
+})
+
+export const updateTemplateSchema = z.object({
+  nome: z.string().min(1).max(200).optional(),
+  sinapiCodigo: z.string().max(20).optional().nullable(),
+  unidade: z.string().min(1).max(20).optional(),
+  areaTipo: areaTipoEnum.optional(),
+  aplicaEm: z.array(z.enum(ambienteTipoValues)).optional(),
+  padrao: z.boolean().optional(),
+  etapa: z.string().min(1).max(200).optional(),
+  order: z.number().int().min(0).optional(),
+  ativo: z.boolean().optional(),
+})
+
 export type CreateLevantamentoInput = z.infer<typeof createLevantamentoSchema>
 export type UpdateLevantamentoInput = z.infer<typeof updateLevantamentoSchema>
 export type CreateAmbienteInput = z.infer<typeof createAmbienteSchema>
@@ -103,3 +135,5 @@ export type CreateItemInput = z.infer<typeof createItemSchema>
 export type UpdateItemInput = z.infer<typeof updateItemSchema>
 export type FromComposicaoInput = z.infer<typeof fromComposicaoSchema>
 export type BatchCreateItemsInput = z.infer<typeof batchCreateItemsSchema>
+export type CreateTemplateInput = z.infer<typeof createTemplateSchema>
+export type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>

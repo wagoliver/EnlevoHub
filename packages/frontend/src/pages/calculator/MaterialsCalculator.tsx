@@ -20,11 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Calculator, Plus, Trash2, Loader2, FileText } from 'lucide-react'
+import { Calculator, Plus, Trash2, Loader2, FileText, Settings } from 'lucide-react'
 import { AmbienteSidebar } from './AmbienteSidebar'
 import { AmbienteDetail } from './AmbienteDetail'
 import { AmbienteResumo } from './AmbienteResumo'
 import { AmbienteForm } from './AmbienteForm'
+import { ServicoTemplateAdmin } from './ServicoTemplateAdmin'
 
 interface MaterialsCalculatorProps {
   projectId: string
@@ -42,6 +43,9 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   // Ambiente form state
   const [ambienteFormOpen, setAmbienteFormOpen] = useState(false)
   const [editingAmbiente, setEditingAmbiente] = useState<any>(null)
+
+  // Template admin
+  const [templateAdminOpen, setTemplateAdminOpen] = useState(false)
 
   const { data: levantamentos, isLoading } = useQuery({
     queryKey: ['levantamentos', projectId],
@@ -161,12 +165,19 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
           <Calculator className="h-5 w-5 text-neutral-500" />
           <h2 className="text-lg font-semibold">Calculadora de Materiais</h2>
         </div>
-        {canEdit && (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Novo Levantamento
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => setTemplateAdminOpen(true)} title="Configurar templates de servicos">
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Novo Levantamento
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Levantamento selector */}
@@ -316,6 +327,12 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
         onSubmit={handleAmbienteFormSubmit}
         isPending={createAmbienteMutation.isPending || updateAmbienteMutation.isPending}
         editData={editingAmbiente}
+      />
+
+      {/* Template admin dialog */}
+      <ServicoTemplateAdmin
+        open={templateAdminOpen}
+        onOpenChange={setTemplateAdminOpen}
       />
     </div>
   )

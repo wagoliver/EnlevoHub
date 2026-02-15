@@ -657,6 +657,18 @@ export const levantamentoAPI = {
     apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/from-composicao`, data),
   getResumo: (projectId: string, levantamentoId: string) =>
     apiClient.get<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/resumo`),
+
+  // Servico Templates
+  listTemplates: () =>
+    apiClient.get<any[]>('/projects/servico-templates'),
+  createTemplate: (data: any) =>
+    apiClient.post<any>('/projects/servico-templates', data),
+  updateTemplate: (id: string, data: any) =>
+    apiClient.patch<any>(`/projects/servico-templates/${id}`, data),
+  deleteTemplate: (id: string) =>
+    apiClient.delete<any>(`/projects/servico-templates/${id}`),
+  resetTemplates: () =>
+    apiClient.post<any>('/projects/servico-templates/reset', {}),
 }
 
 export const monitoringAPI = {

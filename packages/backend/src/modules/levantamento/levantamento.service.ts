@@ -13,6 +13,13 @@ import type {
 export class LevantamentoService {
   constructor(private prisma: PrismaClient) {}
 
+  /** Count total levantamento items for a tenant (used for workflow status) */
+  async countItemsForTenant(tenantId: string): Promise<number> {
+    return this.prisma.levantamentoItem.count({
+      where: { levantamento: { tenantId } },
+    })
+  }
+
   async list(tenantId: string, projectId: string, page: number, limit: number) {
     const skip = (page - 1) * limit
     const where: Prisma.ProjetoLevantamentoWhereInput = { tenantId, projectId }

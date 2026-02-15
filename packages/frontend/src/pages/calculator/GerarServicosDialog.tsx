@@ -266,6 +266,7 @@ export function GerarServicosDialog({
       toast.success(`${data.addedCount} servicos gerados para "${ambiente.nome}"`)
       // Invalidate all levantamento queries for this project (parent uses 'levantamento-fp')
       queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
       onOpenChange(false)
     },
     onError: (e: Error) => toast.error(e.message),

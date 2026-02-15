@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { projectsAPI, suppliersAPI, contractorsAPI, financialAPI } from '@/lib/api-client'
+import { projectsAPI, suppliersAPI, contractorsAPI, financialAPI, levantamentoAPI } from '@/lib/api-client'
 
 export interface StepStatus {
   fulfilled: boolean
@@ -14,6 +14,13 @@ export function useWorkflowStatus() {
     queryKey: ['workflow-check', 'projects'],
     queryFn: () => projectsAPI.list({ limit: 1 }),
     staleTime: 1000 * 60 * 10,
+  })
+
+  // Step 2: at least 1 levantamento item
+  const { data: itemCountData } = useQuery({
+    queryKey: ['workflow-check', 'levantamento-items'],
+    queryFn: () => levantamentoAPI.getItemCount(),
+    staleTime: 1000 * 60 * 5,
   })
 
   // Step 3: at least 1 supplier
@@ -59,6 +66,7 @@ export function useWorkflowStatus() {
   })
 
   const hasProjects = (projectsData?.data?.length ?? 0) > 0
+  const hasLevantamentoItems = (itemCountData?.count ?? 0) > 0
   const hasSuppliers = (suppliersData?.data?.length ?? 0) > 0
   const hasPurchases = (purchasesData?.data?.length ?? 0) > 0
   const hasContractors = (contractorsData?.data?.length ?? 0) > 0
@@ -72,8 +80,8 @@ export function useWorkflowStatus() {
       label: hasProjects ? 'Projeto cadastrado' : 'Nenhum projeto cadastrado',
     },
     2: {
-      fulfilled: hasProjects,
-      label: hasProjects ? 'Projeto com planejamento' : 'Crie um projeto primeiro',
+      fulfilled: hasLevantamentoItems,
+      label: hasLevantamentoItems ? 'Levantamento realizado' : 'Nenhum item no levantamento',
     },
     3: {
       fulfilled: hasSuppliers && hasPurchases,

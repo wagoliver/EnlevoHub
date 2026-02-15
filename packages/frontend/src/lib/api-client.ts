@@ -712,6 +712,8 @@ async function sseRequest(
 }
 
 export const levantamentoAPI = {
+  getItemCount: () =>
+    apiClient.get<{ count: number }>('/projects/levantamento-item-count'),
   list: (projectId: string, params?: { page?: number; limit?: number }) => {
     const searchParams = new URLSearchParams()
     if (params) {

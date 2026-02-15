@@ -68,6 +68,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
     onSuccess: () => {
       toast.success('Item adicionado')
       queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
       setNewItem({ ...emptyItem })
     },
     onError: (e: Error) => toast.error(e.message),
@@ -89,6 +90,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
     onSuccess: () => {
       toast.success('Item removido')
       queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

@@ -33,6 +33,7 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: Sina
     onSuccess: (data) => {
       toast.success(`${data.addedCount} itens importados da composição ${data.composicao.codigo}`)
       queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

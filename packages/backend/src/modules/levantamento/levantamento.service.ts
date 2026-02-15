@@ -191,10 +191,9 @@ export class LevantamentoService {
     })
     if (!ambiente) throw new Error('Ambiente não encontrado')
 
-    // Unlink items from this ambiente (set ambienteId to null) before deleting
-    await this.prisma.levantamentoItem.updateMany({
+    // Delete items belonging to this ambiente before deleting
+    await this.prisma.levantamentoItem.deleteMany({
       where: { ambienteId },
-      data: { ambienteId: null },
     })
 
     await this.prisma.ambiente.delete({ where: { id: ambienteId } })

@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { financialAPI } from '@/lib/api-client'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DollarSign,
@@ -10,6 +11,7 @@ import {
   AlertCircle,
   Loader2,
   ArrowLeft,
+  CheckCircle2,
 } from 'lucide-react'
 import { WorkflowStepper } from '@/components/WorkflowStepper'
 import { TransactionList } from './financial/TransactionList'
@@ -233,6 +235,26 @@ export function Financial() {
           <ReconciliationView />
         </TabsContent>
       </Tabs>
+
+      {/* Concluir button */}
+      {phaseParam && (
+        <div className="flex items-center justify-end pt-4 pb-2">
+          <Button
+            size="lg"
+            className="gap-2 text-white font-semibold shadow-md"
+            style={{
+              background: 'linear-gradient(135deg, #b8a378, #9a8a6a)',
+            }}
+            onClick={() => {
+              const nextPhase = parseInt(phaseParam, 10) + 1
+              navigate(nextPhase <= 8 ? `/?phase=${nextPhase}` : '/')
+            }}
+          >
+            <CheckCircle2 className="h-5 w-5" />
+            Concluir Etapa
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

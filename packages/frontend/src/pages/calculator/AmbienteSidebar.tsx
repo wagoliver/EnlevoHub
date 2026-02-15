@@ -105,7 +105,10 @@ export function AmbienteSidebar({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (confirm(`Remover ambiente "${amb.nome}"?`)) onDelete(amb.id)
+                      const msg = amb.itemCount > 0
+                        ? `Remover ambiente "${amb.nome}" e seus ${amb.itemCount} itens?`
+                        : `Remover ambiente "${amb.nome}"?`
+                      if (confirm(msg)) onDelete(amb.id)
                     }}
                     className="p-1 rounded hover:bg-red-100"
                   >

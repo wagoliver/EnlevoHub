@@ -107,7 +107,7 @@ export class ServicoTemplateService {
       const comp = t.sinapiCodigo ? compMap.get(t.sinapiCodigo) : null
       return {
         ...t,
-        nome: comp?.descricao || t.nomeCustom || '(sem nome)',
+        nome: t.nomeCustom || comp?.descricao || '(sem nome)',
         unidade: comp?.unidade || 'UN',
         sinapiDescricao: comp?.descricao || null,
       }

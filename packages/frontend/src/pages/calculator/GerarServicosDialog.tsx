@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI, sinapiAPI } from '@/lib/api-client'
@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight, Plus, PenLine } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
 import { ComposicaoTree } from './ComposicaoTree'
 import { calcularAreas, getQuantidadePorArea, AREA_LABELS, templateAplicaAoAmbiente, type AreaTipo } from './servicosCatalogo'
@@ -29,6 +29,15 @@ import { calcularAreas, getQuantidadePorArea, AREA_LABELS, templateAplicaAoAmbie
 const UFS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO',
+]
+
+const AREA_TIPO_OPTIONS: { value: AreaTipo; label: string }[] = [
+  { value: 'PISO', label: 'Piso (m²)' },
+  { value: 'PAREDE_LIQ', label: 'Parede líq. (m²)' },
+  { value: 'PAREDE_BRUTA', label: 'Parede bruta (m²)' },
+  { value: 'TETO', label: 'Teto (m²)' },
+  { value: 'PERIMETRO', label: 'Perímetro (m)' },
+  { value: 'MANUAL', label: 'Manual' },
 ]
 
 function formatCurrency(value: number) {
@@ -69,6 +78,13 @@ interface ServicoRow {
   loadingPreco?: boolean
 }
 
+interface ManualFormState {
+  etapa: string
+  nome: string
+  unidade: string
+  areaTipo: AreaTipo
+}
+
 export function GerarServicosDialog({
   open,
   onOpenChange,
@@ -83,9 +99,13 @@ export function GerarServicosDialog({
   const [mesReferencia, setMesReferencia] = useState('')
   const [desonerado, setDesonerado] = useState(false)
 
-  // SINAPI search (manual override)
+  // SINAPI search (manual override for existing row)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTargetIdx, setSearchTargetIdx] = useState<number | null>(null)
+
+  // SINAPI search for adding new template
+  const [addSearchOpen, setAddSearchOpen] = useState(false)
+  const [addingEtapa, setAddingEtapa] = useState<string | null>(null)
 
   // State
   const [rows, setRows] = useState<ServicoRow[]>([])
@@ -95,6 +115,14 @@ export function GerarServicosDialog({
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const [treeData, setTreeData] = useState<any>(null)
   const [treeLoading, setTreeLoading] = useState(false)
+
+  // Inline editing state
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const editInputRef = useRef<HTMLInputElement>(null)
+
+  // Manual creation form
+  const [manualForm, setManualForm] = useState<ManualFormState | null>(null)
 
   const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
 
@@ -142,6 +170,8 @@ export function GerarServicosDialog({
     setPricesLoaded(false)
     setExpandedIdx(null)
     setTreeData(null)
+    setEditingIdx(null)
+    setManualForm(null)
   }, [open, templates, ambiente.id, ambiente.tags])
 
   // Auto-resolve SINAPI prices when rows are built and month is available
@@ -157,10 +187,8 @@ export function GerarServicosDialog({
     // Mark all as loading
     setRows((prev) => prev.map((r) => r.sinapiCodigo ? { ...r, loadingPreco: true } : r))
 
-    // Resolve codes to compositions in parallel (batch search)
     for (const { row, idx } of rowsWithCodigo) {
       try {
-        // Search SINAPI by code
         const searchResult = await sinapiAPI.searchComposicoes({
           search: row.sinapiCodigo!,
           page: 1,
@@ -169,12 +197,10 @@ export function GerarServicosDialog({
 
         const composicao = searchResult?.data?.[0]
         if (!composicao || composicao.codigo !== row.sinapiCodigo) {
-          // Code not found in SINAPI database
           setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
           continue
         }
 
-        // Calculate unit cost
         const calculo = await sinapiAPI.calculateComposicao(composicao.id, {
           uf,
           mesReferencia: mes,
@@ -203,6 +229,14 @@ export function GerarServicosDialog({
       resolveAllPrices(rows, mesReferencia)
     }
   }, [rows.length, mesReferencia, pricesLoaded])
+
+  // Focus edit input when editing starts
+  useEffect(() => {
+    if (editingIdx !== null && editInputRef.current) {
+      editInputRef.current.focus()
+      editInputRef.current.select()
+    }
+  }, [editingIdx])
 
   const batchMutation = useMutation({
     mutationFn: (itens: any[]) =>
@@ -239,13 +273,62 @@ export function GerarServicosDialog({
     setRows((prev) => prev.map((r) => ({ ...r, checked: !allChecked })))
   }
 
-  // Open SINAPI search for manual override
+  // ---- Inline name editing ----
+
+  const handleStartEditing = (idx: number) => {
+    const row = rows[idx]
+    setEditingIdx(idx)
+    setEditingName(row.template.nomeCustom || row.template.nome || '')
+  }
+
+  const handleSaveEditing = async () => {
+    if (editingIdx === null) return
+    const row = rows[editingIdx]
+    const newName = editingName.trim()
+
+    if (!newName) {
+      setEditingIdx(null)
+      return
+    }
+
+    // Update locally immediately
+    setRows((prev) => prev.map((r, i) => i === editingIdx ? {
+      ...r,
+      template: { ...r.template, nome: newName, nomeCustom: newName },
+    } : r))
+    setEditingIdx(null)
+
+    // Persist to backend
+    try {
+      await levantamentoAPI.updateTemplate(row.template.id, { nomeCustom: newName })
+      queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
+    } catch {
+      toast.error('Erro ao salvar nome')
+    }
+  }
+
+  const handleCancelEditing = () => {
+    setEditingIdx(null)
+    setEditingName('')
+  }
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSaveEditing()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      handleCancelEditing()
+    }
+  }
+
+  // ---- SINAPI search for existing row (override) ----
+
   const handleOpenSinapiSearch = (idx: number) => {
     setSearchTargetIdx(idx)
     setSearchOpen(true)
   }
 
-  // Manual SINAPI composition selection (override)
   const handleSelectComposicao = async (composicao: any) => {
     if (searchTargetIdx === null) return
     const idx = searchTargetIdx
@@ -283,6 +366,121 @@ export function GerarServicosDialog({
     }
   }
 
+  // ---- Add new template from SINAPI search ----
+
+  const handleOpenAddSinapi = (etapa: string) => {
+    setAddingEtapa(etapa)
+    setAddSearchOpen(true)
+  }
+
+  const handleAddFromSinapi = async (composicao: any) => {
+    if (!addingEtapa) return
+
+    try {
+      // Create template in DB
+      const template = await levantamentoAPI.createTemplate({
+        sinapiCodigo: composicao.codigo,
+        nomeCustom: null,
+        areaTipo: 'MANUAL',
+        tags: [],
+        padrao: false,
+        etapa: addingEtapa,
+        order: 99,
+      })
+
+      // Add to local rows
+      const newRow: ServicoRow = {
+        template: {
+          ...template,
+          nome: composicao.descricao,
+          sinapiDescricao: composicao.descricao,
+          unidade: composicao.unidade || 'UN',
+        },
+        checked: true,
+        quantidade: 0,
+        sugerido: false,
+        precoUnitario: 0,
+        sinapiCodigo: composicao.codigo,
+        sinapiComposicaoId: composicao.id,
+        sinapiDescricao: composicao.descricao,
+        loadingPreco: true,
+      }
+
+      setRows((prev) => [...prev, newRow])
+      const newIdx = rows.length
+
+      // Resolve price
+      if (mesReferencia) {
+        try {
+          const calculo = await sinapiAPI.calculateComposicao(composicao.id, {
+            uf,
+            mesReferencia,
+            quantidade: 1,
+            desonerado,
+          })
+          setRows((prev) => prev.map((r, i) => i === newIdx ? {
+            ...r,
+            precoUnitario: Math.round(calculo.custoUnitarioTotal * 100) / 100,
+            loadingPreco: false,
+          } : r))
+        } catch {
+          setRows((prev) => prev.map((r, i) => i === newIdx ? { ...r, loadingPreco: false } : r))
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
+      toast.success(`Servico "${composicao.descricao.substring(0, 40)}..." adicionado`)
+    } catch (err: any) {
+      toast.error('Erro ao criar template: ' + (err.message || ''))
+    }
+  }
+
+  // ---- Manual creation ----
+
+  const handleOpenManualForm = (etapa: string) => {
+    setManualForm({ etapa, nome: '', unidade: 'UN', areaTipo: 'MANUAL' })
+  }
+
+  const handleSaveManual = async () => {
+    if (!manualForm || !manualForm.nome.trim()) {
+      toast.error('Informe o nome do servico')
+      return
+    }
+
+    try {
+      const template = await levantamentoAPI.createTemplate({
+        nomeCustom: manualForm.nome.trim(),
+        areaTipo: manualForm.areaTipo,
+        tags: [],
+        padrao: false,
+        etapa: manualForm.etapa,
+        order: 99,
+      })
+
+      const qty = getQuantidadePorArea(manualForm.areaTipo as AreaTipo, areas)
+
+      const newRow: ServicoRow = {
+        template: {
+          ...template,
+          nome: manualForm.nome.trim(),
+          sinapiDescricao: null,
+          unidade: manualForm.unidade,
+        },
+        checked: true,
+        quantidade: Math.round(qty * 100) / 100,
+        sugerido: false,
+        precoUnitario: 0,
+      }
+
+      setRows((prev) => [...prev, newRow])
+      setManualForm(null)
+      queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
+      toast.success(`Servico "${manualForm.nome.trim()}" criado`)
+    } catch (err: any) {
+      toast.error('Erro ao criar template: ' + (err.message || ''))
+    }
+  }
+
   // Unlink SINAPI from a row
   const handleUnlinkSinapi = (idx: number) => {
     setRows((prev) => prev.map((r, i) => i === idx ? {
@@ -307,7 +505,6 @@ export function GerarServicosDialog({
     setPricesLoaded(false)
     setExpandedIdx(null)
     setTreeData(null)
-    // Reset prices and re-resolve
     setRows((prev) => prev.map((r) => ({
       ...r,
       sinapiComposicaoId: undefined,
@@ -315,7 +512,6 @@ export function GerarServicosDialog({
       precoUnitario: 0,
       loadingPreco: false,
     })))
-    // Will trigger useEffect
   }
 
   // Toggle tree expand for a row
@@ -356,7 +552,7 @@ export function GerarServicosDialog({
     }
 
     const itens = selected.map((r) => ({
-      nome: r.sinapiDescricao || r.template.nome || r.template.nomeCustom || '(sem nome)',
+      nome: r.template.nomeCustom || r.sinapiDescricao || r.template.nome || '(sem nome)',
       unidade: r.template.unidade || 'UN',
       quantidade: Math.round(r.quantidade * 100) / 100,
       precoUnitario: Math.round(r.precoUnitario * 100) / 100,
@@ -394,7 +590,7 @@ export function GerarServicosDialog({
               Gerar Servicos — {ambiente.nome}
             </DialogTitle>
             <DialogDescription>
-              Servicos pre-configurados com composicoes SINAPI. Precos calculados automaticamente.
+              Servicos pre-configurados com composicoes SINAPI. Clique 2x no nome para editar.
               Quantidades baseadas nas dimensoes ({Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m).
             </DialogDescription>
           </DialogHeader>
@@ -487,6 +683,7 @@ export function GerarServicosDialog({
                       const row = rows[idx]
                       const isExpanded = expandedIdx === idx
                       const canExpand = !!row.sinapiComposicaoId && !!mesReferencia
+                      const isEditing = editingIdx === idx
 
                       return (
                         <div
@@ -520,14 +717,32 @@ export function GerarServicosDialog({
                               <div className="w-6 shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm font-medium">{row.template.nome}</span>
-                                {!row.sugerido && (
-                                  <Badge variant="outline" className="text-[9px] text-neutral-400 border-neutral-200">
-                                    opcional
-                                  </Badge>
-                                )}
-                              </div>
+                              {isEditing ? (
+                                <Input
+                                  ref={editInputRef}
+                                  className="h-7 text-sm"
+                                  value={editingName}
+                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onKeyDown={handleEditKeyDown}
+                                  onBlur={handleSaveEditing}
+                                />
+                              ) : (
+                                <div
+                                  className="flex items-center gap-1.5 cursor-pointer group"
+                                  onDoubleClick={() => handleStartEditing(idx)}
+                                  title="Clique 2x para editar o nome"
+                                >
+                                  <span className="text-sm font-medium group-hover:text-primary transition-colors">
+                                    {row.template.nome}
+                                  </span>
+                                  <PenLine className="h-3 w-3 text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  {!row.sugerido && (
+                                    <Badge variant="outline" className="text-[9px] text-neutral-400 border-neutral-200">
+                                      opcional
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <Badge variant="secondary" className="text-[10px] shrink-0">
                               {AREA_LABELS[row.template.areaTipo]}
@@ -560,7 +775,6 @@ export function GerarServicosDialog({
                                 />
                               )}
                             </div>
-                            {/* SINAPI manual link button (only if no code or unresolved) */}
                             {row.checked && !row.sinapiComposicaoId && (
                               <Button
                                 variant="ghost"
@@ -631,9 +845,97 @@ export function GerarServicosDialog({
                         </div>
                       )
                     })}
+
+                    {/* Manual form (inline creation) */}
+                    {manualForm && manualForm.etapa === etapa && (
+                      <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            className="h-7 text-sm flex-1"
+                            placeholder="Nome do servico..."
+                            value={manualForm.nome}
+                            onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveManual()
+                              if (e.key === 'Escape') setManualForm(null)
+                            }}
+                            autoFocus
+                          />
+                          <Select
+                            value={manualForm.areaTipo}
+                            onValueChange={(v) => setManualForm({ ...manualForm, areaTipo: v as AreaTipo })}
+                          >
+                            <SelectTrigger className="h-7 w-36 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {AREA_TIPO_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button size="sm" className="h-7 text-xs" onClick={handleSaveManual}>
+                            Criar
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setManualForm(null)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add service buttons */}
+                    {!(manualForm && manualForm.etapa === etapa) && (
+                      <div className="flex gap-2 mt-1.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-blue-600 hover:text-blue-800"
+                          onClick={() => handleOpenAddSinapi(etapa)}
+                        >
+                          <Search className="h-3 w-3 mr-1" />
+                          Buscar no SINAPI
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-neutral-500 hover:text-neutral-700"
+                          onClick={() => handleOpenManualForm(etapa)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Criar manual
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
+
+              {/* General add (new etapa) */}
+              {!manualForm && (
+                <div className="border-t pt-3">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => handleOpenAddSinapi('Outros')}
+                    >
+                      <Search className="h-3.5 w-3.5 mr-1.5" />
+                      Adicionar do SINAPI
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => handleOpenManualForm('Outros')}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      Criar servico manual
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -660,12 +962,20 @@ export function GerarServicosDialog({
         </DialogContent>
       </Dialog>
 
-      {/* SINAPI Search Dialog (for manual override) */}
+      {/* SINAPI Search Dialog (for override existing row) */}
       <SinapiSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
         mode="composicoes"
         onSelectComposicao={handleSelectComposicao}
+      />
+
+      {/* SINAPI Search Dialog (for adding new template) */}
+      <SinapiSearchDialog
+        open={addSearchOpen}
+        onOpenChange={setAddSearchOpen}
+        mode="composicoes"
+        onSelectComposicao={handleAddFromSinapi}
       />
     </>
   )

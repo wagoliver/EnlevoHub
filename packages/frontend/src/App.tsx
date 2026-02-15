@@ -8,7 +8,7 @@ import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
-import { EmailSettings } from './pages/settings/EmailSettings'
+import { SettingsPage } from './pages/settings/SettingsPage'
 import { StorageSettings } from './pages/settings/StorageSettings'
 import { Dashboard } from './pages/Dashboard'
 import { Projects } from './pages/Projects'
@@ -83,7 +83,7 @@ function App() {
             <Route path="contracts" element={<ComingSoon title="Contratos" />} />
             <Route path="reports" element={<ComingSoon title="Relatórios" />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="settings" element={<EmailSettings />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/storage" element={<StorageSettings />} />
             <Route path="settings/planejamentos" element={<ActivityTemplates />} />
             <Route path="settings/planejamentos/:id" element={<ActivityTemplateEditor />} />

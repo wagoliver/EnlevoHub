@@ -1,13 +1,17 @@
 import { useState, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Ruler, Square, Maximize, Wand2 } from 'lucide-react'
+import { Ruler, Square, Maximize, Wand2, ChevronRight, ChevronDown } from 'lucide-react'
 import { ManualCalculator } from './ManualCalculator'
 import { SinapiCalculator } from './SinapiCalculator'
 import { GerarServicosDialog } from './GerarServicosDialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { calcularAreas } from './servicosCatalogo'
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+}
 
 
 interface AmbienteDetailProps {
@@ -20,11 +24,17 @@ interface AmbienteDetailProps {
 
 export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, etapas }: AmbienteDetailProps) {
   const [gerarOpen, setGerarOpen] = useState(false)
+  const [itemsExpanded, setItemsExpanded] = useState(false)
   const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
 
   const ambienteItens = useMemo(
     () => itens.filter((i: any) => i.ambienteId === ambiente.id),
     [itens, ambiente.id],
+  )
+
+  const totalGeral = useMemo(
+    () => ambienteItens.reduce((sum: number, item: any) => sum + Number(item.quantidade) * Number(item.precoUnitario), 0),
+    [ambienteItens],
   )
 
   return (
@@ -111,40 +121,56 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, eta
       {/* Materials for this ambiente */}
       {ambienteItens.length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              Materiais deste Ambiente
-              <span className="text-xs font-normal text-neutral-400">
-                ({ambienteItens.length} ite{ambienteItens.length === 1 ? 'm' : 'ns'})
+          <div
+            className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-neutral-50/80 transition-colors"
+            onClick={() => setItemsExpanded(!itemsExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              {itemsExpanded ? (
+                <ChevronDown className="h-4 w-4 text-neutral-500" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-neutral-500" />
+              )}
+              <span className="text-sm font-medium">
+                {ambienteItens.length} servico{ambienteItens.length === 1 ? '' : 's'}
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="manual">
-              <TabsList>
-                <TabsTrigger value="manual">Manual</TabsTrigger>
-                <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
-              </TabsList>
+              <span className="text-xs text-neutral-400">
+                {Array.from(new Set(ambienteItens.map((i: any) => i.etapa).filter(Boolean))).join(', ')}
+              </span>
+            </div>
+            <span className="text-sm font-bold text-green-700">
+              {formatCurrency(totalGeral)}
+            </span>
+          </div>
 
-              <TabsContent value="manual" className="mt-4">
-                <ManualCalculator
-                  projectId={projectId}
-                  levantamentoId={levantamentoId}
-                  itens={ambienteItens}
-                  ambienteId={ambiente.id}
-                  etapas={etapas}
-                />
-              </TabsContent>
+          {itemsExpanded && (
+            <CardContent className="pt-0 pb-4">
+              <Tabs defaultValue="manual">
+                <TabsList>
+                  <TabsTrigger value="manual">Manual</TabsTrigger>
+                  <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="sinapi" className="mt-4">
-                <SinapiCalculator
-                  projectId={projectId}
-                  levantamentoId={levantamentoId}
-                  ambienteId={ambiente.id}
-                />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
+                <TabsContent value="manual" className="mt-4">
+                  <ManualCalculator
+                    projectId={projectId}
+                    levantamentoId={levantamentoId}
+                    itens={ambienteItens}
+                    ambienteId={ambiente.id}
+                    etapas={etapas}
+                  />
+                </TabsContent>
+
+                <TabsContent value="sinapi" className="mt-4">
+                  <SinapiCalculator
+                    projectId={projectId}
+                    levantamentoId={levantamentoId}
+                    ambienteId={ambiente.id}
+                  />
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          )}
         </Card>
       )}
 

@@ -34,7 +34,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-EnlevoHub-JWT-Secret-Change-In-Production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
-      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-10485760}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}
       STORAGE_PATH: /app/storage
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       LOG_LEVEL: ${LOG_LEVEL:-info}

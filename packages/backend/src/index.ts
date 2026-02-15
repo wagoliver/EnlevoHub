@@ -54,7 +54,7 @@ async function buildServer() {
 
   await server.register(multipart, {
     limits: {
-      fileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10),
+      fileSize: parseInt(process.env.UPLOAD_MAX_SIZE || '52428800', 10), // 50 MB default
     },
   })
 

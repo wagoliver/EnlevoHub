@@ -224,6 +224,9 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     preHandler: [authMiddleware, requireAdmin()],
     schema: { consumes: ['multipart/form-data'] },
   }, async (request, reply) => {
+    // Extend timeout — processing XLSX takes several minutes
+    request.raw.setTimeout(600_000) // 10 min
+    if (reply.raw.setTimeout) reply.raw.setTimeout(600_000)
     try {
       const data = await request.file()
       if (!data) {
@@ -258,6 +261,9 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
   fastify.post('/collect', {
     preHandler: [authMiddleware, requireAdmin()],
   }, async (request, reply) => {
+    // Extend timeout — download + processing takes several minutes
+    request.raw.setTimeout(600_000) // 10 min
+    if (reply.raw.setTimeout) reply.raw.setTimeout(600_000)
     try {
       const { year, month } = request.body as { year: number; month: number }
 

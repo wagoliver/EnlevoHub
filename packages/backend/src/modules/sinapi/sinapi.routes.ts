@@ -243,7 +243,9 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Bad Request', message: 'Arquivo muito pequeno' })
       }
 
-      // Stream progress via SSE
+      // Hijack response for SSE streaming (must be before writeHead)
+      await reply.hijack()
+
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -267,7 +269,6 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
       }
 
       reply.raw.end()
-      return reply.hijack()
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })
@@ -293,7 +294,9 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
         })
       }
 
-      // Stream progress via SSE
+      // Hijack response for SSE streaming (must be before writeHead)
+      await reply.hijack()
+
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -318,7 +321,6 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
       }
 
       reply.raw.end()
-      return reply.hijack()
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })

@@ -120,11 +120,25 @@ export class SinapiService {
     return composicao
   }
 
-  async calculateComposicao(id: string, query: CalculateComposicaoQuery) {
-    const { uf, mesReferencia, quantidade, desonerado } = query
+  /**
+   * Recursively calculate the unit cost of a composition, including sub-compositions.
+   * Returns { custoUnitario, itensSemPreco, itensCalculados }.
+   */
+  private async resolveComposicaoCost(
+    composicaoId: string,
+    uf: string,
+    mesReferencia: string,
+    desonerado: boolean,
+    visited = new Set<string>(),
+    depth = 0,
+  ): Promise<{ custoUnitario: number; itensSemPreco: number; itensCalculados: any[] }> {
+    if (depth > 5 || visited.has(composicaoId)) {
+      return { custoUnitario: 0, itensSemPreco: 0, itensCalculados: [] }
+    }
+    visited.add(composicaoId)
 
-    const composicao = await this.prisma.sinapiComposicao.findUnique({
-      where: { id },
+    const comp = await this.prisma.sinapiComposicao.findUnique({
+      where: { id: composicaoId },
       include: {
         itens: {
           include: {
@@ -138,20 +152,30 @@ export class SinapiService {
             },
           },
         },
+        filhos: {
+          include: { filho: true },
+        },
       },
     })
 
-    if (!composicao) throw new Error('Composição SINAPI não encontrada')
+    if (!comp) return { custoUnitario: 0, itensSemPreco: 0, itensCalculados: [] }
 
-    const itensCalculados = composicao.itens.map((item) => {
+    let custoTotal = 0
+    let semPreco = 0
+    const itensCalculados: any[] = []
+
+    // Direct insumos
+    for (const item of comp.itens) {
       const preco = item.insumo.precos[0]
       const precoUnitario = preco
         ? Number(desonerado ? preco.precoDesonerado : preco.precoNaoDesonerado)
         : 0
       const coeficiente = Number(item.coeficiente)
       const custoUnitario = precoUnitario * coeficiente
+      if (!preco) semPreco++
+      custoTotal += custoUnitario
 
-      return {
+      itensCalculados.push({
         insumoId: item.insumoId,
         codigo: item.insumo.codigo,
         descricao: item.insumo.descricao,
@@ -161,11 +185,37 @@ export class SinapiService {
         precoUnitario,
         custoUnitario,
         temPreco: !!preco,
-      }
+      })
+    }
+
+    // Sub-compositions (recursive)
+    for (const filho of comp.filhos) {
+      const coef = Number(filho.coeficiente)
+      const sub = await this.resolveComposicaoCost(
+        filho.filhoId, uf, mesReferencia, desonerado, visited, depth + 1,
+      )
+      custoTotal += sub.custoUnitario * coef
+      semPreco += sub.itensSemPreco
+    }
+
+    return { custoUnitario: custoTotal, itensSemPreco: semPreco, itensCalculados }
+  }
+
+  async calculateComposicao(id: string, query: CalculateComposicaoQuery) {
+    const { uf, mesReferencia, quantidade, desonerado } = query
+
+    const composicao = await this.prisma.sinapiComposicao.findUnique({
+      where: { id },
+      select: { id: true, codigo: true, descricao: true, unidade: true },
     })
 
-    const custoUnitarioTotal = itensCalculados.reduce((sum, i) => sum + i.custoUnitario, 0)
-    const custoTotal = custoUnitarioTotal * quantidade
+    if (!composicao) throw new Error('Composição SINAPI não encontrada')
+
+    const { custoUnitario, itensSemPreco, itensCalculados } = await this.resolveComposicaoCost(
+      id, uf, mesReferencia, desonerado,
+    )
+
+    const custoTotal = custoUnitario * quantidade
 
     return {
       composicao: {
@@ -176,10 +226,56 @@ export class SinapiService {
       },
       parametros: { uf, mesReferencia, quantidade, desonerado },
       itens: itensCalculados,
-      custoUnitarioTotal: Math.round(custoUnitarioTotal * 100) / 100,
+      custoUnitarioTotal: Math.round(custoUnitario * 100) / 100,
       custoTotal: Math.round(custoTotal * 100) / 100,
-      itensSemPreco: itensCalculados.filter((i) => !i.temPreco).length,
+      itensSemPreco,
     }
+  }
+
+  /**
+   * Batch-resolve: given an array of SINAPI codes, look up each by exact code match,
+   * recursively calculate the unit cost (including sub-compositions),
+   * and return a map { codigo: { id, descricao, unidade, custoUnitarioTotal } }.
+   */
+  async batchResolve(
+    codigos: string[],
+    uf: string,
+    mesReferencia: string,
+    desonerado: boolean,
+  ) {
+    if (codigos.length === 0) return {}
+
+    // Exact match lookup — one query for all codes
+    const composicoes = await this.prisma.sinapiComposicao.findMany({
+      where: { codigo: { in: codigos } },
+      select: { id: true, codigo: true, descricao: true, unidade: true },
+    })
+
+    const result: Record<string, {
+      id: string
+      codigo: string
+      descricao: string
+      unidade: string
+      custoUnitarioTotal: number
+      itensSemPreco: number
+    }> = {}
+
+    for (const comp of composicoes) {
+      const { custoUnitario, itensSemPreco } = await this.resolveComposicaoCost(
+        comp.id, uf, mesReferencia, desonerado,
+      )
+
+      result[comp.codigo] = {
+        id: comp.id,
+        codigo: comp.codigo,
+        descricao: comp.descricao,
+        unidade: comp.unidade,
+        custoUnitarioTotal: Math.round(custoUnitario * 100) / 100,
+        itensSemPreco,
+      }
+    }
+
+    return result
   }
 
   /**

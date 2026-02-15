@@ -9,6 +9,7 @@ import {
   searchInsumosSchema,
   searchComposicoesSchema,
   calculateComposicaoSchema,
+  batchResolveSchema,
 } from './sinapi.schemas'
 
 function requirePermission(permission: string) {
@@ -147,6 +148,24 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string }
       const query = calculateComposicaoSchema.parse(request.query)
       const result = await service.calculateComposicao(id, query)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Batch Resolve (exact code lookup + price) ----
+
+  fastify.get('/composicoes/batch-resolve', {
+    preHandler: [authMiddleware],
+  }, async (request, reply) => {
+    try {
+      const query = batchResolveSchema.parse(request.query)
+      const codigos = query.codes.split(',').map((c) => c.trim()).filter(Boolean)
+      const result = await service.batchResolve(codigos, query.uf, query.mesReferencia, query.desonerado)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

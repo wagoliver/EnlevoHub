@@ -20,6 +20,14 @@ export const calculateComposicaoSchema = z.object({
   desonerado: z.coerce.boolean().default(false),
 })
 
+export const batchResolveSchema = z.object({
+  codes: z.string().min(1, 'Informe pelo menos um código'),
+  uf: z.string().length(2),
+  mesReferencia: z.string().regex(/^\d{4}-\d{2}$/, 'Formato: YYYY-MM'),
+  desonerado: z.coerce.boolean().default(false),
+})
+
 export type SearchInsumosQuery = z.infer<typeof searchInsumosSchema>
 export type SearchComposicoesQuery = z.infer<typeof searchComposicoesSchema>
 export type CalculateComposicaoQuery = z.infer<typeof calculateComposicaoSchema>
+export type BatchResolveQuery = z.infer<typeof batchResolveSchema>

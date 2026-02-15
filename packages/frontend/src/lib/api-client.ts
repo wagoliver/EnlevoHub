@@ -617,6 +617,14 @@ export const sinapiAPI = {
     })
     return apiClient.get<any>(`/sinapi/composicoes/${id}/tree?${searchParams.toString()}`)
   },
+  batchResolve: (params: { codes: string[]; uf: string; mesReferencia: string; desonerado?: boolean }) => {
+    const searchParams = new URLSearchParams()
+    searchParams.set('codes', params.codes.join(','))
+    searchParams.set('uf', params.uf)
+    searchParams.set('mesReferencia', params.mesReferencia)
+    if (params.desonerado !== undefined) searchParams.set('desonerado', String(params.desonerado))
+    return apiClient.get<Record<string, { id: string; codigo: string; descricao: string; unidade: string; custoUnitarioTotal: number; itensSemPreco: number }>>(`/sinapi/composicoes/batch-resolve?${searchParams.toString()}`)
+  },
   getStats: () => apiClient.get<{ insumos: number; composicoes: number; precos: number; meses: string[] }>('/sinapi/stats'),
   importInsumos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/insumos', formData),
   importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),

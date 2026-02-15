@@ -54,8 +54,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
     mutationFn: (data: any) => levantamentoAPI.addItem(projectId, levantamentoId, data),
     onSuccess: () => {
       toast.success('Item adicionado')
-      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, levantamentoId] })
-      queryClient.invalidateQueries({ queryKey: ['levantamento-resumo', projectId, levantamentoId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
       setNewItem({ ...emptyItem })
     },
     onError: (e: Error) => toast.error(e.message),
@@ -66,8 +65,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
       levantamentoAPI.updateItem(projectId, levantamentoId, itemId, data),
     onSuccess: () => {
       toast.success('Item atualizado')
-      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, levantamentoId] })
-      queryClient.invalidateQueries({ queryKey: ['levantamento-resumo', projectId, levantamentoId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
       setEditingId(null)
     },
     onError: (e: Error) => toast.error(e.message),
@@ -77,8 +75,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
     mutationFn: (itemId: string) => levantamentoAPI.deleteItem(projectId, levantamentoId, itemId),
     onSuccess: () => {
       toast.success('Item removido')
-      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, levantamentoId] })
-      queryClient.invalidateQueries({ queryKey: ['levantamento-resumo', projectId, levantamentoId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

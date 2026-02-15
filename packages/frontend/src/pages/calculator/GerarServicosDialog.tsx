@@ -182,42 +182,37 @@ export function GerarServicosDialog({
       .map((r, i) => ({ row: r, idx: i }))
       .filter((x) => x.row.sinapiCodigo)
 
-    if (rowsWithCodigo.length === 0) return
+    if (rowsWithCodigo.length === 0) {
+      setPricesLoaded(true)
+      return
+    }
 
     // Mark all as loading
     setRows((prev) => prev.map((r) => r.sinapiCodigo ? { ...r, loadingPreco: true } : r))
 
-    for (const { row, idx } of rowsWithCodigo) {
-      try {
-        const searchResult = await sinapiAPI.searchComposicoes({
-          search: row.sinapiCodigo!,
-          page: 1,
-          limit: 1,
-        })
+    try {
+      const codes = rowsWithCodigo.map((x) => x.row.sinapiCodigo!)
+      const resolved = await sinapiAPI.batchResolve({
+        codes,
+        uf,
+        mesReferencia: mes,
+        desonerado,
+      })
 
-        const composicao = searchResult?.data?.[0]
-        if (!composicao || composicao.codigo !== row.sinapiCodigo) {
-          setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
-          continue
-        }
-
-        const calculo = await sinapiAPI.calculateComposicao(composicao.id, {
-          uf,
-          mesReferencia: mes,
-          quantidade: 1,
-          desonerado,
-        })
-
-        setRows((prev) => prev.map((r, i) => i === idx ? {
+      setRows((prev) => prev.map((r) => {
+        if (!r.sinapiCodigo) return r
+        const match = resolved[r.sinapiCodigo]
+        if (!match) return { ...r, loadingPreco: false }
+        return {
           ...r,
-          sinapiComposicaoId: composicao.id,
-          sinapiDescricao: composicao.descricao,
-          precoUnitario: Math.round(calculo.custoUnitarioTotal * 100) / 100,
+          sinapiComposicaoId: match.id,
+          sinapiDescricao: match.descricao,
+          precoUnitario: match.custoUnitarioTotal,
           loadingPreco: false,
-        } : r))
-      } catch {
-        setRows((prev) => prev.map((r, i) => i === idx ? { ...r, loadingPreco: false } : r))
-      }
+        }
+      }))
+    } catch {
+      setRows((prev) => prev.map((r) => ({ ...r, loadingPreco: false })))
     }
 
     setPricesLoaded(true)
@@ -243,7 +238,8 @@ export function GerarServicosDialog({
       levantamentoAPI.batchCreateItems(projectId, levantamentoId, itens),
     onSuccess: (data) => {
       toast.success(`${data.addedCount} servicos gerados para "${ambiente.nome}"`)
-      queryClient.invalidateQueries({ queryKey: ['levantamento', projectId, levantamentoId] })
+      // Invalidate all levantamento queries for this project (parent uses 'levantamento-fp')
+      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
       onOpenChange(false)
     },
     onError: (e: Error) => toast.error(e.message),

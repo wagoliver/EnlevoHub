@@ -72,6 +72,7 @@ interface ServicoRow {
   quantidade: number
   sugerido: boolean
   precoUnitario: number
+  precoManual?: boolean       // true = user edited the price, skip recalc
   sinapiComposicaoId?: string
   sinapiCodigo?: string
   sinapiDescricao?: string
@@ -83,6 +84,7 @@ interface ManualFormState {
   nome: string
   unidade: string
   areaTipo: AreaTipo
+  padrao: boolean
 }
 
 export function GerarServicosDialog({
@@ -180,15 +182,15 @@ export function GerarServicosDialog({
 
     const rowsWithCodigo = currentRows
       .map((r, i) => ({ row: r, idx: i }))
-      .filter((x) => x.row.sinapiCodigo)
+      .filter((x) => x.row.sinapiCodigo && !x.row.precoManual)
 
     if (rowsWithCodigo.length === 0) {
       setPricesLoaded(true)
       return
     }
 
-    // Mark all as loading
-    setRows((prev) => prev.map((r) => r.sinapiCodigo ? { ...r, loadingPreco: true } : r))
+    // Mark only non-manual rows as loading
+    setRows((prev) => prev.map((r) => (r.sinapiCodigo && !r.precoManual) ? { ...r, loadingPreco: true } : r))
 
     try {
       const codes = rowsWithCodigo.map((x) => x.row.sinapiCodigo!)
@@ -200,7 +202,7 @@ export function GerarServicosDialog({
       })
 
       setRows((prev) => prev.map((r) => {
-        if (!r.sinapiCodigo) return r
+        if (!r.sinapiCodigo || r.precoManual) return r
         const match = resolved[r.sinapiCodigo]
         if (!match) return { ...r, loadingPreco: false }
         return {
@@ -261,7 +263,7 @@ export function GerarServicosDialog({
   const handlePrecoChange = (idx: number, value: string) => {
     const num = parseFloat(value)
     if (isNaN(num) || num < 0) return
-    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, precoUnitario: num } : r))
+    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, precoUnitario: num, precoManual: true } : r))
   }
 
   const handleSelectAll = () => {
@@ -434,12 +436,16 @@ export function GerarServicosDialog({
   // ---- Manual creation ----
 
   const handleOpenManualForm = (etapa: string) => {
-    setManualForm({ etapa, nome: '', unidade: 'UN', areaTipo: 'MANUAL' })
+    setManualForm({ etapa, nome: '', unidade: 'UN', areaTipo: 'MANUAL', padrao: true })
   }
 
   const handleSaveManual = async () => {
     if (!manualForm || !manualForm.nome.trim()) {
       toast.error('Informe o nome do servico')
+      return
+    }
+    if (!manualForm.etapa.trim()) {
+      toast.error('Informe a etapa')
       return
     }
 
@@ -448,8 +454,8 @@ export function GerarServicosDialog({
         nomeCustom: manualForm.nome.trim(),
         areaTipo: manualForm.areaTipo,
         tags: [],
-        padrao: false,
-        etapa: manualForm.etapa,
+        padrao: manualForm.padrao,
+        etapa: manualForm.etapa.trim(),
         order: 99,
       })
 
@@ -527,7 +533,7 @@ export function GerarServicosDialog({
     setPricesLoaded(false)
     setExpandedIdx(null)
     setTreeData(null)
-    setRows((prev) => prev.map((r) => ({
+    setRows((prev) => prev.map((r) => r.precoManual ? r : ({
       ...r,
       sinapiComposicaoId: undefined,
       sinapiDescricao: undefined,
@@ -787,14 +793,29 @@ export function GerarServicosDialog({
                                 </div>
                               ) : (
                                 <Input
-                                  className="h-7 w-20 text-xs text-right"
+                                  className={`h-7 w-20 text-xs text-right ${row.precoManual ? 'border-amber-400 bg-amber-50' : ''}`}
                                   type="number"
                                   step="0.01"
                                   placeholder="R$ 0,00"
                                   value={row.precoUnitario || ''}
                                   onChange={(e) => handlePrecoChange(idx, e.target.value)}
                                   disabled={!row.checked}
+                                  title={row.precoManual ? 'Preco editado manualmente' : ''}
                                 />
+                              )}
+                              {row.precoManual && row.sinapiCodigo && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-amber-500 hover:text-blue-600 shrink-0"
+                                  onClick={() => {
+                                    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, precoManual: false, precoUnitario: 0 } : r))
+                                    setPricesLoaded(false)
+                                  }}
+                                  title="Restaurar preco SINAPI"
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </Button>
                               )}
                             </div>
                             {row.checked && !row.sinapiComposicaoId && (
@@ -880,9 +901,9 @@ export function GerarServicosDialog({
                     {/* Manual form (inline creation) */}
                     {manualForm && manualForm.etapa === etapa && (
                       <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Input
-                            className="h-7 text-sm flex-1"
+                            className="h-7 text-sm flex-1 min-w-[160px]"
                             placeholder="Nome do servico..."
                             value={manualForm.nome}
                             onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })}
@@ -891,6 +912,12 @@ export function GerarServicosDialog({
                               if (e.key === 'Escape') setManualForm(null)
                             }}
                             autoFocus
+                          />
+                          <Input
+                            className="h-7 text-xs w-28"
+                            placeholder="Etapa"
+                            value={manualForm.etapa}
+                            onChange={(e) => setManualForm({ ...manualForm, etapa: e.target.value })}
                           />
                           <Select
                             value={manualForm.areaTipo}
@@ -905,6 +932,13 @@ export function GerarServicosDialog({
                               ))}
                             </SelectContent>
                           </Select>
+                          <label className="flex items-center gap-1 text-xs text-neutral-500 cursor-pointer">
+                            <Checkbox
+                              checked={manualForm.padrao}
+                              onChange={() => setManualForm({ ...manualForm, padrao: !manualForm.padrao })}
+                            />
+                            Padrao
+                          </label>
                           <Button size="sm" className="h-7 text-xs" onClick={handleSaveManual}>
                             Criar
                           </Button>
@@ -943,6 +977,57 @@ export function GerarServicosDialog({
               ))}
 
               {/* General add (new etapa) */}
+              {manualForm && !etapas.some(([e]) => e === manualForm.etapa) && (
+                <div className="border-t pt-3">
+                  <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Input
+                        className="h-7 text-sm flex-1 min-w-[160px]"
+                        placeholder="Nome do servico..."
+                        value={manualForm.nome}
+                        onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveManual()
+                          if (e.key === 'Escape') setManualForm(null)
+                        }}
+                        autoFocus
+                      />
+                      <Input
+                        className="h-7 text-xs w-28"
+                        placeholder="Etapa"
+                        value={manualForm.etapa}
+                        onChange={(e) => setManualForm({ ...manualForm, etapa: e.target.value })}
+                      />
+                      <Select
+                        value={manualForm.areaTipo}
+                        onValueChange={(v) => setManualForm({ ...manualForm, areaTipo: v as AreaTipo })}
+                      >
+                        <SelectTrigger className="h-7 w-36 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AREA_TIPO_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <label className="flex items-center gap-1 text-xs text-neutral-500 cursor-pointer">
+                        <Checkbox
+                          checked={manualForm.padrao}
+                          onChange={() => setManualForm({ ...manualForm, padrao: !manualForm.padrao })}
+                        />
+                        Padrao
+                      </label>
+                      <Button size="sm" className="h-7 text-xs" onClick={handleSaveManual}>
+                        Criar
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setManualForm(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {!manualForm && (
                 <div className="border-t pt-3">
                   <div className="flex gap-2">
@@ -959,7 +1044,7 @@ export function GerarServicosDialog({
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
-                      onClick={() => handleOpenManualForm('Outros')}
+                      onClick={() => handleOpenManualForm('')}
                     >
                       <Plus className="h-3.5 w-3.5 mr-1.5" />
                       Criar servico manual

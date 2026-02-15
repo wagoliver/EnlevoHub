@@ -9,9 +9,10 @@ function formatCurrency(value: number) {
 interface AmbienteResumoProps {
   ambientes: any[]
   itens: any[]
+  activityGroups?: any
 }
 
-export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
+export function AmbienteResumo({ ambientes, itens, activityGroups }: AmbienteResumoProps) {
   const resumo = useMemo(() => {
     const ambientesData = ambientes.map((amb) => {
       const comp = Number(amb.comprimento)
@@ -38,6 +39,38 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
 
     return { ambientesData, itensSemAmbiente, totalSemAmbiente, totalAmbientes, totalGeral, itensEmAmbientes, areaTotal }
   }, [ambientes, itens])
+
+  // Group cost by activity (when activityGroups are available)
+  const activityCost = useMemo(() => {
+    if (!activityGroups?.activityGroups?.length) return null
+
+    const groups: { id: string; label: string; color: string | null; itemCount: number; total: number }[] = []
+    const activityIdSet = new Set<string>()
+
+    for (const ag of activityGroups.activityGroups) {
+      activityIdSet.add(ag.activity.id)
+      const activityItens = itens.filter((i: any) => i.projectActivityId === ag.activity.id)
+      const total = activityItens.reduce(
+        (sum: number, i: any) => sum + Number(i.quantidade) * Number(i.precoUnitario),
+        0,
+      )
+      const label = ag.activity.parentName
+        ? `${ag.activity.parentName} > ${ag.activity.name}`
+        : ag.activity.name
+      groups.push({ id: ag.activity.id, label, color: ag.activity.color, itemCount: activityItens.length, total })
+    }
+
+    // Items not linked to any activity
+    const unlinked = itens.filter((i: any) => !i.projectActivityId || !activityIdSet.has(i.projectActivityId))
+    const unlinkedTotal = unlinked.reduce(
+      (sum: number, i: any) => sum + Number(i.quantidade) * Number(i.precoUnitario),
+      0,
+    )
+
+    const totalGeral = groups.reduce((sum, g) => sum + g.total, 0) + unlinkedTotal
+
+    return { groups, unlinked, unlinkedTotal, totalGeral }
+  }, [activityGroups, itens])
 
   return (
     <div className="space-y-4">
@@ -125,6 +158,62 @@ export function AmbienteResumo({ ambientes, itens }: AmbienteResumoProps) {
                       <div
                         className="bg-neutral-300 h-1.5 rounded-full transition-all"
                         style={{ width: `${resumo.totalGeral > 0 ? Math.min((resumo.totalSemAmbiente / resumo.totalGeral) * 100, 100) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Per-activity breakdown */}
+      {activityCost && activityCost.groups.some((g) => g.itemCount > 0) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Custo por Atividade</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {activityCost.groups.map((g) => {
+                if (g.itemCount === 0) return null
+                const pct = activityCost.totalGeral > 0 ? (g.total / activityCost.totalGeral) * 100 : 0
+                return (
+                  <div key={g.id} className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium truncate" style={g.color ? { color: g.color } : undefined}>{g.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-neutral-400">{g.itemCount} itens</span>
+                          <span className="text-sm font-medium">{formatCurrency(g.total)}</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-neutral-100 rounded-full h-1.5">
+                        <div
+                          className="h-1.5 rounded-full transition-all"
+                          style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: g.color || 'hsl(var(--primary))' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {activityCost.unlinked.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-neutral-400 truncate">Sem atividade</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-neutral-400">{activityCost.unlinked.length} itens</span>
+                        <span className="text-sm font-medium">{formatCurrency(activityCost.unlinkedTotal)}</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-neutral-100 rounded-full h-1.5">
+                      <div
+                        className="bg-neutral-300 h-1.5 rounded-full transition-all"
+                        style={{ width: `${activityCost.totalGeral > 0 ? Math.min((activityCost.unlinkedTotal / activityCost.totalGeral) * 100, 100) : 0}%` }}
                       />
                     </div>
                   </div>

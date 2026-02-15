@@ -798,6 +798,8 @@ model ProjectActivity {
   unitActivities       UnitActivity[]
   measurements         Measurement[]
   contractorActivities ContractorActivity[]
+  serviceLinks         ActivityServiceLink[]
+  levantamentoItens    LevantamentoItem[]
 
   @@index([projectId])
   @@index([parentId])
@@ -1048,16 +1050,19 @@ model LevantamentoItem {
   etapa           String?
   sinapiInsumoId  String?
   sinapiComposicaoId String?
+  projectActivityId  String?
   observacoes     String? @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  levantamento ProjetoLevantamento @relation(fields: [levantamentoId], references: [id], onDelete: Cascade)
-  ambiente     Ambiente?           @relation(fields: [ambienteId], references: [id], onDelete: SetNull)
+  levantamento    ProjetoLevantamento @relation(fields: [levantamentoId], references: [id], onDelete: Cascade)
+  ambiente        Ambiente?           @relation(fields: [ambienteId], references: [id], onDelete: SetNull)
+  projectActivity ProjectActivity?    @relation(fields: [projectActivityId], references: [id], onDelete: SetNull)
 
   @@index([levantamentoId])
   @@index([ambienteId])
   @@index([etapa])
+  @@index([projectActivityId])
   @@map("levantamento_itens")
 }
 
@@ -1086,9 +1091,27 @@ model ServicoTemplate {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activityLinks ActivityServiceLink[]
 
   @@index([tenantId])
   @@index([sinapiCodigo])
   @@map("servico_templates")
+}
+
+// ==================== ACTIVITY-SERVICE LINK ====================
+
+model ActivityServiceLink {
+  id                  String   @id @default(uuid())
+  projectActivityId   String
+  servicoTemplateId   String
+  isDefault           Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  projectActivity ProjectActivity @relation(fields: [projectActivityId], references: [id], onDelete: Cascade)
+  servicoTemplate ServicoTemplate @relation(fields: [servicoTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([projectActivityId, servicoTemplateId])
+  @@index([projectActivityId])
+  @@map("activity_service_links")
 }

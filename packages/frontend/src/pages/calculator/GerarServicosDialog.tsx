@@ -44,12 +44,18 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
+interface ActivityGroup {
+  activity: { id: string; name: string; parentName: string | null; color: string | null }
+  templates: any[]
+}
+
 interface GerarServicosDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ambiente: any
   projectId: string
   levantamentoId: string
+  activityGroups?: { activityGroups: ActivityGroup[]; unlinkedTemplates: any[] }
 }
 
 interface TemplateData {
@@ -77,6 +83,7 @@ interface ServicoRow {
   sinapiCodigo?: string
   sinapiDescricao?: string
   loadingPreco?: boolean
+  projectActivityId?: string
 }
 
 interface ManualFormState {
@@ -93,6 +100,7 @@ export function GerarServicosDialog({
   ambiente,
   projectId,
   levantamentoId,
+  activityGroups: activityGroupsProp,
 }: GerarServicosDialogProps) {
   const queryClient = useQueryClient()
 
@@ -151,6 +159,21 @@ export function GerarServicosDialog({
     }
   }, [mesesDisponiveis, mesReferencia])
 
+  // Build a map of template id -> activity id from activityGroups
+  const templateActivityMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (activityGroupsProp?.activityGroups) {
+      for (const group of activityGroupsProp.activityGroups) {
+        for (const t of group.templates) {
+          map.set(t.id, group.activity.id)
+        }
+      }
+    }
+    return map
+  }, [activityGroupsProp])
+
+  const hasActivityGroups = activityGroupsProp?.activityGroups && activityGroupsProp.activityGroups.length > 0
+
   // Build rows from templates when they load or ambiente changes
   useEffect(() => {
     if (!open || !templates || !Array.isArray(templates)) return
@@ -166,6 +189,7 @@ export function GerarServicosDialog({
         sugerido,
         precoUnitario: 0,
         sinapiCodigo: t.sinapiCodigo || undefined,
+        projectActivityId: templateActivityMap.get(t.id),
       }
     })
     setRows(newRows)
@@ -174,7 +198,7 @@ export function GerarServicosDialog({
     setTreeData(null)
     setEditingIdx(null)
     setManualForm(null)
-  }, [open, templates, ambiente.id, ambiente.tags])
+  }, [open, templates, ambiente.id, ambiente.tags, templateActivityMap])
 
   // Auto-resolve SINAPI prices when rows are built and month is available
   const resolveAllPrices = useCallback(async (currentRows: ServicoRow[], mes: string) => {
@@ -587,6 +611,7 @@ export function GerarServicosDialog({
       etapa: r.template.etapa,
       ambienteId: ambiente.id,
       sinapiComposicaoId: r.sinapiComposicaoId || undefined,
+      projectActivityId: r.projectActivityId || undefined,
     }))
 
     batchMutation.mutate(itens)
@@ -597,16 +622,55 @@ export function GerarServicosDialog({
     .filter((r) => r.checked)
     .reduce((sum, r) => sum + r.quantidade * r.precoUnitario, 0)
 
-  // Group by etapa
-  const etapas = useMemo(() => {
+  // Group by activity (if available) or by etapa (fallback)
+  const groupedRows = useMemo(() => {
+    if (hasActivityGroups && activityGroupsProp) {
+      // Group by activity
+      const groups: { key: string; label: string; color: string | null; activityId: string | null; indices: number[] }[] = []
+      const activityMap = new Map<string, number>() // activityId -> group index
+      const unlinkedIndices: number[] = []
+
+      // Create groups for each activity (preserving order from activityGroups)
+      for (const ag of activityGroupsProp.activityGroups) {
+        const label = ag.activity.parentName
+          ? `${ag.activity.parentName} > ${ag.activity.name}`
+          : ag.activity.name
+        activityMap.set(ag.activity.id, groups.length)
+        groups.push({ key: ag.activity.id, label, color: ag.activity.color, activityId: ag.activity.id, indices: [] })
+      }
+
+      // Distribute rows into groups
+      rows.forEach((r, i) => {
+        if (r.projectActivityId && activityMap.has(r.projectActivityId)) {
+          groups[activityMap.get(r.projectActivityId)!].indices.push(i)
+        } else {
+          unlinkedIndices.push(i)
+        }
+      })
+
+      // Add "Nao Vinculados" group if there are unlinked templates
+      if (unlinkedIndices.length > 0) {
+        groups.push({ key: '__unlinked__', label: 'Nao Vinculados', color: null, activityId: null, indices: unlinkedIndices })
+      }
+
+      return groups.filter((g) => g.indices.length > 0)
+    }
+
+    // Fallback: group by etapa string
     const map = new Map<string, number[]>()
     rows.forEach((r, i) => {
       const key = r.template.etapa
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(i)
     })
-    return Array.from(map.entries())
-  }, [rows])
+    return Array.from(map.entries()).map(([etapa, indices]) => ({
+      key: etapa,
+      label: etapa,
+      color: null,
+      activityId: null,
+      indices,
+    }))
+  }, [rows, hasActivityGroups, activityGroupsProp])
 
   return (
     <>
@@ -701,13 +765,13 @@ export function GerarServicosDialog({
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-2">
-              {etapas.map(([etapa, indices]) => (
-                <div key={etapa}>
-                  <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">
-                    {etapa}
+              {groupedRows.map((group) => (
+                <div key={group.key}>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide mb-2" style={group.color ? { color: group.color } : { color: 'rgb(115, 115, 115)' }}>
+                    {group.label}
                   </h4>
                   <div className="space-y-1">
-                    {indices.map((idx) => {
+                    {group.indices.map((idx) => {
                       const row = rows[idx]
                       const isExpanded = expandedIdx === idx
                       const canExpand = !!row.sinapiComposicaoId && !!mesReferencia
@@ -899,7 +963,7 @@ export function GerarServicosDialog({
                     })}
 
                     {/* Manual form (inline creation) */}
-                    {manualForm && manualForm.etapa === etapa && (
+                    {manualForm && manualForm.etapa === group.label && (
                       <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Input
@@ -950,13 +1014,13 @@ export function GerarServicosDialog({
                     )}
 
                     {/* Add service buttons */}
-                    {!(manualForm && manualForm.etapa === etapa) && (
+                    {!(manualForm && manualForm.etapa === group.label) && (
                       <div className="flex gap-2 mt-1.5">
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-blue-600 hover:text-blue-800"
-                          onClick={() => handleOpenAddSinapi(etapa)}
+                          onClick={() => handleOpenAddSinapi(group.label)}
                         >
                           <Search className="h-3 w-3 mr-1" />
                           Buscar no SINAPI
@@ -965,7 +1029,7 @@ export function GerarServicosDialog({
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-neutral-500 hover:text-neutral-700"
-                          onClick={() => handleOpenManualForm(etapa)}
+                          onClick={() => handleOpenManualForm(group.label)}
                         >
                           <Plus className="h-3 w-3 mr-1" />
                           Criar manual
@@ -977,7 +1041,7 @@ export function GerarServicosDialog({
               ))}
 
               {/* General add (new etapa) */}
-              {manualForm && !etapas.some(([e]) => e === manualForm.etapa) && (
+              {manualForm && !groupedRows.some((g) => g.label === manualForm.etapa) && (
                 <div className="border-t pt-3">
                   <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">

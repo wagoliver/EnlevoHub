@@ -73,6 +73,41 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     return nomes
   }, [activities])
 
+  // Check if project has STAGE activities
+  const hasActivities = useMemo(() => {
+    if (!activities || !Array.isArray(activities)) return false
+    function hasStages(items: any[]): boolean {
+      for (const item of items) {
+        if (item.level === 'STAGE') return true
+        if (item.children?.length && hasStages(item.children)) return true
+      }
+      return false
+    }
+    return hasStages(activities)
+  }, [activities])
+
+  // Auto-link activities to templates (fire-and-forget, idempotent)
+  const autoLinkMutation = useMutation({
+    mutationFn: () => levantamentoAPI.autoLinkActivities(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates-by-activity', projectId] })
+    },
+  })
+
+  useEffect(() => {
+    if (hasActivities) {
+      autoLinkMutation.mutate()
+    }
+  }, [hasActivities]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch templates grouped by activity
+  const { data: activityGroupsData } = useQuery({
+    queryKey: ['templates-by-activity', projectId],
+    queryFn: () => levantamentoAPI.getTemplatesByActivity(projectId),
+    enabled: hasActivities,
+    staleTime: 2 * 60 * 1000,
+  })
+
   // Ambiente mutations
   const createAmbienteMutation = useMutation({
     mutationFn: (data: any) => levantamentoAPI.createAmbiente(projectId, levantamento!.id, data),
@@ -212,11 +247,13 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
                     levantamentoId={levantamento.id}
                     itens={itens}
                     etapas={etapas}
+                    activityGroups={activityGroupsData}
                   />
                 ) : (
                   <AmbienteResumo
                     ambientes={ambientes}
                     itens={itens}
+                    activityGroups={activityGroupsData}
                   />
                 )}
               </div>

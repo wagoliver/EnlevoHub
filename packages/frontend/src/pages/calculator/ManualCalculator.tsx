@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI } from '@/lib/api-client'
@@ -31,6 +31,7 @@ interface ManualCalculatorProps {
   itens: any[]
   ambienteId?: string
   etapas?: string[]
+  activityGroups?: any
 }
 
 interface EditingItem {
@@ -44,8 +45,20 @@ interface EditingItem {
 
 const emptyItem: EditingItem = { nome: '', unidade: 'UN', quantidade: '', precoUnitario: '', etapa: '' }
 
-export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [] }: ManualCalculatorProps) {
+export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [], activityGroups }: ManualCalculatorProps) {
   const queryClient = useQueryClient()
+
+  // Derive dropdown options from activityGroups (STAGE names) or fallback to etapas
+  const etapaOptions = useMemo(() => {
+    if (activityGroups?.activityGroups?.length > 0) {
+      return activityGroups.activityGroups.map((g: any) => ({
+        value: g.activity.name,
+        label: g.activity.parentName ? `${g.activity.parentName} > ${g.activity.name}` : g.activity.name,
+      }))
+    }
+    return etapas.map((e: string) => ({ value: e, label: e }))
+  }, [activityGroups, etapas])
+
   const [newItem, setNewItem] = useState<EditingItem>({ ...emptyItem })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingData, setEditingData] = useState<EditingItem>({ ...emptyItem })
@@ -169,8 +182,8 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="_none">—</SelectItem>
-                          {etapas.map((e) => (
-                            <SelectItem key={e} value={e}>{e}</SelectItem>
+                          {etapaOptions.map((opt: any) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

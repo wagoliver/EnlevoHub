@@ -4,6 +4,7 @@ import { JWTService } from '../../core/auth/jwt.service'
 import { hasPermission } from '../../core/rbac/permissions'
 import { LevantamentoService } from './levantamento.service'
 import { ServicoTemplateService } from './servico-template.service'
+import { ActivityServiceLinkService } from './activity-service-link.service'
 import {
   createLevantamentoSchema,
   updateLevantamentoSchema,
@@ -18,6 +19,7 @@ import {
   updateTemplateSchema,
   createAmbienteTagSchema,
   updateAmbienteTagSchema,
+  createLinkSchema,
 } from './levantamento.schemas'
 
 function requirePermission(permission: string) {
@@ -37,6 +39,7 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
   const authMiddleware = createAuthMiddleware(jwtService)
   const service = new LevantamentoService(fastify.prisma)
   const templateService = new ServicoTemplateService(fastify.prisma)
+  const linkService = new ActivityServiceLinkService(fastify.prisma)
 
   const getTenantId = (request: any): string => request.user.tenantId
 
@@ -373,6 +376,68 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const result = await templateService.resetDefaults(getTenantId(request))
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Activity-Service Links ----
+
+  fastify.post('/:projectId/activity-service-links/auto', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { projectId } = request.params as { projectId: string }
+      const result = await linkService.autoLink(getTenantId(request), projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.get('/:projectId/templates-by-activity', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const { projectId } = request.params as { projectId: string }
+      const result = await linkService.getTemplatesForProject(getTenantId(request), projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.post('/:projectId/activity-service-links', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const data = createLinkSchema.parse(request.body)
+      const result = await linkService.link(data.projectActivityId, data.servicoTemplateId)
+      return reply.status(201).send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  fastify.delete('/:projectId/activity-service-links/:id', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await linkService.unlink(id)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

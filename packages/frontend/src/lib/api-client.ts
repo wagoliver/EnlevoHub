@@ -756,6 +756,16 @@ export const levantamentoAPI = {
   getResumo: (projectId: string, levantamentoId: string) =>
     apiClient.get<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/resumo`),
 
+  // Activity-Service Links
+  autoLinkActivities: (projectId: string) =>
+    apiClient.post<any>(`/projects/${projectId}/activity-service-links/auto`),
+  getTemplatesByActivity: (projectId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/templates-by-activity`),
+  linkActivity: (projectId: string, data: { projectActivityId: string; servicoTemplateId: string }) =>
+    apiClient.post<any>(`/projects/${projectId}/activity-service-links`, data),
+  unlinkActivity: (projectId: string, linkId: string) =>
+    apiClient.delete<any>(`/projects/${projectId}/activity-service-links/${linkId}`),
+
   // Servico Templates
   listTemplates: () =>
     apiClient.get<any[]>('/projects/servico-templates'),

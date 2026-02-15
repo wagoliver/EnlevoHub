@@ -252,6 +252,7 @@ export class LevantamentoService {
       etapa: item.etapa || null,
       ambienteId: item.ambienteId || null,
       sinapiComposicaoId: item.sinapiComposicaoId || null,
+      projectActivityId: item.projectActivityId || null,
       observacoes: item.observacoes || null,
     }))
 

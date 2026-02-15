@@ -20,9 +20,10 @@ interface AmbienteDetailProps {
   levantamentoId: string
   itens: any[]
   etapas?: string[]
+  activityGroups?: any
 }
 
-export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, etapas }: AmbienteDetailProps) {
+export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, etapas, activityGroups }: AmbienteDetailProps) {
   const [gerarOpen, setGerarOpen] = useState(false)
   const [itemsExpanded, setItemsExpanded] = useState(false)
   const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
@@ -158,6 +159,7 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, eta
                     itens={ambienteItens}
                     ambienteId={ambiente.id}
                     etapas={etapas}
+                    activityGroups={activityGroups}
                   />
                 </TabsContent>
 
@@ -181,6 +183,7 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, eta
         ambiente={ambiente}
         projectId={projectId}
         levantamentoId={levantamentoId}
+        activityGroups={activityGroups}
       />
     </div>
   )

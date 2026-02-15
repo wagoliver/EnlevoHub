@@ -80,6 +80,7 @@ export const batchCreateItemsSchema = z.object({
     etapa: z.string().max(200).optional(),
     ambienteId: z.string().uuid().optional(),
     sinapiComposicaoId: z.string().uuid().optional(),
+    projectActivityId: z.string().uuid().optional(),
     observacoes: z.string().optional(),
   })).min(1).max(50),
 })
@@ -140,5 +141,13 @@ export type CreateItemInput = z.infer<typeof createItemSchema>
 export type UpdateItemInput = z.infer<typeof updateItemSchema>
 export type FromComposicaoInput = z.infer<typeof fromComposicaoSchema>
 export type BatchCreateItemsInput = z.infer<typeof batchCreateItemsSchema>
+// --- Activity Service Links ---
+
+export const createLinkSchema = z.object({
+  projectActivityId: z.string().uuid(),
+  servicoTemplateId: z.string().uuid(),
+})
+
+export type CreateLinkInput = z.infer<typeof createLinkSchema>
 export type CreateTemplateInput = z.infer<typeof createTemplateSchema>
 export type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>

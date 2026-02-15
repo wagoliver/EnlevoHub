@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { sinapiAPI } from '@/lib/api-client'
 import {
@@ -58,13 +58,23 @@ export function ComposicaoDetailDialog({
   onImport,
 }: ComposicaoDetailDialogProps) {
   const [uf, setUf] = useState('SP')
-  const [mesReferencia, setMesReferencia] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [mesReferencia, setMesReferencia] = useState('')
   const [quantidade, setQuantidade] = useState(1)
   const [desonerado, setDesonerado] = useState(false)
   const [showCalc, setShowCalc] = useState(false)
+
+  const { data: mesesDisponiveis } = useQuery({
+    queryKey: ['sinapi-meses-referencia'],
+    queryFn: () => sinapiAPI.getMesesReferencia(),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Auto-select the most recent month when data loads
+  useEffect(() => {
+    if (mesesDisponiveis && mesesDisponiveis.length > 0 && !mesReferencia) {
+      setMesReferencia(mesesDisponiveis[0])
+    }
+  }, [mesesDisponiveis, mesReferencia])
 
   const { data: composicao, isLoading } = useQuery({
     queryKey: ['sinapi-composicao', composicaoId],
@@ -169,13 +179,22 @@ export function ComposicaoDetailDialog({
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Mês Referência</Label>
-                  <Input
-                    className="h-8 text-xs"
-                    placeholder="2024-01"
-                    value={mesReferencia}
-                    onChange={(e) => setMesReferencia(e.target.value)}
-                  />
+                  <Label className="text-xs">Mes Referencia</Label>
+                  <Select value={mesReferencia} onValueChange={setMesReferencia}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(mesesDisponiveis || []).map((mes: string) => {
+                        const [ano, m] = mes.split('-')
+                        const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+                        const label = `${meses[parseInt(m, 10) - 1]}/${ano}`
+                        return (
+                          <SelectItem key={mes} value={mes}>{label}</SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-xs">Quantidade</Label>

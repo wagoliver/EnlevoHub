@@ -11,6 +11,7 @@ import {
   createItemSchema,
   updateItemSchema,
   fromComposicaoSchema,
+  batchCreateItemsSchema,
   listLevantamentosSchema,
 } from './levantamento.schemas'
 
@@ -218,6 +219,24 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
       const { projectId, levantamentoId, itemId } = request.params as { projectId: string; levantamentoId: string; itemId: string }
       const result = await service.deleteItem(getTenantId(request), projectId, levantamentoId, itemId)
       return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Batch Items ----
+
+  fastify.post('/:projectId/levantamentos/:levantamentoId/itens/batch', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { projectId, levantamentoId } = request.params as { projectId: string; levantamentoId: string }
+      const data = batchCreateItemsSchema.parse(request.body)
+      const result = await service.batchCreateItems(getTenantId(request), projectId, levantamentoId, data)
+      return reply.status(201).send(result)
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })

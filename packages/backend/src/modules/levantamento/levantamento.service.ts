@@ -7,6 +7,7 @@ import type {
   CreateItemInput,
   UpdateItemInput,
   FromComposicaoInput,
+  BatchCreateItemsInput,
 } from './levantamento.schemas'
 
 export class LevantamentoService {
@@ -202,6 +203,27 @@ export class LevantamentoService {
 
     await this.prisma.levantamentoItem.delete({ where: { id: itemId } })
     return { success: true }
+  }
+
+  async batchCreateItems(tenantId: string, projectId: string, levantamentoId: string, input: BatchCreateItemsInput) {
+    const lev = await this.prisma.projetoLevantamento.findFirst({
+      where: { id: levantamentoId, tenantId, projectId },
+    })
+    if (!lev) throw new Error('Levantamento não encontrado')
+
+    const data = input.itens.map((item) => ({
+      levantamentoId,
+      nome: item.nome,
+      unidade: item.unidade,
+      quantidade: item.quantidade,
+      precoUnitario: item.precoUnitario,
+      etapa: item.etapa || null,
+      ambienteId: item.ambienteId || null,
+      observacoes: item.observacoes || null,
+    }))
+
+    const result = await this.prisma.levantamentoItem.createMany({ data })
+    return { addedCount: result.count }
   }
 
   // --- SINAPI Integration ---

@@ -4,6 +4,13 @@ import type { SearchInsumosQuery, SearchComposicoesQuery, CalculateComposicaoQue
 export class SinapiService {
   constructor(private prisma: PrismaClient) {}
 
+  async getMesesDisponiveis() {
+    const rows = await this.prisma.$queryRaw<{ mesReferencia: string }[]>`
+      SELECT DISTINCT "mesReferencia" FROM sinapi_precos ORDER BY "mesReferencia" DESC
+    `
+    return rows.map((r) => r.mesReferencia)
+  }
+
   async searchInsumos(query: SearchInsumosQuery) {
     const { search, tipo, page, limit } = query
     const skip = (page - 1) * limit

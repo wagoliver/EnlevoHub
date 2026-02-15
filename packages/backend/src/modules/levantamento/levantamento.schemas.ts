@@ -77,6 +77,18 @@ export const fromComposicaoSchema = z.object({
   ambienteId: z.string().uuid().optional(),
 })
 
+export const batchCreateItemsSchema = z.object({
+  itens: z.array(z.object({
+    nome: z.string().min(1).max(500),
+    unidade: z.string().min(1).max(20),
+    quantidade: z.number().positive(),
+    precoUnitario: z.number().min(0),
+    etapa: z.string().max(200).optional(),
+    ambienteId: z.string().uuid().optional(),
+    observacoes: z.string().optional(),
+  })).min(1).max(50),
+})
+
 export const listLevantamentosSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -89,3 +101,4 @@ export type UpdateAmbienteInput = z.infer<typeof updateAmbienteSchema>
 export type CreateItemInput = z.infer<typeof createItemSchema>
 export type UpdateItemInput = z.infer<typeof updateItemSchema>
 export type FromComposicaoInput = z.infer<typeof fromComposicaoSchema>
+export type BatchCreateItemsInput = z.infer<typeof batchCreateItemsSchema>

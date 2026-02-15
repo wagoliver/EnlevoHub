@@ -1,10 +1,13 @@
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Ruler, Square, Maximize } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Ruler, Square, Maximize, Wand2 } from 'lucide-react'
 import { ManualCalculator } from './ManualCalculator'
 import { SinapiCalculator } from './SinapiCalculator'
+import { GerarServicosDialog } from './GerarServicosDialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { calcularAreas } from './servicosCatalogo'
 
 const TIPO_LABELS: Record<string, string> = {
   SALA: 'Sala',
@@ -27,26 +30,9 @@ interface AmbienteDetailProps {
   itens: any[]
 }
 
-function calcAreas(ambiente: any) {
-  const comp = Number(ambiente.comprimento)
-  const larg = Number(ambiente.largura)
-  const pe = Number(ambiente.peDireito)
-  const portas = ambiente.qtdPortas ?? 0
-  const janelas = ambiente.qtdJanelas ?? 0
-
-  const areaPiso = comp * larg
-  const perimetro = 2 * (comp + larg)
-  const areaParedeBruta = perimetro * pe
-  const areaPortas = portas * 1.60 * 2.10
-  const areaJanelas = janelas * 1.20 * 1.20
-  const areaParedeLiquida = Math.max(0, areaParedeBruta - areaPortas - areaJanelas)
-  const areaTeto = areaPiso
-
-  return { areaPiso, perimetro, areaParedeBruta, areaPortas, areaJanelas, areaParedeLiquida, areaTeto }
-}
-
 export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens }: AmbienteDetailProps) {
-  const areas = useMemo(() => calcAreas(ambiente), [ambiente])
+  const [gerarOpen, setGerarOpen] = useState(false)
+  const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
 
   const ambienteItens = useMemo(
     () => itens.filter((i: any) => i.ambienteId === ambiente.id),
@@ -56,15 +42,21 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens }: A
   return (
     <div className="space-y-4">
       {/* Ambiente info header */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <h3 className="text-lg font-semibold">{ambiente.nome}</h3>
-        <Badge variant="secondary">{TIPO_LABELS[ambiente.tipo] || ambiente.tipo}</Badge>
-        <span className="text-sm text-neutral-500">
-          {Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m
-          &middot; Pe-dir: {Number(ambiente.peDireito).toFixed(2)} m
-          &middot; {ambiente.qtdPortas} porta{ambiente.qtdPortas !== 1 ? 's' : ''}
-          &middot; {ambiente.qtdJanelas} janela{ambiente.qtdJanelas !== 1 ? 's' : ''}
-        </span>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-lg font-semibold">{ambiente.nome}</h3>
+          <Badge variant="secondary">{TIPO_LABELS[ambiente.tipo] || ambiente.tipo}</Badge>
+          <span className="text-sm text-neutral-500">
+            {Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m
+            &middot; Pe-dir: {Number(ambiente.peDireito).toFixed(2)} m
+            &middot; {ambiente.qtdPortas} porta{ambiente.qtdPortas !== 1 ? 's' : ''}
+            &middot; {ambiente.qtdJanelas} janela{ambiente.qtdJanelas !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setGerarOpen(true)}>
+          <Wand2 className="h-4 w-4 mr-1.5" />
+          Gerar Servicos
+        </Button>
       </div>
 
       {/* Calculated areas */}
@@ -110,42 +102,69 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens }: A
         </Card>
       </div>
 
+      {/* Empty state: prompt to generate services */}
+      {ambienteItens.length === 0 && (
+        <div className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-6 text-center">
+          <Wand2 className="h-8 w-8 text-primary/50 mx-auto" />
+          <h4 className="mt-2 text-sm font-medium text-neutral-700">Ambiente sem itens</h4>
+          <p className="mt-1 text-xs text-neutral-500 max-w-md mx-auto">
+            Clique em "Gerar Servicos" para criar automaticamente os itens de construcao
+            deste ambiente (alvenaria, pintura, piso, etc.) com as quantidades ja calculadas.
+          </p>
+          <Button size="sm" className="mt-3" onClick={() => setGerarOpen(true)}>
+            <Wand2 className="h-4 w-4 mr-1.5" />
+            Gerar Servicos
+          </Button>
+        </div>
+      )}
+
       {/* Materials for this ambiente */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            Materiais deste Ambiente
-            <span className="text-xs font-normal text-neutral-400">
-              ({ambienteItens.length} ite{ambienteItens.length === 1 ? 'm' : 'ns'})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="manual">
-            <TabsList>
-              <TabsTrigger value="manual">Manual</TabsTrigger>
-              <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
-            </TabsList>
+      {ambienteItens.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              Materiais deste Ambiente
+              <span className="text-xs font-normal text-neutral-400">
+                ({ambienteItens.length} ite{ambienteItens.length === 1 ? 'm' : 'ns'})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="manual">
+              <TabsList>
+                <TabsTrigger value="manual">Manual</TabsTrigger>
+                <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="manual" className="mt-4">
-              <ManualCalculator
-                projectId={projectId}
-                levantamentoId={levantamentoId}
-                itens={ambienteItens}
-                ambienteId={ambiente.id}
-              />
-            </TabsContent>
+              <TabsContent value="manual" className="mt-4">
+                <ManualCalculator
+                  projectId={projectId}
+                  levantamentoId={levantamentoId}
+                  itens={ambienteItens}
+                  ambienteId={ambiente.id}
+                />
+              </TabsContent>
 
-            <TabsContent value="sinapi" className="mt-4">
-              <SinapiCalculator
-                projectId={projectId}
-                levantamentoId={levantamentoId}
-                ambienteId={ambiente.id}
-              />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+              <TabsContent value="sinapi" className="mt-4">
+                <SinapiCalculator
+                  projectId={projectId}
+                  levantamentoId={levantamentoId}
+                  ambienteId={ambiente.id}
+                />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Gerar Servicos Dialog */}
+      <GerarServicosDialog
+        open={gerarOpen}
+        onOpenChange={setGerarOpen}
+        ambiente={ambiente}
+        projectId={projectId}
+        levantamentoId={levantamentoId}
+      />
     </div>
   )
 }

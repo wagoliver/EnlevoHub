@@ -580,6 +580,7 @@ export const activityTemplatesAPI = {
 }
 
 export const sinapiAPI = {
+  getMesesReferencia: () => apiClient.get<string[]>('/sinapi/meses-referencia'),
   searchInsumos: (params?: { search?: string; tipo?: string; page?: number; limit?: number }) => {
     const searchParams = new URLSearchParams()
     if (params) {
@@ -646,6 +647,8 @@ export const levantamentoAPI = {
   // Items
   addItem: (projectId: string, levantamentoId: string, data: any) =>
     apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens`, data),
+  batchCreateItems: (projectId: string, levantamentoId: string, itens: any[]) =>
+    apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens/batch`, { itens }),
   updateItem: (projectId: string, levantamentoId: string, itemId: string, data: any) =>
     apiClient.patch<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/itens/${itemId}`, data),
   deleteItem: (projectId: string, levantamentoId: string, itemId: string) =>

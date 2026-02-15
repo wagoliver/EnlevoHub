@@ -5,6 +5,13 @@ import { levantamentoAPI } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Table,
   TableBody,
   TableCell,
@@ -13,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Plus, Trash2, Loader2, Save } from 'lucide-react'
+import { ETAPAS_LISTA } from './servicosCatalogo'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -157,7 +165,19 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId 
                     <TableCell><Input className="h-7 text-xs text-right" type="number" value={editingData.quantidade} onChange={(e) => setEditingData({ ...editingData, quantidade: e.target.value })} /></TableCell>
                     <TableCell><Input className="h-7 text-xs text-right" type="number" step="0.01" value={editingData.precoUnitario} onChange={(e) => setEditingData({ ...editingData, precoUnitario: e.target.value })} /></TableCell>
                     <TableCell className="text-xs text-right font-medium">-</TableCell>
-                    <TableCell><Input className="h-7 text-xs" value={editingData.etapa} onChange={(e) => setEditingData({ ...editingData, etapa: e.target.value })} /></TableCell>
+                    <TableCell>
+                      <Select value={editingData.etapa || '_none'} onValueChange={(v) => setEditingData({ ...editingData, etapa: v === '_none' ? '' : v })}>
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">—</SelectItem>
+                          {ETAPAS_LISTA.map((e) => (
+                            <SelectItem key={e} value={e}>{e}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleSaveEdit} disabled={updateMutation.isPending}>
@@ -241,12 +261,17 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId 
               </TableCell>
               <TableCell />
               <TableCell>
-                <Input
-                  className="h-7 text-xs"
-                  placeholder="Etapa"
-                  value={newItem.etapa}
-                  onChange={(e) => setNewItem({ ...newItem, etapa: e.target.value })}
-                />
+                <Select value={newItem.etapa || '_none'} onValueChange={(v) => setNewItem({ ...newItem, etapa: v === '_none' ? '' : v })}>
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue placeholder="Etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">—</SelectItem>
+                    {ETAPAS_LISTA.map((e) => (
+                      <SelectItem key={e} value={e}>{e}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </TableCell>
               <TableCell>
                 <Button

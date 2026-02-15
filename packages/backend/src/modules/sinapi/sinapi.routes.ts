@@ -41,6 +41,22 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
 
   const getUserId = (request: any): string => request.user.userId
 
+  // ---- Meses Referência ----
+
+  fastify.get('/meses-referencia', {
+    preHandler: [authMiddleware],
+  }, async (_request, reply) => {
+    try {
+      const result = await service.getMesesDisponiveis()
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Insumos ----
 
   fastify.get('/insumos', {

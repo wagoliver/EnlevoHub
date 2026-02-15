@@ -226,7 +226,7 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     // Extend timeout — processing XLSX takes several minutes
     request.raw.setTimeout(600_000) // 10 min
-    if (reply.raw.setTimeout) reply.raw.setTimeout(600_000)
+
     try {
       const data = await request.file()
       if (!data) {
@@ -243,11 +243,31 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Bad Request', message: 'Arquivo muito pequeno' })
       }
 
-      const result = await collectorService.collectFromZip(
-        buffer,
-        getUserId(request),
-      )
-      return reply.send(result)
+      // Stream progress via SSE
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+      })
+
+      const sendEvent = (event: string, payload: any) => {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
+      }
+
+      try {
+        const result = await collectorService.collectFromZip(
+          buffer,
+          getUserId(request),
+          (msg) => sendEvent('progress', { message: msg }),
+        )
+        sendEvent('done', result)
+      } catch (err: any) {
+        sendEvent('error', { message: err.message || 'Erro desconhecido' })
+      }
+
+      reply.raw.end()
+      return reply.hijack()
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })
@@ -261,9 +281,8 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
   fastify.post('/collect', {
     preHandler: [authMiddleware, requireAdmin()],
   }, async (request, reply) => {
-    // Extend timeout — download + processing takes several minutes
     request.raw.setTimeout(600_000) // 10 min
-    if (reply.raw.setTimeout) reply.raw.setTimeout(600_000)
+
     try {
       const { year, month } = request.body as { year: number; month: number }
 
@@ -274,12 +293,32 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
         })
       }
 
-      const result = await collectorService.collect(
-        year,
-        month,
-        getUserId(request),
-      )
-      return reply.send(result)
+      // Stream progress via SSE
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      })
+
+      const sendEvent = (event: string, payload: any) => {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`)
+      }
+
+      try {
+        const result = await collectorService.collect(
+          year,
+          month,
+          getUserId(request),
+          (msg) => sendEvent('progress', { message: msg }),
+        )
+        sendEvent('done', result)
+      } catch (err: any) {
+        sendEvent('error', { message: err.message || 'Erro desconhecido' })
+      }
+
+      reply.raw.end()
+      return reply.hijack()
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })

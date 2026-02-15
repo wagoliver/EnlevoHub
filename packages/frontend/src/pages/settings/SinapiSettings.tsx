@@ -21,6 +21,7 @@ import {
   Database,
   Info,
   Download,
+  X,
 } from 'lucide-react'
 
 function buildMonthOptions() {
@@ -49,10 +50,12 @@ export function SinapiSettings() {
     `${monthOptions[0].year}-${monthOptions[0].month}`,
   )
   const [collectResult, setCollectResult] = useState<any>(null)
+  const [collectProgress, setCollectProgress] = useState<string | null>(null)
 
   // Upload ZIP
   const [zipFile, setZipFile] = useState<File | null>(null)
   const [zipResult, setZipResult] = useState<any>(null)
+  const [zipProgress, setZipProgress] = useState<string | null>(null)
 
   const { data: stats } = useQuery({
     queryKey: ['sinapi-stats'],
@@ -62,14 +65,16 @@ export function SinapiSettings() {
   const collectMutation = useMutation({
     mutationFn: async () => {
       const [y, m] = selectedMonth.split('-').map(Number)
-      return sinapiAPI.collect(y, m)
+      return sinapiAPI.collect(y, m, (msg) => setCollectProgress(msg))
     },
     onSuccess: (data) => {
       setCollectResult(data)
+      setCollectProgress(null)
       queryClient.invalidateQueries({ queryKey: ['sinapi-stats'] })
       toast.success('Coleta SINAPI finalizada com sucesso')
     },
     onError: (error: Error) => {
+      setCollectProgress(null)
       toast.error(error.message)
     },
   })
@@ -77,15 +82,17 @@ export function SinapiSettings() {
   const zipUploadMutation = useMutation({
     mutationFn: async () => {
       if (!zipFile) throw new Error('Selecione um arquivo ZIP')
-      return sinapiAPI.collectFromZip(zipFile)
+      return sinapiAPI.collectFromZip(zipFile, (msg) => setZipProgress(msg))
     },
     onSuccess: (data) => {
       setZipResult(data)
       setZipFile(null)
+      setZipProgress(null)
       queryClient.invalidateQueries({ queryKey: ['sinapi-stats'] })
       toast.success('Importacao do ZIP finalizada com sucesso')
     },
     onError: (error: Error) => {
+      setZipProgress(null)
       toast.error(error.message)
     },
   })
@@ -193,22 +200,29 @@ export function SinapiSettings() {
           {collectMutation.isPending && (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <div>
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600 flex-shrink-0" />
+                <div className="flex-1">
                   <p className="text-sm font-medium text-blue-900">
                     Coletando dados do SINAPI...
                   </p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Baixando ZIP, extraindo XLSX e importando insumos, composicoes e precos.
-                    Isso pode levar alguns minutos.
-                  </p>
+                  {collectProgress ? (
+                    <p className="text-xs text-blue-700 mt-1 font-mono">{collectProgress}</p>
+                  ) : (
+                    <p className="text-xs text-blue-700 mt-1">Iniciando...</p>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
           {collectMutation.isError && !collectResult && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4 relative">
+              <button
+                onClick={() => collectMutation.reset()}
+                className="absolute top-2 right-2 text-red-400 hover:text-red-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
                 <div>
@@ -310,22 +324,29 @@ export function SinapiSettings() {
           {zipUploadMutation.isPending && (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <div>
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600 flex-shrink-0" />
+                <div className="flex-1">
                   <p className="text-sm font-medium text-blue-900">
                     Processando ZIP do SINAPI...
                   </p>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Extraindo XLSX e importando insumos, composicoes e precos.
-                    Isso pode levar alguns minutos.
-                  </p>
+                  {zipProgress ? (
+                    <p className="text-xs text-blue-700 mt-1 font-mono">{zipProgress}</p>
+                  ) : (
+                    <p className="text-xs text-blue-700 mt-1">Enviando arquivo...</p>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
           {zipUploadMutation.isError && !zipResult && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+            <div className="rounded-lg bg-red-50 border border-red-200 p-4 relative">
+              <button
+                onClick={() => zipUploadMutation.reset()}
+                className="absolute top-2 right-2 text-red-400 hover:text-red-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
                 <div>

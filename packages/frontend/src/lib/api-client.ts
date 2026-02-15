@@ -614,12 +614,86 @@ export const sinapiAPI = {
   importInsumos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/insumos', formData),
   importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),
   importPrecos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/precos', formData),
-  collect: (year: number, month: number) => apiClient.post<any>('/sinapi/collect', { year, month }),
-  collectFromZip: (file: File) => {
+  collect: (year: number, month: number, onProgress?: (msg: string) => void) => {
+    return sseRequest('/sinapi/collect', { body: JSON.stringify({ year, month }), contentType: 'application/json' }, onProgress)
+  },
+  collectFromZip: (file: File, onProgress?: (msg: string) => void) => {
     const formData = new FormData()
     formData.append('file', file)
-    return apiClient.upload<any>('/sinapi/collect-from-zip', formData)
+    return sseRequest('/sinapi/collect-from-zip', { body: formData }, onProgress)
   },
+}
+
+/** POST that reads SSE progress events and returns the final result */
+async function sseRequest(
+  endpoint: string,
+  opts: { body: BodyInit; contentType?: string },
+  onProgress?: (msg: string) => void,
+): Promise<any> {
+  const { accessToken } = useAuthStore.getState()
+  const headers: Record<string, string> = {}
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+  if (opts.contentType) headers['Content-Type'] = opts.contentType
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: opts.body,
+  })
+
+  if (!response.ok) {
+    let msg = response.statusText
+    try {
+      const data = await response.json()
+      msg = data.message || data.error || msg
+    } catch { /* ignore */ }
+    throw new Error(msg)
+  }
+
+  // If not SSE, fallback to JSON
+  const ct = response.headers.get('content-type') || ''
+  if (!ct.includes('text/event-stream')) {
+    return response.json()
+  }
+
+  // Parse SSE stream
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: any = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() || ''
+
+    for (const part of parts) {
+      if (!part.trim()) continue
+      let eventType = ''
+      let eventData = ''
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event: ')) eventType = line.slice(7)
+        else if (line.startsWith('data: ')) eventData = line.slice(6)
+      }
+
+      if (eventType === 'progress' && onProgress) {
+        try {
+          const parsed = JSON.parse(eventData)
+          onProgress(parsed.message)
+        } catch { /* ignore */ }
+      } else if (eventType === 'done') {
+        result = JSON.parse(eventData)
+      } else if (eventType === 'error') {
+        const parsed = JSON.parse(eventData)
+        throw new Error(parsed.message)
+      }
+    }
+  }
+
+  return result
 }
 
 export const levantamentoAPI = {

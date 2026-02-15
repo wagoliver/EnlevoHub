@@ -38,6 +38,23 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
 
   const getTenantId = (request: any): string => request.user.tenantId
 
+  // ---- Levantamento por Planta (get or create) ----
+
+  fastify.get('/:projectId/floor-plans/:floorPlanId/levantamento', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const { projectId, floorPlanId } = request.params as { projectId: string; floorPlanId: string }
+      const result = await service.getOrCreateForFloorPlan(getTenantId(request), projectId, floorPlanId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Levantamentos CRUD ----
 
   fastify.get('/:projectId/levantamentos', {

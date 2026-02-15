@@ -49,6 +49,38 @@ export class LevantamentoService {
     return levantamento
   }
 
+  async getOrCreateForFloorPlan(tenantId: string, projectId: string, floorPlanId: string) {
+    // Check if levantamento already exists for this floorPlan
+    const existing = await this.prisma.projetoLevantamento.findFirst({
+      where: { projectId, floorPlanId, tenantId },
+      include: {
+        itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    })
+    if (existing) return existing
+
+    // Verify floorPlan belongs to project/tenant
+    const floorPlan = await this.prisma.floorPlan.findFirst({
+      where: { id: floorPlanId, project: { id: projectId, tenantId } },
+    })
+    if (!floorPlan) throw new Error('Planta não encontrada')
+
+    // Auto-create
+    return this.prisma.projetoLevantamento.create({
+      data: {
+        tenantId,
+        projectId,
+        floorPlanId,
+        nome: floorPlan.name,
+      },
+      include: {
+        itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    })
+  }
+
   async create(tenantId: string, projectId: string, data: CreateLevantamentoInput) {
     // Verify project belongs to tenant
     const project = await this.prisma.project.findFirst({

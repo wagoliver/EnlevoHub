@@ -175,8 +175,9 @@ model FloorPlan {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  units   Unit[]
+  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units          Unit[]
+  levantamentos  ProjetoLevantamento[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -955,6 +956,7 @@ model ProjetoLevantamento {
   id            String          @id @default(uuid())
   tenantId      String
   projectId     String
+  floorPlanId   String?
   nome          String
   tipo          LevantamentoTipo @default(MANUAL)
   uf            String?         @db.VarChar(2)
@@ -965,11 +967,14 @@ model ProjetoLevantamento {
 
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  floorPlan FloorPlan? @relation(fields: [floorPlanId], references: [id], onDelete: SetNull)
   itens     LevantamentoItem[]
   ambientes Ambiente[]
 
+  @@unique([projectId, floorPlanId])
   @@index([tenantId])
   @@index([projectId])
+  @@index([floorPlanId])
   @@map("projeto_levantamentos")
 }
 

@@ -23,12 +23,27 @@ interface UpdateTemplateInput {
   ativo?: boolean
 }
 
-// Default templates with common SINAPI composition codes
+// Default templates with validated SINAPI composition codes (base 2026-01)
+//
+// Codes validated against sinapi_composicoes table:
+// 103324 - Alvenaria vedação bloco cerâmico 14cm, betoneira (M2)
+// 87879  - Chapisco interno, colher de pedreiro, betoneira 400L (M2)
+// 87535  - Emboço parede interna, área >10m², e=17.5mm, betoneira (M2)
+// 87265  - Revestimento cerâmico parede interna, esmaltada 20x20cm (M2)
+// 88489  - Pintura látex acrílica premium, paredes, 2 demãos (M2)
+// 88488  - Pintura látex acrílica premium, teto, 2 demãos (M2)
+// 87620  - Contrapiso argamassa 1:4, betoneira 400L, e=2cm (M2)
+// 87263  - Piso porcelanato 60x60cm, área >10m² (M2)
+// 88648  - Rodapé cerâmico 7cm, esmaltada 35x35cm (M)
+// 96109  - Forro placas de gesso, residencial (M2)
+// 98555  - Impermeabilização argamassa polimérica, 3 demãos (M2)
+// 91947  - Suporte c/ placa 4x2" baixo p/ ponto elétrico (UN)
+// (ponto hidráulico) - sem composição unitária no SINAPI
 const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Alvenaria ---
   {
     nome: 'Alvenaria de vedação',
-    sinapiCodigo: '87292',
+    sinapiCodigo: '103324',
     unidade: 'm²',
     areaTipo: 'PAREDE_LIQ',
     aplicaEm: [],
@@ -39,7 +54,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Revestimento ---
   {
     nome: 'Chapisco interno',
-    sinapiCodigo: '87894',
+    sinapiCodigo: '87879',
     unidade: 'm²',
     areaTipo: 'PAREDE_LIQ',
     aplicaEm: [],
@@ -49,7 +64,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   },
   {
     nome: 'Emboço / massa única',
-    sinapiCodigo: '87775',
+    sinapiCodigo: '87535',
     unidade: 'm²',
     areaTipo: 'PAREDE_LIQ',
     aplicaEm: [],
@@ -59,7 +74,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   },
   {
     nome: 'Revestimento cerâmico (azulejo)',
-    sinapiCodigo: '87262',
+    sinapiCodigo: '87265',
     unidade: 'm²',
     areaTipo: 'PAREDE_LIQ',
     aplicaEm: ['BANHEIRO', 'COZINHA', 'AREA_SERVICO'],
@@ -70,7 +85,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Pintura ---
   {
     nome: 'Pintura interna (paredes)',
-    sinapiCodigo: '88485',
+    sinapiCodigo: '88489',
     unidade: 'm²',
     areaTipo: 'PAREDE_LIQ',
     aplicaEm: [],
@@ -80,7 +95,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   },
   {
     nome: 'Pintura de teto',
-    sinapiCodigo: '88487',
+    sinapiCodigo: '88488',
     unidade: 'm²',
     areaTipo: 'TETO',
     aplicaEm: [],
@@ -91,7 +106,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Piso ---
   {
     nome: 'Contrapiso',
-    sinapiCodigo: '87258',
+    sinapiCodigo: '87620',
     unidade: 'm²',
     areaTipo: 'PISO',
     aplicaEm: [],
@@ -101,7 +116,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   },
   {
     nome: 'Piso cerâmico / porcelanato',
-    sinapiCodigo: '87261',
+    sinapiCodigo: '87263',
     unidade: 'm²',
     areaTipo: 'PISO',
     aplicaEm: [],
@@ -111,7 +126,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   },
   {
     nome: 'Rodapé cerâmico',
-    sinapiCodigo: '87246',
+    sinapiCodigo: '88648',
     unidade: 'm',
     areaTipo: 'PERIMETRO',
     aplicaEm: [],
@@ -122,7 +137,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Teto ---
   {
     nome: 'Forro de gesso',
-    sinapiCodigo: '96112',
+    sinapiCodigo: '96109',
     unidade: 'm²',
     areaTipo: 'TETO',
     aplicaEm: [],
@@ -144,7 +159,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Instalações ---
   {
     nome: 'Ponto de instalação elétrica',
-    sinapiCodigo: '91928',
+    sinapiCodigo: '91947',
     unidade: 'un',
     areaTipo: 'PISO',
     aplicaEm: [],
@@ -154,7 +169,7 @@ const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   },
   {
     nome: 'Ponto de instalação hidráulica',
-    sinapiCodigo: '89449',
+    sinapiCodigo: null,
     unidade: 'un',
     areaTipo: 'PISO',
     aplicaEm: ['BANHEIRO', 'COZINHA', 'AREA_SERVICO'],

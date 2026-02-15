@@ -3,6 +3,8 @@ import ExcelJS from 'exceljs'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+import * as https from 'https'
+import * as http from 'http'
 import * as unzipper from 'unzipper'
 
 const DOWNLOAD_URL_PATTERN =
@@ -623,14 +625,69 @@ export class SinapiCollectorService {
 
   // ---- Helpers ----
 
-  private async downloadFile(url: string, dest: string): Promise<void> {
-    // Use dynamic import for fetch (Node 18+)
-    const response = await fetch(url)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-    const buffer = Buffer.from(await response.arrayBuffer())
-    fs.writeFileSync(dest, buffer)
+  private async downloadFile(url: string, dest: string, maxRedirects = 5): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const doRequest = (reqUrl: string, redirectsLeft: number) => {
+        const mod = reqUrl.startsWith('https') ? https : http
+        const req = mod.get(
+          reqUrl,
+          {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Accept: '*/*',
+            },
+          },
+          (res) => {
+            // Handle redirects (301, 302, 303, 307, 308)
+            if (
+              res.statusCode &&
+              res.statusCode >= 300 &&
+              res.statusCode < 400 &&
+              res.headers.location
+            ) {
+              if (redirectsLeft <= 0) {
+                reject(new Error('Too many redirects'))
+                return
+              }
+              const redirectUrl = new URL(
+                res.headers.location,
+                reqUrl,
+              ).toString()
+              res.resume() // consume response to free socket
+              doRequest(redirectUrl, redirectsLeft - 1)
+              return
+            }
+
+            if (res.statusCode && res.statusCode >= 400) {
+              res.resume()
+              reject(
+                new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`),
+              )
+              return
+            }
+
+            const file = fs.createWriteStream(dest)
+            res.pipe(file)
+            file.on('finish', () => {
+              file.close()
+              resolve()
+            })
+            file.on('error', (err) => {
+              fs.unlinkSync(dest)
+              reject(err)
+            })
+          },
+        )
+        req.on('error', reject)
+        req.setTimeout(120_000, () => {
+          req.destroy()
+          reject(new Error('Download timeout (120s)'))
+        })
+      }
+
+      doRequest(url, maxRedirects)
+    })
   }
 
   private async extractZip(zipPath: string, destDir: string): Promise<void> {

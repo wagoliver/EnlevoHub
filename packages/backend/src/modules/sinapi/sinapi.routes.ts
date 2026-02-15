@@ -60,6 +60,22 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ---- Stats ----
+
+  fastify.get('/stats', {
+    preHandler: [authMiddleware],
+  }, async (_request, reply) => {
+    try {
+      const result = await service.getStats()
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Insumos ----
 
   fastify.get('/insumos', {

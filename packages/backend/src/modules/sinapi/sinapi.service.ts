@@ -11,6 +11,24 @@ export class SinapiService {
     return rows.map((r) => r.mesReferencia)
   }
 
+  async getStats() {
+    const [insumos, composicoes, precos, meses] = await Promise.all([
+      this.prisma.sinapiInsumo.count(),
+      this.prisma.sinapiComposicao.count(),
+      this.prisma.sinapiPreco.count(),
+      this.prisma.$queryRaw<{ mesReferencia: string }[]>`
+        SELECT DISTINCT "mesReferencia" FROM sinapi_precos ORDER BY "mesReferencia" DESC
+      `,
+    ])
+
+    return {
+      insumos,
+      composicoes,
+      precos,
+      meses: meses.map((r) => r.mesReferencia),
+    }
+  }
+
   async searchInsumos(query: SearchInsumosQuery) {
     const { search, tipo, page, limit } = query
     const skip = (page - 1) * limit

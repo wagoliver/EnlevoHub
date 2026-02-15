@@ -21,16 +21,11 @@ import {
   Database,
   Info,
   Download,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react'
-
-type ImportType = 'insumos' | 'composicoes' | 'precos'
 
 function buildMonthOptions() {
   const options: { label: string; year: number; month: number }[] = []
   const now = new Date()
-  // from current month back 12 months
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const y = d.getFullYear()
@@ -39,6 +34,10 @@ function buildMonthOptions() {
     options.push({ label: `${mm}/${y}`, year: y, month: m })
   }
   return options
+}
+
+function formatNumber(n: number) {
+  return n.toLocaleString('pt-BR')
 }
 
 export function SinapiSettings() {
@@ -51,20 +50,14 @@ export function SinapiSettings() {
   )
   const [collectResult, setCollectResult] = useState<any>(null)
 
-  // Import manual
-  const [showManualImport, setShowManualImport] = useState(false)
-  const [importType, setImportType] = useState<ImportType>('insumos')
-  const [file, setFile] = useState<File | null>(null)
-  const [importResult, setImportResult] = useState<any>(null)
-
-  const { data: meses } = useQuery({
-    queryKey: ['sinapi-meses'],
-    queryFn: () => sinapiAPI.getMesesReferencia(),
-  })
-
   // Upload ZIP
   const [zipFile, setZipFile] = useState<File | null>(null)
   const [zipResult, setZipResult] = useState<any>(null)
+
+  const { data: stats } = useQuery({
+    queryKey: ['sinapi-stats'],
+    queryFn: () => sinapiAPI.getStats(),
+  })
 
   const collectMutation = useMutation({
     mutationFn: async () => {
@@ -73,7 +66,7 @@ export function SinapiSettings() {
     },
     onSuccess: (data) => {
       setCollectResult(data)
-      queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
+      queryClient.invalidateQueries({ queryKey: ['sinapi-stats'] })
       toast.success('Coleta SINAPI finalizada com sucesso')
     },
     onError: (error: Error) => {
@@ -89,7 +82,7 @@ export function SinapiSettings() {
     onSuccess: (data) => {
       setZipResult(data)
       setZipFile(null)
-      queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
+      queryClient.invalidateQueries({ queryKey: ['sinapi-stats'] })
       toast.success('Importacao do ZIP finalizada com sucesso')
     },
     onError: (error: Error) => {
@@ -97,28 +90,7 @@ export function SinapiSettings() {
     },
   })
 
-  const importMutation = useMutation({
-    mutationFn: async () => {
-      if (!file) throw new Error('Selecione um arquivo')
-      const formData = new FormData()
-      formData.append('file', file)
-      switch (importType) {
-        case 'insumos': return sinapiAPI.importInsumos(formData)
-        case 'composicoes': return sinapiAPI.importComposicoes(formData)
-        case 'precos': return sinapiAPI.importPrecos(formData)
-      }
-    },
-    onSuccess: (data) => {
-      setImportResult(data)
-      queryClient.invalidateQueries({ queryKey: ['sinapi-meses'] })
-      toast.success(`Importacao concluida: ${data.importedCount} registros importados`)
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
-  const mesesList = Array.isArray(meses) ? meses : []
+  const hasData = stats && (stats.insumos > 0 || stats.composicoes > 0)
 
   return (
     <div className="space-y-6">
@@ -130,24 +102,46 @@ export function SinapiSettings() {
             Status da Base SINAPI
           </CardTitle>
           <CardDescription>
-            Meses de referencia disponiveis na base local
+            Resumo dos dados SINAPI importados na base local
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mesesList.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {mesesList.map((mes: string) => (
-                <span
-                  key={mes}
-                  className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700"
-                >
-                  {mes}
-                </span>
-              ))}
+          {hasData ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-lg border bg-neutral-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-primary-700">{formatNumber(stats.insumos)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Insumos</p>
+                </div>
+                <div className="rounded-lg border bg-neutral-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-primary-700">{formatNumber(stats.composicoes)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Composicoes</p>
+                </div>
+                <div className="rounded-lg border bg-neutral-50 p-4 text-center">
+                  <p className="text-2xl font-bold text-primary-700">{formatNumber(stats.precos)}</p>
+                  <p className="text-xs text-neutral-500 mt-1">Precos</p>
+                </div>
+              </div>
+
+              {stats.meses.length > 0 && (
+                <div>
+                  <p className="text-xs text-neutral-500 mb-2">Meses de referencia disponiveis:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.meses.map((mes: string) => (
+                      <span
+                        key={mes}
+                        className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700"
+                      >
+                        {mes}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-neutral-500">
-              Nenhum dado importado ainda. Use a coleta automatica abaixo.
+              Nenhum dado importado ainda. Use a coleta automatica ou importe um ZIP abaixo.
             </p>
           )}
         </CardContent>
@@ -354,105 +348,11 @@ export function SinapiSettings() {
             <p className="mt-1 text-sm text-blue-700">
               A coleta automatica baixa o arquivo XLSX oficial da Caixa para o mes selecionado e
               importa tudo de uma vez: insumos, precos por UF (com e sem desoneracao) e composicoes
-              analiticas com coeficientes. O processo pode levar alguns minutos dependendo da conexao.
+              analiticas com coeficientes. Se o servidor nao conseguir baixar (CDN bloqueado),
+              use a opcao de importar ZIP manualmente.
             </p>
           </div>
         </CardContent>
-      </Card>
-
-      {/* Import manual (collapsible) */}
-      <Card>
-        <CardHeader
-          className="cursor-pointer select-none"
-          onClick={() => setShowManualImport(!showManualImport)}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Upload className="h-4 w-4" />
-                Importacao Manual (CSV)
-              </CardTitle>
-              <CardDescription>
-                Alternativa para importar arquivos CSV individualmente
-              </CardDescription>
-            </div>
-            {showManualImport ? (
-              <ChevronUp className="h-5 w-5 text-neutral-400" />
-            ) : (
-              <ChevronDown className="h-5 w-5 text-neutral-400" />
-            )}
-          </div>
-        </CardHeader>
-
-        {showManualImport && (
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Tipo de Importacao</Label>
-                <Select value={importType} onValueChange={(v) => { setImportType(v as ImportType); setFile(null); setImportResult(null) }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="insumos">Insumos</SelectItem>
-                    <SelectItem value="composicoes">Composicoes</SelectItem>
-                    <SelectItem value="precos">Precos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Arquivo CSV</Label>
-                <Input
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={(e) => { setFile(e.target.files?.[0] || null); setImportResult(null) }}
-                />
-              </div>
-            </div>
-
-            <div className="text-xs text-neutral-500 bg-neutral-50 rounded-lg p-3">
-              <p className="font-medium mb-1">Colunas esperadas:</p>
-              {importType === 'insumos' && (
-                <code className="text-neutral-700">codigo; descricao; unidade; tipo</code>
-              )}
-              {importType === 'composicoes' && (
-                <code className="text-neutral-700">composicao_codigo; composicao_descricao; composicao_unidade; insumo_codigo; coeficiente</code>
-              )}
-              {importType === 'precos' && (
-                <code className="text-neutral-700">codigo; uf; mes_referencia; preco_desonerado; preco_nao_desonerado</code>
-              )}
-            </div>
-
-            {importResult && (
-              <div className={`rounded-lg p-4 ${importResult.errorCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'} border`}>
-                <div className="flex items-start gap-2">
-                  {importResult.errorCount > 0 ? (
-                    <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
-                  )}
-                  <p className="text-sm font-medium">
-                    {importResult.importedCount} de {importResult.totalRecords} registros importados
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <Button
-              onClick={() => importMutation.mutate()}
-              disabled={!file || importMutation.isPending}
-              variant="outline"
-            >
-              {importMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Upload className="h-4 w-4 mr-2" />
-              )}
-              Importar CSV
-            </Button>
-          </CardContent>
-        )}
       </Card>
     </div>
   )

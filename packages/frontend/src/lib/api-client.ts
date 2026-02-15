@@ -610,6 +610,7 @@ export const sinapiAPI = {
     })
     return apiClient.get<any>(`/sinapi/composicoes/${id}/calculate?${searchParams.toString()}`)
   },
+  getStats: () => apiClient.get<{ insumos: number; composicoes: number; precos: number; meses: string[] }>('/sinapi/stats'),
   importInsumos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/insumos', formData),
   importComposicoes: (formData: FormData) => apiClient.upload<any>('/sinapi/import/composicoes', formData),
   importPrecos: (formData: FormData) => apiClient.upload<any>('/sinapi/import/precos', formData),

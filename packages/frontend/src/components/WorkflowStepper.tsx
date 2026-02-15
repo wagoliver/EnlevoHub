@@ -11,6 +11,8 @@ import {
   ArrowLeft,
   AlertCircle,
   Check,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -146,23 +148,57 @@ export function WorkflowStepper({ phase }: WorkflowStepperProps) {
         </TooltipProvider>
       </div>
 
-      {/* Row 2: phase context */}
+      {/* Row 2: phase context + navigation buttons */}
       <div className="flex items-center gap-2.5 px-4 pb-3 pt-0.5">
-        <div
-          className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: `${GOLD}15` }}
-        >
-          <StepIcon className="h-4 w-4" style={{ color: GOLD }} />
+        {/* Previous button */}
+        {phase > 1 ? (
+          <button
+            onClick={() => navigate(`/?phase=${phase - 1}`)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex-shrink-0 border-2 text-neutral-600 border-neutral-300 bg-white hover:border-[#b8a378] hover:text-neutral-800 shadow-sm"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Anterior</span>
+          </button>
+        ) : (
+          <div className="w-[42px] sm:w-[106px] flex-shrink-0" />
+        )}
+
+        {/* Phase info (centered) */}
+        <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
+          <div
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: `${GOLD}15` }}
+          >
+            <StepIcon className="h-4 w-4" style={{ color: GOLD }} />
+          </div>
+          <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold text-neutral-800">
+              {currentStep.name}
+            </span>
+            <span className="text-sm text-neutral-400">&mdash;</span>
+            <span className="text-sm text-neutral-500">
+              {currentStep.hint}
+            </span>
+          </div>
         </div>
-        <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm font-semibold text-neutral-800">
-            {currentStep.name}
-          </span>
-          <span className="text-sm text-neutral-400">&mdash;</span>
-          <span className="text-sm text-neutral-500">
-            {currentStep.hint}
-          </span>
-        </div>
+
+        {/* Next button */}
+        {phase < 8 ? (
+          <button
+            onClick={() => navigate(`/?phase=${phase + 1}`)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all flex-shrink-0 border-2 shadow-sm"
+            style={{
+              background: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`,
+              borderColor: GOLD_DARK,
+              color: '#fff',
+            }}
+          >
+            <span className="hidden sm:inline">Próximo</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        ) : (
+          <div className="w-[42px] sm:w-[106px] flex-shrink-0" />
+        )}
       </div>
     </div>
   )

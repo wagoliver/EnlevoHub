@@ -28,6 +28,7 @@ import {
   XCircle,
   Lightbulb,
   ArrowRight,
+  ChevronLeft,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -602,6 +603,7 @@ function PhaseDetailPanel({
   selectedProjectId,
   selectedProject,
   onNext,
+  onPrev,
 }: {
   phase: Phase
   state: NodeState
@@ -610,6 +612,7 @@ function PhaseDetailPanel({
   selectedProjectId: string | null
   selectedProject: any
   onNext?: () => void
+  onPrev?: () => void
 }) {
   const navigate = useNavigate()
   const Icon = phase.icon
@@ -766,18 +769,38 @@ function PhaseDetailPanel({
         </div>
       )}
 
-      {/* Next phase button */}
-      {onNext && (
-        <div className="flex justify-end pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-[#b8a378] border-[#b8a378]/30 hover:bg-[#b8a378]/5 hover:text-[#9a8a6a]"
-            onClick={onNext}
-          >
-            Próximo
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
+      {/* Phase navigation buttons */}
+      {(onPrev || onNext) && (
+        <div className="flex items-center justify-between pt-2">
+          {onPrev ? (
+            <Button
+              variant="outline"
+              size="default"
+              className="gap-1.5 border-2 border-neutral-300 text-neutral-600 hover:border-[#b8a378] hover:text-neutral-800 font-medium"
+              onClick={onPrev}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Anterior
+            </Button>
+          ) : (
+            <div />
+          )}
+          {onNext ? (
+            <Button
+              size="default"
+              className="gap-1.5 text-white font-semibold border-2 shadow-sm"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD}, ${GOLD_DARK})`,
+                borderColor: GOLD_DARK,
+              }}
+              onClick={onNext}
+            >
+              Próximo
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <div />
+          )}
         </div>
       )}
     </div>
@@ -1029,6 +1052,7 @@ export function Dashboard() {
               isCancelled={isCancelled}
               selectedProjectId={selectedProjectId}
               selectedProject={selectedProject}
+              onPrev={selectedPhaseIdx > 0 ? () => setSelectedPhaseIdx(selectedPhaseIdx - 1) : undefined}
               onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
             />
           </Card>
@@ -1049,6 +1073,7 @@ export function Dashboard() {
               isCancelled={isCancelled}
               selectedProjectId={selectedProjectId}
               selectedProject={selectedProject}
+              onPrev={selectedPhaseIdx > 0 ? () => setSelectedPhaseIdx(selectedPhaseIdx - 1) : undefined}
               onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
             />
           </Card>

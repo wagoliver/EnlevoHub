@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight, Plus, PenLine } from 'lucide-react'
+import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight, Plus, PenLine, Trash2 } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
 import { ComposicaoTree } from './ComposicaoTree'
 import { calcularAreas, getQuantidadePorArea, AREA_LABELS, templateAplicaAoAmbiente, type AreaTipo } from './servicosCatalogo'
@@ -492,6 +492,32 @@ export function GerarServicosDialog({
     }
   }
 
+  // Remove a row from the dialog (and delete template if user-created)
+  const handleRemoveRow = async (idx: number) => {
+    const row = rows[idx]
+
+    // Close expanded tree if it's this row
+    if (expandedIdx === idx) {
+      setExpandedIdx(null)
+      setTreeData(null)
+    } else if (expandedIdx !== null && expandedIdx > idx) {
+      setExpandedIdx(expandedIdx - 1)
+    }
+
+    // Remove from local state
+    setRows((prev) => prev.filter((_, i) => i !== idx))
+
+    // If it's a user-created template (not default), delete from DB
+    if (!row.template.padrao && row.template.order >= 99) {
+      try {
+        await levantamentoAPI.deleteTemplate(row.template.id)
+        queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
+      } catch {
+        // Ignore — template stays in DB but row is removed from dialog
+      }
+    }
+  }
+
   // Recalculate all linked prices
   const handleRecalculateAll = async () => {
     if (!mesReferencia) {
@@ -793,6 +819,15 @@ export function GerarServicosDialog({
                                 <X className="h-3.5 w-3.5" />
                               </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-neutral-300 hover:text-red-500 shrink-0"
+                              onClick={() => handleRemoveRow(idx)}
+                              title="Remover servico"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                           {/* SINAPI linked info */}
                           {row.sinapiComposicaoId && (

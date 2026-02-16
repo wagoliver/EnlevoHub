@@ -49,13 +49,32 @@ interface ActivityGroup {
   templates: any[]
 }
 
+interface PhaseHierarchy {
+  id: string; name: string; color: string | null
+  stages: {
+    id: string; name: string; color: string | null
+    activities: {
+      id: string; name: string
+      sinapiCodigo: string | null; areaTipo: string | null
+      tags: string[]; padrao: boolean
+      sinapiDescricao: string | null; unidade: string | null
+      linkedTemplates: any[]
+    }[]
+  }[]
+}
+
 interface GerarServicosDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   ambiente: any
   projectId: string
   levantamentoId: string
-  activityGroups?: { activityGroups: ActivityGroup[]; unlinkedTemplates: any[] }
+  activityGroups?: {
+    phases?: PhaseHierarchy[]
+    hasSinapiActivities?: boolean
+    activityGroups: ActivityGroup[]
+    unlinkedTemplates: any[]
+  }
 }
 
 interface TemplateData {
@@ -172,11 +191,60 @@ export function GerarServicosDialog({
     return map
   }, [activityGroupsProp])
 
+  const hasSinapiMode = activityGroupsProp?.hasSinapiActivities ?? false
   const hasActivityGroups = activityGroupsProp?.activityGroups && activityGroupsProp.activityGroups.length > 0
 
-  // Build rows from templates when they load or ambiente changes
+  // Build rows from SINAPI activities (new mode) or templates (legacy mode)
   useEffect(() => {
-    if (!open || !templates || !Array.isArray(templates)) return
+    if (!open) return
+
+    // New mode: build rows from PHASE > STAGE > ACTIVITY hierarchy
+    if (hasSinapiMode && activityGroupsProp?.phases) {
+      const ambienteTags: string[] = ambiente.tags || []
+      const newRows: ServicoRow[] = []
+
+      for (const phase of activityGroupsProp.phases) {
+        for (const stage of phase.stages) {
+          for (const act of stage.activities) {
+            if (!act.sinapiCodigo || !act.areaTipo) continue
+            const sugerido = templateAplicaAoAmbiente(act.tags || [], ambienteTags)
+            const etapaLabel = `${phase.name} > ${stage.name}`
+            newRows.push({
+              template: {
+                id: act.id,
+                nome: act.name,
+                sinapiCodigo: act.sinapiCodigo,
+                nomeCustom: null,
+                unidade: act.unidade || 'UN',
+                areaTipo: act.areaTipo as AreaTipo,
+                tags: act.tags || [],
+                padrao: act.padrao,
+                etapa: etapaLabel,
+                order: 0,
+                sinapiDescricao: act.sinapiDescricao,
+              },
+              checked: sugerido && act.padrao,
+              quantidade: Math.round(getQuantidadePorArea(act.areaTipo as AreaTipo, areas) * 100) / 100,
+              sugerido,
+              precoUnitario: 0,
+              sinapiCodigo: act.sinapiCodigo || undefined,
+              projectActivityId: act.id,
+            })
+          }
+        }
+      }
+
+      setRows(newRows)
+      setPricesLoaded(false)
+      setExpandedIdx(null)
+      setTreeData(null)
+      setEditingIdx(null)
+      setManualForm(null)
+      return
+    }
+
+    // Legacy mode: build rows from ServicoTemplate catalog
+    if (!templates || !Array.isArray(templates)) return
 
     const activeTemplates = templates.filter((t: any) => t.ativo !== false)
     const ambienteTags: string[] = ambiente.tags || []
@@ -198,7 +266,7 @@ export function GerarServicosDialog({
     setTreeData(null)
     setEditingIdx(null)
     setManualForm(null)
-  }, [open, templates, ambiente.id, ambiente.tags, templateActivityMap])
+  }, [open, templates, ambiente.id, ambiente.tags, templateActivityMap, hasSinapiMode, activityGroupsProp?.phases])
 
   // Auto-resolve SINAPI prices when rows are built and month is available
   const resolveAllPrices = useCallback(async (currentRows: ServicoRow[], mes: string) => {
@@ -625,8 +693,44 @@ export function GerarServicosDialog({
 
   // Group by activity (if available) or by etapa (fallback)
   const groupedRows = useMemo(() => {
+    // New SINAPI mode: group by PHASE > STAGE from the hierarchy
+    if (hasSinapiMode && activityGroupsProp?.phases) {
+      const groups: { key: string; label: string; color: string | null; activityId: string | null; indices: number[] }[] = []
+
+      for (const phase of activityGroupsProp.phases) {
+        for (const stage of phase.stages) {
+          const label = `${phase.name} > ${stage.name}`
+          const stageActIds = new Set(stage.activities.map(a => a.id))
+          const indices: number[] = []
+          rows.forEach((r, i) => {
+            if (r.projectActivityId && stageActIds.has(r.projectActivityId)) {
+              indices.push(i)
+            }
+          })
+          if (indices.length > 0) {
+            groups.push({
+              key: stage.id,
+              label,
+              color: phase.color || stage.color,
+              activityId: null,
+              indices,
+            })
+          }
+        }
+      }
+
+      // Orphan rows (shouldn't happen but just in case)
+      const usedIndices = new Set(groups.flatMap(g => g.indices))
+      const orphanIndices = rows.map((_, i) => i).filter(i => !usedIndices.has(i))
+      if (orphanIndices.length > 0) {
+        groups.push({ key: '__orphan__', label: 'Outros', color: null, activityId: null, indices: orphanIndices })
+      }
+
+      return groups
+    }
+
+    // Legacy mode: group by activity links
     if (hasActivityGroups && activityGroupsProp) {
-      // Group by activity
       const groups: { key: string; label: string; color: string | null; activityId: string | null; indices: number[] }[] = []
       const activityMap = new Map<string, number>() // activityId -> group index
       const unlinkedIndices: number[] = []
@@ -671,7 +775,7 @@ export function GerarServicosDialog({
       activityId: null,
       indices,
     }))
-  }, [rows, hasActivityGroups, activityGroupsProp])
+  }, [rows, hasActivityGroups, hasSinapiMode, activityGroupsProp])
 
   return (
     <>

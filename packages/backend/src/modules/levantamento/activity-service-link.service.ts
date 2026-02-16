@@ -82,18 +82,23 @@ export class ActivityServiceLinkService {
 
   /**
    * Get templates grouped by project activity.
-   * Returns activityGroups + unlinkedTemplates.
+   * Returns phases (PHASE > STAGE > ACTIVITY hierarchy) + activityGroups (legacy) + unlinkedTemplates.
    */
   async getTemplatesForProject(tenantId: string, projectId: string) {
-    // Get all STAGE activities with their parent (PHASE) info
-    const stages = await this.prisma.projectActivity.findMany({
-      where: { projectId, level: 'STAGE' },
+    // Get ALL project activities (PHASE, STAGE, ACTIVITY) for the hierarchy
+    const allActivities = await this.prisma.projectActivity.findMany({
+      where: { projectId },
       select: {
         id: true,
         name: true,
+        level: true,
         color: true,
         order: true,
-        parent: { select: { id: true, name: true } },
+        parentId: true,
+        sinapiCodigo: true,
+        areaTipo: true,
+        tags: true,
+        padrao: true,
         serviceLinks: {
           select: {
             id: true,
@@ -105,6 +110,67 @@ export class ActivityServiceLinkService {
       orderBy: { order: 'asc' },
     })
 
+    // Separate by level
+    const phaseActivities = allActivities.filter(a => a.level === 'PHASE')
+    const stageActivities = allActivities.filter(a => a.level === 'STAGE')
+    const leafActivities = allActivities.filter(a => a.level === 'ACTIVITY')
+
+    // Check if project has SINAPI-enabled activities (new mode)
+    const hasSinapiActivities = leafActivities.some(a => !!a.sinapiCodigo)
+
+    // Enrich leaf activities with SINAPI composicao data
+    const actSinapiCodigos = leafActivities
+      .map(a => a.sinapiCodigo)
+      .filter((c): c is string => !!c)
+
+    const actComposicoes = actSinapiCodigos.length > 0
+      ? await this.prisma.sinapiComposicao.findMany({
+          where: { codigo: { in: actSinapiCodigos } },
+          select: { codigo: true, descricao: true, unidade: true },
+        })
+      : []
+
+    const actCompMap = new Map(actComposicoes.map(c => [c.codigo, c]))
+
+    // Build PHASE > STAGE > ACTIVITY hierarchy
+    const phases = phaseActivities.map(phase => {
+      const phaseStages = stageActivities
+        .filter(s => s.parentId === phase.id)
+        .map(stage => {
+          const stageLeaves = leafActivities
+            .filter(a => a.parentId === stage.id)
+            .map(act => {
+              const comp = act.sinapiCodigo ? actCompMap.get(act.sinapiCodigo) : null
+              return {
+                id: act.id,
+                name: act.name,
+                sinapiCodigo: act.sinapiCodigo,
+                areaTipo: act.areaTipo,
+                tags: act.tags,
+                padrao: act.padrao,
+                sinapiDescricao: comp?.descricao || null,
+                unidade: comp?.unidade || null,
+                linkedTemplates: act.serviceLinks,
+              }
+            })
+
+          return {
+            id: stage.id,
+            name: stage.name,
+            color: stage.color,
+            activities: stageLeaves,
+          }
+        })
+
+      return {
+        id: phase.id,
+        name: phase.name,
+        color: phase.color,
+        stages: phaseStages,
+      }
+    })
+
+    // === Legacy backward-compat: activityGroups + unlinkedTemplates ===
     // Ensure templates exist (auto-seed on first use)
     await this.templateService.seedDefaults(tenantId)
 
@@ -140,22 +206,23 @@ export class ActivityServiceLinkService {
 
     // Build a set of all linked template IDs
     const linkedTemplateIds = new Set<string>()
-    for (const stage of stages) {
+    for (const stage of stageActivities) {
       for (const link of stage.serviceLinks) {
         linkedTemplateIds.add(link.servicoTemplateId)
       }
     }
 
-    // Build activity groups
-    const activityGroups = stages.map((stage) => {
+    // Build activity groups (legacy format)
+    const activityGroups = stageActivities.map((stage) => {
       const linkedIds = stage.serviceLinks.map((l) => l.servicoTemplateId)
       const stageTemplates = enrichedTemplates.filter((t) => linkedIds.includes(t.id))
+      const parentPhase = phaseActivities.find(p => p.id === stage.parentId)
 
       return {
         activity: {
           id: stage.id,
           name: stage.name,
-          parentName: stage.parent?.name || null,
+          parentName: parentPhase?.name || null,
           color: stage.color,
         },
         templates: stageTemplates,
@@ -165,7 +232,7 @@ export class ActivityServiceLinkService {
     // Unlinked templates
     const unlinkedTemplates = enrichedTemplates.filter((t) => !linkedTemplateIds.has(t.id))
 
-    return { activityGroups, unlinkedTemplates }
+    return { phases, hasSinapiActivities, activityGroups, unlinkedTemplates }
   }
 
   /**

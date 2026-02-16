@@ -18,6 +18,10 @@ interface ActivityDef {
   weight: number
   durationDays: number
   deps?: string[]
+  sinapiCodigo?: string
+  areaTipo?: string
+  tags?: string[]
+  padrao?: boolean
 }
 
 async function createActivities(
@@ -37,6 +41,10 @@ async function createActivities(
         parentId,
         durationDays: act.durationDays,
         dependencies: act.deps || null,
+        sinapiCodigo: act.sinapiCodigo || null,
+        areaTipo: act.areaTipo || null,
+        tags: act.tags || [],
+        padrao: act.padrao ?? true,
       },
     })
   }
@@ -121,8 +129,8 @@ export async function seedDefaultTemplate(tx: PrismaTx, tenantId: string) {
   })
 
   await createStage(tx, tid, fase4.id, 'Alvenaria', 0, [
-    { name: 'Alvenaria externa', order: 0, weight: 3, durationDays: 15 },
-    { name: 'Alvenaria interna', order: 1, weight: 3, durationDays: 12 },
+    { name: 'Alvenaria externa', order: 0, weight: 3, durationDays: 15, sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+    { name: 'Alvenaria interna', order: 1, weight: 3, durationDays: 12, sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
     { name: 'Vergas e contravergas', order: 2, weight: 1, durationDays: 5 },
   ])
 
@@ -156,17 +164,17 @@ export async function seedDefaultTemplate(tx: PrismaTx, tenantId: string) {
   })
 
   await createStage(tx, tid, fase6.id, 'Revestimento Interno', 0, [
-    { name: 'Chapisco e emboço interno', order: 0, weight: 3, durationDays: 12 },
-    { name: 'Reboco interno', order: 1, weight: 3, durationDays: 10, deps: ['Chapisco e emboço interno'] },
-    { name: 'Contrapiso', order: 2, weight: 2, durationDays: 5 },
-    { name: 'Revestimento cerâmico (paredes)', order: 3, weight: 2, durationDays: 8, deps: ['Reboco interno'] },
-    { name: 'Piso cerâmico / porcelanato', order: 4, weight: 2, durationDays: 8, deps: ['Contrapiso'] },
+    { name: 'Chapisco e emboço interno', order: 0, weight: 3, durationDays: 12, sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
+    { name: 'Reboco interno', order: 1, weight: 3, durationDays: 10, deps: ['Chapisco e emboço interno'], sinapiCodigo: '87535', areaTipo: 'PAREDE_LIQ' },
+    { name: 'Contrapiso', order: 2, weight: 2, durationDays: 5, sinapiCodigo: '87620', areaTipo: 'PISO' },
+    { name: 'Revestimento cerâmico (paredes)', order: 3, weight: 2, durationDays: 8, deps: ['Reboco interno'], sinapiCodigo: '87265', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'] },
+    { name: 'Piso cerâmico / porcelanato', order: 4, weight: 2, durationDays: 8, deps: ['Contrapiso'], sinapiCodigo: '87263', areaTipo: 'PISO' },
   ])
 
   await createStage(tx, tid, fase6.id, 'Revestimento Externo', 1, [
-    { name: 'Chapisco e emboço externo', order: 0, weight: 2, durationDays: 10 },
-    { name: 'Reboco externo', order: 1, weight: 2, durationDays: 8, deps: ['Chapisco e emboço externo'] },
-    { name: 'Textura / Pintura externa', order: 2, weight: 2, durationDays: 6, deps: ['Reboco externo'] },
+    { name: 'Chapisco e emboço externo', order: 0, weight: 2, durationDays: 10, sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
+    { name: 'Reboco externo', order: 1, weight: 2, durationDays: 8, deps: ['Chapisco e emboço externo'], sinapiCodigo: '87535', areaTipo: 'PAREDE_LIQ' },
+    { name: 'Textura / Pintura externa', order: 2, weight: 2, durationDays: 6, deps: ['Reboco externo'], sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
   ])
 
   // ========== FASE 7: Acabamentos e Entrega (20%) ==========
@@ -184,8 +192,8 @@ export async function seedDefaultTemplate(tx: PrismaTx, tenantId: string) {
     { name: 'Louças sanitárias', order: 0, weight: 1, durationDays: 3 },
     { name: 'Metais e acessórios', order: 1, weight: 1, durationDays: 2 },
     { name: 'Bancadas (granito/mármore)', order: 2, weight: 1, durationDays: 3 },
-    { name: 'Pintura interna (massa corrida + tinta)', order: 3, weight: 3, durationDays: 10 },
-    { name: 'Instalação de interruptores e tomadas', order: 4, weight: 1, durationDays: 2, deps: ['Pintura interna (massa corrida + tinta)'] },
+    { name: 'Pintura interna (massa corrida + tinta)', order: 3, weight: 3, durationDays: 10, sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
+    { name: 'Instalação de interruptores e tomadas', order: 4, weight: 1, durationDays: 2, deps: ['Pintura interna (massa corrida + tinta)'], sinapiCodigo: '91947', areaTipo: 'MANUAL' },
   ])
 
   await createStage(tx, tid, fase7.id, 'Finalização', 2, [

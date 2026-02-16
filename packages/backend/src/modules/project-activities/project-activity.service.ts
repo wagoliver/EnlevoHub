@@ -300,6 +300,10 @@ export class ProjectActivityService {
             weight: Number(item.weight),
             order: item.order,
             scope: 'ALL_UNITS',
+            sinapiCodigo: item.sinapiCodigo || null,
+            areaTipo: item.areaTipo || null,
+            tags: item.tags || [],
+            padrao: item.padrao ?? true,
           },
         })
 
@@ -397,6 +401,12 @@ export class ProjectActivityService {
         actData.plannedEndDate = new Date(act.plannedEndDate)
       }
 
+      // SINAPI fields (only meaningful on ACTIVITY level, but store if provided)
+      if (act.sinapiCodigo) actData.sinapiCodigo = act.sinapiCodigo
+      if (act.areaTipo) actData.areaTipo = act.areaTipo
+      if (act.tags?.length) actData.tags = act.tags
+      if (act.padrao !== undefined && act.padrao !== null) actData.padrao = act.padrao
+
       // Only leaf ACTIVITY level gets scope and unit activities
       if (act.level === 'ACTIVITY') {
         actData.scope = act.scope || 'ALL_UNITS'
@@ -475,6 +485,10 @@ export class ProjectActivityService {
           weight: act.weight,
           dependencies: act.dependencies || null,
           scope: 'ALL_UNITS',
+          sinapiCodigo: act.sinapiCodigo || null,
+          areaTipo: act.areaTipo || null,
+          tags: act.tags || [],
+          padrao: act.padrao ?? true,
         })),
       })),
     }))

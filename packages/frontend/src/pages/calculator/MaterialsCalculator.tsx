@@ -86,7 +86,18 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     return hasStages(activities)
   }, [activities])
 
-  // Auto-link activities to templates (fire-and-forget, idempotent)
+  // Fetch templates grouped by activity (includes phases hierarchy + legacy groups)
+  const { data: activityGroupsData } = useQuery({
+    queryKey: ['templates-by-activity', projectId],
+    queryFn: () => levantamentoAPI.getTemplatesByActivity(projectId),
+    enabled: hasActivities,
+    staleTime: 2 * 60 * 1000,
+  })
+
+  // Detect if project uses new SINAPI-activity mode or legacy template-link mode
+  const hasSinapiActivities = activityGroupsData?.hasSinapiActivities ?? false
+
+  // Auto-link activities to templates (fire-and-forget, idempotent) — only in legacy mode
   const autoLinkMutation = useMutation({
     mutationFn: () => levantamentoAPI.autoLinkActivities(projectId),
     onSuccess: () => {
@@ -95,18 +106,10 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   })
 
   useEffect(() => {
-    if (hasActivities) {
+    if (hasActivities && !hasSinapiActivities) {
       autoLinkMutation.mutate()
     }
-  }, [hasActivities]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Fetch templates grouped by activity
-  const { data: activityGroupsData } = useQuery({
-    queryKey: ['templates-by-activity', projectId],
-    queryFn: () => levantamentoAPI.getTemplatesByActivity(projectId),
-    enabled: hasActivities,
-    staleTime: 2 * 60 * 1000,
-  })
+  }, [hasActivities, hasSinapiActivities]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ambiente mutations
   const createAmbienteMutation = useMutation({

@@ -761,6 +761,10 @@ model ActivityTemplateItem {
   durationDays      Int?
   dependencies      Json?
   color             String?
+  sinapiCodigo      String?          @db.VarChar(20)
+  areaTipo          AreaTipo?
+  tags              String[]         @default([])
+  padrao            Boolean          @default(true)
 
   // Relations
   template ActivityTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
@@ -788,6 +792,10 @@ model ProjectActivity {
   actualEndDate    DateTime?
   dependencies     Json?
   color            String?
+  sinapiCodigo     String?           @db.VarChar(20)
+  areaTipo         AreaTipo?
+  tags             String[]          @default([])
+  padrao           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

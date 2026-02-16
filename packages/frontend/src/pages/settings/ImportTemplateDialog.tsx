@@ -73,6 +73,10 @@ interface ParsedActivity {
   weight: number
   durationDays: number | null
   dependencies: string[] | null
+  sinapiCodigo?: string | null
+  areaTipo?: string | null
+  tags?: string[] | null
+  padrao?: boolean | null
 }
 
 interface ValidationError {
@@ -323,6 +327,24 @@ function templatePhasesToParsed(templatePhases: TemplatePhase[]): ParsedPhase[] 
   }))
 }
 
+/** Inject sinapiMap data into parsed phases by matching activity names */
+function injectSinapiMap(phases: ParsedPhase[], sinapiMap?: Record<string, import('./template-models').SinapiMapping>) {
+  if (!sinapiMap) return
+  for (const phase of phases) {
+    for (const stage of phase.stages) {
+      for (const act of stage.activities) {
+        const mapping = sinapiMap[act.name]
+        if (mapping) {
+          act.sinapiCodigo = mapping.sinapiCodigo
+          act.areaTipo = mapping.areaTipo
+          act.tags = mapping.tags || []
+          act.padrao = mapping.padrao ?? true
+        }
+      }
+    }
+  }
+}
+
 export type { ParsedPhase }
 
 export function ImportTemplateDialog({
@@ -521,6 +543,10 @@ export function ImportTemplateDialog({
               weight: a.weight,
               durationDays: a.durationDays,
               dependencies: a.dependencies,
+              sinapiCodigo: a.sinapiCodigo || null,
+              areaTipo: a.areaTipo || null,
+              tags: a.tags || [],
+              padrao: a.padrao ?? true,
             })),
           })),
         })),
@@ -550,6 +576,10 @@ export function ImportTemplateDialog({
             weight: a.weight,
             durationDays: a.durationDays,
             dependencies: a.dependencies,
+            sinapiCodigo: a.sinapiCodigo || null,
+            areaTipo: a.areaTipo || null,
+            tags: a.tags || [],
+            padrao: a.padrao ?? true,
           })),
         })),
       })),
@@ -815,6 +845,7 @@ export function ImportTemplateDialog({
                       setRowErrors([])
                       setFileName('')
                       const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
+                      injectSinapiMap(parsed, tpl.sinapiMap)
                       setPhases(parsed)
                       setParseErrors(structErrors)
                       setExpandedPhases(new Set(parsed.map((p) => p.name)))

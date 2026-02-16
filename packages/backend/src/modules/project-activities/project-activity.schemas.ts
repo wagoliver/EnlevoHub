@@ -31,6 +31,10 @@ const scheduledActivityChildSchema: z.ZodType<any> = z.lazy(() =>
     dependencies: z.array(z.string()).optional(),
     color: z.string().optional(),
     scope: z.enum(['ALL_UNITS', 'SPECIFIC_UNITS', 'GENERAL']).optional(),
+    sinapiCodigo: z.string().max(20).optional().nullable(),
+    areaTipo: z.enum(['PISO', 'PAREDE_LIQ', 'PAREDE_BRUTA', 'TETO', 'PERIMETRO', 'MANUAL']).optional().nullable(),
+    tags: z.array(z.string()).optional().nullable(),
+    padrao: z.boolean().optional().nullable(),
     children: z.array(scheduledActivityChildSchema).optional(),
   })
 )
@@ -44,11 +48,17 @@ export const createFromTemplateWithScheduleSchema = z.object({
 
 // === Direct hierarchy creation (no template needed) ===
 
+const areaTipoEnum = z.enum(['PISO', 'PAREDE_LIQ', 'PAREDE_BRUTA', 'TETO', 'PERIMETRO', 'MANUAL'])
+
 const hierarchyActivitySchema = z.object({
   name: z.string().min(1),
   weight: z.number().min(0).max(100).default(1),
   durationDays: z.number().int().positive().optional().nullable(),
   dependencies: z.array(z.string()).optional().nullable(),
+  sinapiCodigo: z.string().max(20).optional().nullable(),
+  areaTipo: areaTipoEnum.optional().nullable(),
+  tags: z.array(z.string()).optional().nullable(),
+  padrao: z.boolean().optional().nullable(),
 })
 
 const hierarchyStageSchema = z.object({

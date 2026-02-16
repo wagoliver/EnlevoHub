@@ -21,31 +21,48 @@ interface UpdateTemplateInput {
   ativo?: boolean
 }
 
+// Default stage names — aligned with the default activity template STAGEs
+export const DEFAULT_STAGE_NAMES = [
+  'Preparação do Terreno',
+  'Infraestrutura',
+  'Estrutura de Concreto',
+  'Alvenaria',
+  'Cobertura',
+  'Instalações Hidráulicas',
+  'Instalações Elétricas',
+  'Revestimento Interno',
+  'Revestimento Externo',
+  'Esquadrias e Vidros',
+  'Louças, Metais e Pintura',
+  'Finalização',
+]
+
 // Default templates: sinapiCodigo is the identity. Name/unit come from SINAPI at query time.
 // Templates with tags=[] apply to ALL rooms. Templates with tags=['AREA_MOLHADA'] only for wet areas.
+// etapa values must match DEFAULT_STAGE_NAMES for autoLink to work correctly.
 const DEFAULT_TEMPLATES: CreateTemplateInput[] = [
   // --- Base services (all rooms) ---
   // nomeCustom serves as fallback when SINAPI data is not yet imported
   { sinapiCodigo: '103324', nomeCustom: 'Alvenaria de vedação', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Alvenaria', order: 10 },
-  { sinapiCodigo: '87879', nomeCustom: 'Chapisco interno', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 20 },
-  { sinapiCodigo: '87535', nomeCustom: 'Emboço / massa única interno', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento', order: 21 },
-  { sinapiCodigo: '87620', nomeCustom: 'Contrapiso', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 40 },
-  { sinapiCodigo: '87263', nomeCustom: 'Piso cerâmico / porcelanato', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Piso', order: 41 },
-  { sinapiCodigo: '88648', nomeCustom: 'Rodapé cerâmico', areaTipo: 'PERIMETRO', tags: [], padrao: true, etapa: 'Piso', order: 42 },
-  { sinapiCodigo: '88489', nomeCustom: 'Pintura interna (paredes)', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Pintura', order: 50 },
-  { sinapiCodigo: '88488', nomeCustom: 'Pintura de teto', areaTipo: 'TETO', tags: [], padrao: true, etapa: 'Pintura', order: 51 },
-  { sinapiCodigo: '91947', nomeCustom: 'Ponto de instalação elétrica', areaTipo: 'MANUAL', tags: [], padrao: false, etapa: 'Instalações', order: 70 },
+  { sinapiCodigo: '87879', nomeCustom: 'Chapisco interno', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento Interno', order: 20 },
+  { sinapiCodigo: '87535', nomeCustom: 'Emboço / massa única interno', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Revestimento Interno', order: 21 },
+  { sinapiCodigo: '87620', nomeCustom: 'Contrapiso', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Revestimento Interno', order: 40 },
+  { sinapiCodigo: '87263', nomeCustom: 'Piso cerâmico / porcelanato', areaTipo: 'PISO', tags: [], padrao: true, etapa: 'Revestimento Interno', order: 41 },
+  { sinapiCodigo: '88648', nomeCustom: 'Rodapé cerâmico', areaTipo: 'PERIMETRO', tags: [], padrao: true, etapa: 'Revestimento Interno', order: 42 },
+  { sinapiCodigo: '88489', nomeCustom: 'Pintura interna (paredes)', areaTipo: 'PAREDE_LIQ', tags: [], padrao: true, etapa: 'Louças, Metais e Pintura', order: 50 },
+  { sinapiCodigo: '88488', nomeCustom: 'Pintura de teto', areaTipo: 'TETO', tags: [], padrao: true, etapa: 'Louças, Metais e Pintura', order: 51 },
+  { sinapiCodigo: '91947', nomeCustom: 'Ponto de instalação elétrica', areaTipo: 'MANUAL', tags: [], padrao: false, etapa: 'Instalações Elétricas', order: 70 },
 
   // --- Área Molhada (banheiro, cozinha, etc.) ---
-  { sinapiCodigo: '98555', nomeCustom: 'Impermeabilização', areaTipo: 'PISO', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Impermeabilização', order: 30 },
-  { sinapiCodigo: '87265', nomeCustom: 'Revestimento cerâmico (azulejo)', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Revestimento', order: 22 },
-  { nomeCustom: 'Ponto de instalação hidráulica', areaTipo: 'MANUAL', tags: ['AREA_MOLHADA'], padrao: false, etapa: 'Instalações', order: 71 },
+  { sinapiCodigo: '98555', nomeCustom: 'Impermeabilização', areaTipo: 'PISO', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Revestimento Interno', order: 30 },
+  { sinapiCodigo: '87265', nomeCustom: 'Revestimento cerâmico (azulejo)', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'], padrao: true, etapa: 'Revestimento Interno', order: 22 },
+  { nomeCustom: 'Ponto de instalação hidráulica', areaTipo: 'MANUAL', tags: ['AREA_MOLHADA'], padrao: false, etapa: 'Instalações Hidráulicas', order: 71 },
 
   // --- Área Externa (varanda, terraço, etc.) ---
-  { sinapiCodigo: '98555', nomeCustom: 'Impermeabilização externa', areaTipo: 'PISO', tags: ['AREA_EXTERNA'], padrao: true, etapa: 'Impermeabilização', order: 31 },
+  { sinapiCodigo: '98555', nomeCustom: 'Impermeabilização externa', areaTipo: 'PISO', tags: ['AREA_EXTERNA'], padrao: true, etapa: 'Revestimento Externo', order: 31 },
 
   // --- Opcional (não padrão) ---
-  { sinapiCodigo: '96109', nomeCustom: 'Forro de gesso', areaTipo: 'TETO', tags: [], padrao: false, etapa: 'Teto', order: 60 },
+  { sinapiCodigo: '96109', nomeCustom: 'Forro de gesso', areaTipo: 'TETO', tags: [], padrao: false, etapa: 'Revestimento Interno', order: 60 },
 ]
 
 // Default tags for room characteristics
@@ -274,6 +291,27 @@ export class ServicoTemplateService {
 
     await this.prisma.ambienteTag.delete({ where: { id } })
     return { deleted: true }
+  }
+
+  async getStageSuggestions(tenantId: string) {
+    // Unique etapa values already used by this tenant's templates
+    const templates = await this.prisma.servicoTemplate.findMany({
+      where: { tenantId },
+      select: { etapa: true },
+      distinct: ['etapa'],
+    })
+    const tenantEtapas = templates.map((t) => t.etapa)
+
+    // Merge defaults + tenant-specific, deduplicate, preserve order
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const name of [...DEFAULT_STAGE_NAMES, ...tenantEtapas]) {
+      if (!seen.has(name)) {
+        seen.add(name)
+        result.push(name)
+      }
+    }
+    return result
   }
 
   async seedTags(tenantId: string) {

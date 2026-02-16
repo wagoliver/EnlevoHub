@@ -341,6 +341,20 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.get('/servico-templates/stage-suggestions', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const result = await templateService.getStageSuggestions(getTenantId(request))
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   fastify.post('/servico-templates', {
     preHandler: [authMiddleware, requirePermission('projects:edit')],
   }, async (request, reply) => {

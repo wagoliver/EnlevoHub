@@ -779,6 +779,8 @@ export const levantamentoAPI = {
     apiClient.delete<any>(`/projects/servico-templates/${id}`),
   resetTemplates: () =>
     apiClient.post<any>('/projects/servico-templates/reset', {}),
+  getStageSuggestions: () =>
+    apiClient.get<string[]>('/projects/servico-templates/stage-suggestions'),
 
   // Ambiente Tags
   listTags: () =>

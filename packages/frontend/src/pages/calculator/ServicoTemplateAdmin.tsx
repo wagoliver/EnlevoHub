@@ -70,6 +70,7 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<TemplateFormData>({ ...emptyForm })
+  const [customEtapa, setCustomEtapa] = useState(false)
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['servico-templates'],
@@ -81,6 +82,14 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
   const { data: availableTags } = useQuery({
     queryKey: ['ambiente-tags'],
     queryFn: () => levantamentoAPI.listTags(),
+    staleTime: 5 * 60 * 1000,
+    enabled: open,
+  })
+
+  // Fetch stage name suggestions for the etapa dropdown
+  const { data: stageSuggestions } = useQuery({
+    queryKey: ['stage-suggestions'],
+    queryFn: () => levantamentoAPI.getStageSuggestions(),
     staleTime: 5 * 60 * 1000,
     enabled: open,
   })
@@ -127,6 +136,7 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
   const handleNew = () => {
     setEditingId(null)
     setForm({ ...emptyForm })
+    setCustomEtapa(false)
     setFormOpen(true)
   }
 
@@ -141,6 +151,9 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
       etapa: t.etapa,
       order: t.order,
     })
+    // Check if current etapa is in the suggestions list
+    const isKnown = (stageSuggestions || []).includes(t.etapa)
+    setCustomEtapa(!isKnown && !!t.etapa)
     setFormOpen(true)
   }
 
@@ -357,11 +370,46 @@ export function ServicoTemplateAdmin({ open, onOpenChange }: ServicoTemplateAdmi
               </div>
               <div>
                 <Label className="text-xs">Etapa</Label>
-                <Input
-                  placeholder="Ex: Alvenaria, Pintura"
-                  value={form.etapa}
-                  onChange={(e) => setForm({ ...form, etapa: e.target.value })}
-                />
+                {customEtapa ? (
+                  <div className="flex gap-1">
+                    <Input
+                      placeholder="Nome da etapa customizada"
+                      value={form.etapa}
+                      onChange={(e) => setForm({ ...form, etapa: e.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-xs px-2"
+                      onClick={() => { setCustomEtapa(false); setForm({ ...form, etapa: '' }) }}
+                    >
+                      Voltar
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={form.etapa}
+                    onValueChange={(v) => {
+                      if (v === '__custom__') {
+                        setCustomEtapa(true)
+                        setForm({ ...form, etapa: '' })
+                      } else {
+                        setForm({ ...form, etapa: v })
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="Selecione a etapa" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(stageSuggestions || []).map((name: string) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">Outro (digitar)...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <Label className="text-xs">Ordem</Label>

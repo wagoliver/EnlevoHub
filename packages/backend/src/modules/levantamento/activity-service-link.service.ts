@@ -50,17 +50,15 @@ export class ActivityServiceLinkService {
       normalized: normalize(stage.name),
     }))
 
-    // Match templates to activities using substring matching:
-    // template.etapa "Revestimento" matches stage "Revestimento Interno"
-    // stage "Alvenaria" matches template.etapa "Alvenaria"
+    // Match templates to activities using exact normalized matching.
+    // With DEFAULT_TEMPLATES aligned to STAGE names, this gives precise matches.
     const linksToCreate: { projectActivityId: string; servicoTemplateId: string }[] = []
 
     for (const template of templates) {
       const normalizedEtapa = normalize(template.etapa)
 
       for (const stage of normalizedStages) {
-        // Match if one contains the other (e.g. "revestimento" ⊂ "revestimento interno")
-        if (stage.normalized.includes(normalizedEtapa) || normalizedEtapa.includes(stage.normalized)) {
+        if (stage.normalized === normalizedEtapa) {
           linksToCreate.push({
             projectActivityId: stage.id,
             servicoTemplateId: template.id,

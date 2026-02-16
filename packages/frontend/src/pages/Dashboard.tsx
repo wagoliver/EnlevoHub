@@ -667,6 +667,100 @@ function PhaseDetailPanel({
 
       <Separator />
 
+      {/* Sequential actions — primary section */}
+      {phase.actions.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-neutral-800 mb-3">
+            Próximos passos
+          </h4>
+          <div className="space-y-2">
+            {phase.actions.map((action, idx) => {
+              const disabled = action.requiresProject && !selectedProjectId
+              const done = action.doneCheck?.({ projectId: selectedProjectId, project: selectedProject })
+                ?? workflowStatus?.[phase.number]?.fulfilled
+                ?? false
+              const path = action.projectPath && selectedProjectId
+                ? action.projectPath.replace(':id', selectedProjectId)
+                : action.path
+
+              return (
+                <div
+                  key={idx}
+                  role={disabled ? undefined : 'button'}
+                  tabIndex={disabled ? undefined : 0}
+                  onClick={() => {
+                    if (!disabled) navigate(`${path}?phase=${phase.number}`)
+                  }}
+                  onKeyDown={(e) => {
+                    if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault()
+                      navigate(`${path}?phase=${phase.number}`)
+                    }
+                  }}
+                  className={`
+                    flex items-center gap-4 px-5 py-4 rounded-xl border-2 transition-all duration-200
+                    ${done
+                      ? 'border-green-200 bg-green-50/60 hover:border-green-300 hover:shadow-sm cursor-pointer'
+                      : disabled
+                        ? 'border-neutral-100 bg-neutral-50/50 cursor-default'
+                        : 'border-neutral-200 bg-white hover:border-[#b8a378] hover:shadow-md hover:scale-[1.01] cursor-pointer'
+                    }
+                  `}
+                >
+                  {/* Step number or check */}
+                  {done ? (
+                    <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-green-100 text-green-600">
+                      <Check className="h-4 w-4" />
+                    </div>
+                  ) : (
+                    <div
+                      className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                        disabled
+                          ? 'bg-neutral-100 text-neutral-300'
+                          : 'bg-[#b8a378]/15 text-[#b8a378]'
+                      }`}
+                    >
+                      {idx + 1}
+                    </div>
+                  )}
+
+                  {/* Label */}
+                  <span
+                    className={`flex-1 font-medium ${
+                      done ? 'text-green-700 text-sm' : disabled ? 'text-neutral-400 text-sm' : 'text-neutral-800 text-sm'
+                    }`}
+                  >
+                    {action.label}
+                  </span>
+
+                  {/* Status indicator */}
+                  {done ? (
+                    <div className="flex items-center gap-1.5 text-green-600 flex-shrink-0">
+                      <span className="text-xs font-medium">Concluído</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
+                  ) : disabled ? (
+                    <span className="text-[11px] text-neutral-400 italic flex-shrink-0">
+                      Selecione um projeto
+                    </span>
+                  ) : (
+                    <ArrowRight className="h-4 w-4 text-neutral-300 group-hover:text-[#b8a378] flex-shrink-0 transition-colors" />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tip */}
+      <div className="flex gap-3 p-3.5 rounded-lg bg-amber-50/80 border border-amber-100">
+        <Lightbulb className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-amber-800 leading-relaxed">
+          {phase.tip}
+        </p>
+      </div>
+
       {/* Checklist */}
       <div>
         <h4 className="text-sm font-semibold text-neutral-700 mb-2.5">
@@ -683,96 +777,6 @@ function PhaseDetailPanel({
           ))}
         </ul>
       </div>
-
-      {/* Tip */}
-      <div className="flex gap-3 p-3.5 rounded-lg bg-amber-50/80 border border-amber-100">
-        <Lightbulb className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-amber-800 leading-relaxed">
-          {phase.tip}
-        </p>
-      </div>
-
-      {/* Sequential actions */}
-      {phase.actions.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-neutral-700 mb-2.5">
-            Próximos passos
-          </h4>
-          <div className="rounded-lg border border-neutral-200 divide-y divide-neutral-100 overflow-hidden">
-            {phase.actions.map((action, idx) => {
-              const disabled = action.requiresProject && !selectedProjectId
-              const done = action.doneCheck?.({ projectId: selectedProjectId, project: selectedProject })
-                ?? workflowStatus?.[phase.number]?.fulfilled
-                ?? false
-              const path = action.projectPath && selectedProjectId
-                ? action.projectPath.replace(':id', selectedProjectId)
-                : action.path
-
-              return (
-                <div
-                  key={idx}
-                  className={`flex items-center gap-3 px-4 py-3 ${
-                    done ? 'bg-green-50/50' : disabled ? 'bg-neutral-50/50' : 'bg-white hover:bg-neutral-50'
-                  } transition-colors`}
-                >
-                  {/* Step number or check */}
-                  {done ? (
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-green-100 text-green-600">
-                      <Check className="h-3.5 w-3.5" />
-                    </div>
-                  ) : (
-                    <div
-                      className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        disabled
-                          ? 'bg-neutral-100 text-neutral-300'
-                          : 'bg-[#b8a378]/10 text-[#b8a378]'
-                      }`}
-                    >
-                      {idx + 1}
-                    </div>
-                  )}
-
-                  {/* Label */}
-                  <span
-                    className={`flex-1 text-sm ${
-                      done ? 'text-green-700' : disabled ? 'text-neutral-400' : 'text-neutral-700'
-                    }`}
-                  >
-                    {action.label}
-                  </span>
-
-                  {/* Action button */}
-                  {done ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 flex-shrink-0 h-8 text-[11px] font-medium"
-                      onClick={() => navigate(`${path}?phase=${phase.number}`)}
-                    >
-                      Concluído
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
-                  ) : disabled ? (
-                    <span className="text-[11px] text-neutral-400 italic flex-shrink-0">
-                      Selecione um projeto
-                    </span>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-[#b8a378] hover:text-[#9a8a6a] hover:bg-[#b8a378]/5 flex-shrink-0 h-8"
-                      onClick={() => navigate(`${path}?phase=${phase.number}`)}
-                    >
-                      Ir
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Phase navigation buttons */}
       {(onPrev || onNext) && (

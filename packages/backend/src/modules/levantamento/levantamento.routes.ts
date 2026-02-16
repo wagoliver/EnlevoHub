@@ -76,6 +76,23 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ---- Levantamento por Projeto (get or create, project-level) ----
+
+  fastify.get('/:projectId/levantamento', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const { projectId } = request.params as { projectId: string }
+      const result = await service.getOrCreateForProject(getTenantId(request), projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Levantamentos CRUD ----
 
   fastify.get('/:projectId/levantamentos', {

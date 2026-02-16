@@ -728,6 +728,8 @@ export const levantamentoAPI = {
     apiClient.get<any>(`/projects/${projectId}/levantamentos/${id}`),
   getForFloorPlan: (projectId: string, floorPlanId: string) =>
     apiClient.get<any>(`/projects/${projectId}/floor-plans/${floorPlanId}/levantamento`),
+  getForProject: (projectId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/levantamento`),
   create: (projectId: string, data: any) =>
     apiClient.post<any>(`/projects/${projectId}/levantamentos`, data),
   update: (projectId: string, id: string, data: any) =>

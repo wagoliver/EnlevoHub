@@ -140,7 +140,8 @@ model Project {
   budget          Decimal       @db.Decimal(15, 2)
   schedulingMode  SchedulingMode?
   holidays        Json?
-  metadata        Json?
+  metadata             Json?
+  quantidadeUnidades   Int           @default(1)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -999,7 +1000,6 @@ model ProjetoLevantamento {
   itens     LevantamentoItem[]
   ambientes Ambiente[]
 
-  @@unique([projectId, floorPlanId])
   @@index([tenantId])
   @@index([projectId])
   @@index([floorPlanId])

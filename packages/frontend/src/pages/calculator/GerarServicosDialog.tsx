@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI, sinapiAPI } from '@/lib/api-client'
@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight, Plus, PenLine, Trash2 } from 'lucide-react'
+import { Loader2, Wand2, Search, Link2, X, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
 import { ComposicaoTree } from './ComposicaoTree'
 import { calcularAreas, getQuantidadePorArea, AREA_LABELS, templateAplicaAoAmbiente, type AreaTipo } from './servicosCatalogo'
@@ -31,22 +31,8 @@ const UFS = [
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO',
 ]
 
-const AREA_TIPO_OPTIONS: { value: AreaTipo; label: string }[] = [
-  { value: 'PISO', label: 'Piso (m²)' },
-  { value: 'PAREDE_LIQ', label: 'Parede líq. (m²)' },
-  { value: 'PAREDE_BRUTA', label: 'Parede bruta (m²)' },
-  { value: 'TETO', label: 'Teto (m²)' },
-  { value: 'PERIMETRO', label: 'Perímetro (m)' },
-  { value: 'MANUAL', label: 'Manual' },
-]
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-}
-
-interface ActivityGroup {
-  activity: { id: string; name: string; parentName: string | null; color: string | null }
-  templates: any[]
 }
 
 interface PhaseHierarchy {
@@ -72,7 +58,7 @@ interface GerarServicosDialogProps {
   activityGroups?: {
     phases?: PhaseHierarchy[]
     hasSinapiActivities?: boolean
-    activityGroups: ActivityGroup[]
+    activityGroups: any[]
     unlinkedTemplates: any[]
   }
 }
@@ -97,20 +83,12 @@ interface ServicoRow {
   quantidade: number
   sugerido: boolean
   precoUnitario: number
-  precoManual?: boolean       // true = user edited the price, skip recalc
+  precoManual?: boolean
   sinapiComposicaoId?: string
   sinapiCodigo?: string
   sinapiDescricao?: string
   loadingPreco?: boolean
   projectActivityId?: string
-}
-
-interface ManualFormState {
-  etapa: string
-  nome: string
-  unidade: string
-  areaTipo: AreaTipo
-  padrao: boolean
 }
 
 export function GerarServicosDialog({
@@ -132,10 +110,6 @@ export function GerarServicosDialog({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTargetIdx, setSearchTargetIdx] = useState<number | null>(null)
 
-  // SINAPI search for adding new template
-  const [addSearchOpen, setAddSearchOpen] = useState(false)
-  const [addingEtapa, setAddingEtapa] = useState<string | null>(null)
-
   // State
   const [rows, setRows] = useState<ServicoRow[]>([])
   const [pricesLoaded, setPricesLoaded] = useState(false)
@@ -145,23 +119,7 @@ export function GerarServicosDialog({
   const [treeData, setTreeData] = useState<any>(null)
   const [treeLoading, setTreeLoading] = useState(false)
 
-  // Inline editing state
-  const [editingIdx, setEditingIdx] = useState<number | null>(null)
-  const [editingName, setEditingName] = useState('')
-  const editInputRef = useRef<HTMLInputElement>(null)
-
-  // Manual creation form
-  const [manualForm, setManualForm] = useState<ManualFormState | null>(null)
-
   const areas = useMemo(() => calcularAreas(ambiente), [ambiente])
-
-  // Fetch templates from DB
-  const { data: templates, isLoading: templatesLoading } = useQuery({
-    queryKey: ['servico-templates'],
-    queryFn: () => levantamentoAPI.listTemplates(),
-    staleTime: 5 * 60 * 1000,
-    enabled: open,
-  })
 
   // Fetch available SINAPI months
   const { data: mesesDisponiveis } = useQuery({
@@ -178,95 +136,53 @@ export function GerarServicosDialog({
     }
   }, [mesesDisponiveis, mesReferencia])
 
-  // Build a map of template id -> activity id from activityGroups
-  const templateActivityMap = useMemo(() => {
-    const map = new Map<string, string>()
-    if (activityGroupsProp?.activityGroups) {
-      for (const group of activityGroupsProp.activityGroups) {
-        for (const t of group.templates) {
-          map.set(t.id, group.activity.id)
-        }
-      }
-    }
-    return map
-  }, [activityGroupsProp])
-
-  const hasSinapiMode = activityGroupsProp?.hasSinapiActivities ?? false
-  const hasActivityGroups = activityGroupsProp?.activityGroups && activityGroupsProp.activityGroups.length > 0
-
-  // Build rows from SINAPI activities (new mode) or templates (legacy mode)
+  // Build rows from PHASE > STAGE > ACTIVITY hierarchy
   useEffect(() => {
     if (!open) return
-
-    // New mode: build rows from PHASE > STAGE > ACTIVITY hierarchy
-    if (hasSinapiMode && activityGroupsProp?.phases) {
-      const ambienteTags: string[] = ambiente.tags || []
-      const newRows: ServicoRow[] = []
-
-      for (const phase of activityGroupsProp.phases) {
-        for (const stage of phase.stages) {
-          for (const act of stage.activities) {
-            if (!act.sinapiCodigo || !act.areaTipo) continue
-            const sugerido = templateAplicaAoAmbiente(act.tags || [], ambienteTags)
-            const etapaLabel = `${phase.name} > ${stage.name}`
-            newRows.push({
-              template: {
-                id: act.id,
-                nome: act.name,
-                sinapiCodigo: act.sinapiCodigo,
-                nomeCustom: null,
-                unidade: act.unidade || 'UN',
-                areaTipo: act.areaTipo as AreaTipo,
-                tags: act.tags || [],
-                padrao: act.padrao,
-                etapa: etapaLabel,
-                order: 0,
-                sinapiDescricao: act.sinapiDescricao,
-              },
-              checked: sugerido && act.padrao,
-              quantidade: Math.round(getQuantidadePorArea(act.areaTipo as AreaTipo, areas) * 100) / 100,
-              sugerido,
-              precoUnitario: 0,
-              sinapiCodigo: act.sinapiCodigo || undefined,
-              projectActivityId: act.id,
-            })
-          }
-        }
-      }
-
-      setRows(newRows)
-      setPricesLoaded(false)
-      setExpandedIdx(null)
-      setTreeData(null)
-      setEditingIdx(null)
-      setManualForm(null)
+    if (!activityGroupsProp?.phases) {
+      setRows([])
       return
     }
 
-    // Legacy mode: build rows from ServicoTemplate catalog
-    if (!templates || !Array.isArray(templates)) return
-
-    const activeTemplates = templates.filter((t: any) => t.ativo !== false)
     const ambienteTags: string[] = ambiente.tags || []
-    const newRows: ServicoRow[] = activeTemplates.map((t: any) => {
-      const sugerido = templateAplicaAoAmbiente(t.tags || [], ambienteTags)
-      return {
-        template: t,
-        checked: sugerido && t.padrao,
-        quantidade: Math.round(getQuantidadePorArea(t.areaTipo, areas) * 100) / 100,
-        sugerido,
-        precoUnitario: 0,
-        sinapiCodigo: t.sinapiCodigo || undefined,
-        projectActivityId: templateActivityMap.get(t.id),
+    const newRows: ServicoRow[] = []
+
+    for (const phase of activityGroupsProp.phases) {
+      for (const stage of phase.stages) {
+        for (const act of stage.activities) {
+          if (!act.sinapiCodigo || !act.areaTipo) continue
+          const sugerido = templateAplicaAoAmbiente(act.tags || [], ambienteTags)
+          const etapaLabel = `${phase.name} > ${stage.name}`
+          newRows.push({
+            template: {
+              id: act.id,
+              nome: act.name,
+              sinapiCodigo: act.sinapiCodigo,
+              nomeCustom: null,
+              unidade: act.unidade || 'UN',
+              areaTipo: act.areaTipo as AreaTipo,
+              tags: act.tags || [],
+              padrao: act.padrao,
+              etapa: etapaLabel,
+              order: 0,
+              sinapiDescricao: act.sinapiDescricao,
+            },
+            checked: sugerido && act.padrao,
+            quantidade: Math.round(getQuantidadePorArea(act.areaTipo as AreaTipo, areas) * 100) / 100,
+            sugerido,
+            precoUnitario: 0,
+            sinapiCodigo: act.sinapiCodigo || undefined,
+            projectActivityId: act.id,
+          })
+        }
       }
-    })
+    }
+
     setRows(newRows)
     setPricesLoaded(false)
     setExpandedIdx(null)
     setTreeData(null)
-    setEditingIdx(null)
-    setManualForm(null)
-  }, [open, templates, ambiente.id, ambiente.tags, templateActivityMap, hasSinapiMode, activityGroupsProp?.phases])
+  }, [open, ambiente.id, ambiente.tags, activityGroupsProp?.phases])
 
   // Auto-resolve SINAPI prices when rows are built and month is available
   const resolveAllPrices = useCallback(async (currentRows: ServicoRow[], mes: string) => {
@@ -319,21 +235,12 @@ export function GerarServicosDialog({
     }
   }, [rows.length, mesReferencia, pricesLoaded])
 
-  // Focus edit input when editing starts
-  useEffect(() => {
-    if (editingIdx !== null && editInputRef.current) {
-      editInputRef.current.focus()
-      editInputRef.current.select()
-    }
-  }, [editingIdx])
-
   const batchMutation = useMutation({
     mutationFn: (itens: any[]) =>
       levantamentoAPI.batchCreateItems(projectId, levantamentoId, itens),
     onSuccess: (data) => {
       toast.success(`${data.addedCount} servicos gerados para "${ambiente.nome}"`)
-      // Invalidate all levantamento queries for this project (parent uses 'levantamento-fp')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
       onOpenChange(false)
     },
@@ -362,55 +269,6 @@ export function GerarServicosDialog({
   const handleSelectAll = () => {
     const allChecked = rows.every((r) => r.checked)
     setRows((prev) => prev.map((r) => ({ ...r, checked: !allChecked })))
-  }
-
-  // ---- Inline name editing ----
-
-  const handleStartEditing = (idx: number) => {
-    const row = rows[idx]
-    setEditingIdx(idx)
-    setEditingName(row.template.nomeCustom || row.template.nome || '')
-  }
-
-  const handleSaveEditing = async () => {
-    if (editingIdx === null) return
-    const row = rows[editingIdx]
-    const newName = editingName.trim()
-
-    if (!newName) {
-      setEditingIdx(null)
-      return
-    }
-
-    // Update locally immediately
-    setRows((prev) => prev.map((r, i) => i === editingIdx ? {
-      ...r,
-      template: { ...r.template, nome: newName, nomeCustom: newName },
-    } : r))
-    setEditingIdx(null)
-
-    // Persist to backend
-    try {
-      await levantamentoAPI.updateTemplate(row.template.id, { nomeCustom: newName })
-      queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
-    } catch {
-      toast.error('Erro ao salvar nome')
-    }
-  }
-
-  const handleCancelEditing = () => {
-    setEditingIdx(null)
-    setEditingName('')
-  }
-
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSaveEditing()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      handleCancelEditing()
-    }
   }
 
   // ---- SINAPI search for existing row (override) ----
@@ -457,125 +315,6 @@ export function GerarServicosDialog({
     }
   }
 
-  // ---- Add new template from SINAPI search ----
-
-  const handleOpenAddSinapi = (etapa: string) => {
-    setAddingEtapa(etapa)
-    setAddSearchOpen(true)
-  }
-
-  const handleAddFromSinapi = async (composicao: any) => {
-    if (!addingEtapa) return
-
-    try {
-      // Create template in DB
-      const template = await levantamentoAPI.createTemplate({
-        sinapiCodigo: composicao.codigo,
-        nomeCustom: null,
-        areaTipo: 'MANUAL',
-        tags: [],
-        padrao: false,
-        etapa: addingEtapa,
-        order: 99,
-      })
-
-      // Add to local rows
-      const newRow: ServicoRow = {
-        template: {
-          ...template,
-          nome: composicao.descricao,
-          sinapiDescricao: composicao.descricao,
-          unidade: composicao.unidade || 'UN',
-        },
-        checked: true,
-        quantidade: 0,
-        sugerido: false,
-        precoUnitario: 0,
-        sinapiCodigo: composicao.codigo,
-        sinapiComposicaoId: composicao.id,
-        sinapiDescricao: composicao.descricao,
-        loadingPreco: true,
-      }
-
-      setRows((prev) => [...prev, newRow])
-      const newIdx = rows.length
-
-      // Resolve price
-      if (mesReferencia) {
-        try {
-          const calculo = await sinapiAPI.calculateComposicao(composicao.id, {
-            uf,
-            mesReferencia,
-            quantidade: 1,
-            desonerado,
-          })
-          setRows((prev) => prev.map((r, i) => i === newIdx ? {
-            ...r,
-            precoUnitario: Math.round(calculo.custoUnitarioTotal * 100) / 100,
-            loadingPreco: false,
-          } : r))
-        } catch {
-          setRows((prev) => prev.map((r, i) => i === newIdx ? { ...r, loadingPreco: false } : r))
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
-      toast.success(`Servico "${composicao.descricao.substring(0, 40)}..." adicionado`)
-    } catch (err: any) {
-      toast.error('Erro ao criar template: ' + (err.message || ''))
-    }
-  }
-
-  // ---- Manual creation ----
-
-  const handleOpenManualForm = (etapa: string) => {
-    setManualForm({ etapa, nome: '', unidade: 'UN', areaTipo: 'MANUAL', padrao: true })
-  }
-
-  const handleSaveManual = async () => {
-    if (!manualForm || !manualForm.nome.trim()) {
-      toast.error('Informe o nome do servico')
-      return
-    }
-    if (!manualForm.etapa.trim()) {
-      toast.error('Informe a etapa')
-      return
-    }
-
-    try {
-      const template = await levantamentoAPI.createTemplate({
-        nomeCustom: manualForm.nome.trim(),
-        areaTipo: manualForm.areaTipo,
-        tags: [],
-        padrao: manualForm.padrao,
-        etapa: manualForm.etapa.trim(),
-        order: 99,
-      })
-
-      const qty = getQuantidadePorArea(manualForm.areaTipo as AreaTipo, areas)
-
-      const newRow: ServicoRow = {
-        template: {
-          ...template,
-          nome: manualForm.nome.trim(),
-          sinapiDescricao: null,
-          unidade: manualForm.unidade,
-        },
-        checked: true,
-        quantidade: Math.round(qty * 100) / 100,
-        sugerido: false,
-        precoUnitario: 0,
-      }
-
-      setRows((prev) => [...prev, newRow])
-      setManualForm(null)
-      queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
-      toast.success(`Servico "${manualForm.nome.trim()}" criado`)
-    } catch (err: any) {
-      toast.error('Erro ao criar template: ' + (err.message || ''))
-    }
-  }
-
   // Unlink SINAPI from a row
   const handleUnlinkSinapi = (idx: number) => {
     setRows((prev) => prev.map((r, i) => i === idx ? {
@@ -588,32 +327,6 @@ export function GerarServicosDialog({
     if (expandedIdx === idx) {
       setExpandedIdx(null)
       setTreeData(null)
-    }
-  }
-
-  // Remove a row from the dialog (and delete template if user-created)
-  const handleRemoveRow = async (idx: number) => {
-    const row = rows[idx]
-
-    // Close expanded tree if it's this row
-    if (expandedIdx === idx) {
-      setExpandedIdx(null)
-      setTreeData(null)
-    } else if (expandedIdx !== null && expandedIdx > idx) {
-      setExpandedIdx(expandedIdx - 1)
-    }
-
-    // Remove from local state
-    setRows((prev) => prev.filter((_, i) => i !== idx))
-
-    // If it's a user-created template (not default), delete from DB
-    if (!row.template.padrao && row.template.order >= 99) {
-      try {
-        await levantamentoAPI.deleteTemplate(row.template.id)
-        queryClient.invalidateQueries({ queryKey: ['servico-templates'] })
-      } catch {
-        // Ignore — template stays in DB but row is removed from dialog
-      }
     }
   }
 
@@ -673,7 +386,7 @@ export function GerarServicosDialog({
     }
 
     const itens = selected.map((r) => ({
-      nome: r.template.nomeCustom || r.sinapiDescricao || r.template.nome || '(sem nome)',
+      nome: r.sinapiDescricao || r.template.nome || '(sem nome)',
       unidade: r.template.unidade || 'UN',
       quantidade: Math.round(r.quantidade * 100) / 100,
       precoUnitario: Math.round(r.precoUnitario * 100) / 100,
@@ -691,91 +404,42 @@ export function GerarServicosDialog({
     .filter((r) => r.checked)
     .reduce((sum, r) => sum + r.quantidade * r.precoUnitario, 0)
 
-  // Group by activity (if available) or by etapa (fallback)
+  // Group by PHASE > STAGE from the hierarchy
   const groupedRows = useMemo(() => {
-    // New SINAPI mode: group by PHASE > STAGE from the hierarchy
-    if (hasSinapiMode && activityGroupsProp?.phases) {
-      const groups: { key: string; label: string; color: string | null; activityId: string | null; indices: number[] }[] = []
+    if (!activityGroupsProp?.phases) return []
 
-      for (const phase of activityGroupsProp.phases) {
-        for (const stage of phase.stages) {
-          const label = `${phase.name} > ${stage.name}`
-          const stageActIds = new Set(stage.activities.map(a => a.id))
-          const indices: number[] = []
-          rows.forEach((r, i) => {
-            if (r.projectActivityId && stageActIds.has(r.projectActivityId)) {
-              indices.push(i)
-            }
-          })
-          if (indices.length > 0) {
-            groups.push({
-              key: stage.id,
-              label,
-              color: phase.color || stage.color,
-              activityId: null,
-              indices,
-            })
+    const groups: { key: string; label: string; color: string | null; indices: number[] }[] = []
+
+    for (const phase of activityGroupsProp.phases) {
+      for (const stage of phase.stages) {
+        const label = `${phase.name} > ${stage.name}`
+        const stageActIds = new Set(stage.activities.map(a => a.id))
+        const indices: number[] = []
+        rows.forEach((r, i) => {
+          if (r.projectActivityId && stageActIds.has(r.projectActivityId)) {
+            indices.push(i)
           }
+        })
+        if (indices.length > 0) {
+          groups.push({
+            key: stage.id,
+            label,
+            color: phase.color || stage.color,
+            indices,
+          })
         }
       }
-
-      // Orphan rows (shouldn't happen but just in case)
-      const usedIndices = new Set(groups.flatMap(g => g.indices))
-      const orphanIndices = rows.map((_, i) => i).filter(i => !usedIndices.has(i))
-      if (orphanIndices.length > 0) {
-        groups.push({ key: '__orphan__', label: 'Outros', color: null, activityId: null, indices: orphanIndices })
-      }
-
-      return groups
     }
 
-    // Legacy mode: group by activity links
-    if (hasActivityGroups && activityGroupsProp) {
-      const groups: { key: string; label: string; color: string | null; activityId: string | null; indices: number[] }[] = []
-      const activityMap = new Map<string, number>() // activityId -> group index
-      const unlinkedIndices: number[] = []
-
-      // Create groups for each activity (preserving order from activityGroups)
-      for (const ag of activityGroupsProp.activityGroups) {
-        const label = ag.activity.parentName
-          ? `${ag.activity.parentName} > ${ag.activity.name}`
-          : ag.activity.name
-        activityMap.set(ag.activity.id, groups.length)
-        groups.push({ key: ag.activity.id, label, color: ag.activity.color, activityId: ag.activity.id, indices: [] })
-      }
-
-      // Distribute rows into groups
-      rows.forEach((r, i) => {
-        if (r.projectActivityId && activityMap.has(r.projectActivityId)) {
-          groups[activityMap.get(r.projectActivityId)!].indices.push(i)
-        } else {
-          unlinkedIndices.push(i)
-        }
-      })
-
-      // Add "Nao Vinculados" group if there are unlinked templates
-      if (unlinkedIndices.length > 0) {
-        groups.push({ key: '__unlinked__', label: 'Nao Vinculados', color: null, activityId: null, indices: unlinkedIndices })
-      }
-
-      return groups.filter((g) => g.indices.length > 0)
+    // Orphan rows (shouldn't happen but just in case)
+    const usedIndices = new Set(groups.flatMap(g => g.indices))
+    const orphanIndices = rows.map((_, i) => i).filter(i => !usedIndices.has(i))
+    if (orphanIndices.length > 0) {
+      groups.push({ key: '__orphan__', label: 'Outros', color: null, indices: orphanIndices })
     }
 
-    // Fallback: group by etapa string
-    const map = new Map<string, number[]>()
-    rows.forEach((r, i) => {
-      const key = r.template.etapa
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(i)
-    })
-    return Array.from(map.entries()).map(([etapa, indices]) => ({
-      key: etapa,
-      label: etapa,
-      color: null,
-      activityId: null,
-      indices,
-    }))
-  }, [rows, hasActivityGroups, hasSinapiMode, activityGroupsProp])
+    return groups
+  }, [rows, activityGroupsProp])
 
   return (
     <>
@@ -787,7 +451,7 @@ export function GerarServicosDialog({
               Gerar Servicos — {ambiente.nome}
             </DialogTitle>
             <DialogDescription>
-              Servicos pre-configurados com composicoes SINAPI. Clique 2x no nome para editar.
+              Servicos baseados nas atividades do projeto com composicoes SINAPI.
               Quantidades baseadas nas dimensoes ({Number(ambiente.comprimento).toFixed(2)} x {Number(ambiente.largura).toFixed(2)} m).
             </DialogDescription>
           </DialogHeader>
@@ -864,9 +528,14 @@ export function GerarServicosDialog({
           </div>
 
           {/* Service list */}
-          {templatesLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Wand2 className="h-8 w-8 text-neutral-300 mb-3" />
+              <p className="text-sm text-neutral-600 font-medium">Nenhuma atividade com SINAPI encontrada</p>
+              <p className="text-xs text-neutral-400 mt-1 max-w-sm">
+                As atividades do projeto precisam ter codigo SINAPI e tipo de area configurados
+                para aparecer aqui. Configure-os no template do projeto.
+              </p>
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-2">
@@ -880,7 +549,6 @@ export function GerarServicosDialog({
                       const row = rows[idx]
                       const isExpanded = expandedIdx === idx
                       const canExpand = !!row.sinapiComposicaoId && !!mesReferencia
-                      const isEditing = editingIdx === idx
 
                       return (
                         <div
@@ -914,32 +582,16 @@ export function GerarServicosDialog({
                               <div className="w-6 shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                              {isEditing ? (
-                                <Input
-                                  ref={editInputRef}
-                                  className="h-7 text-sm"
-                                  value={editingName}
-                                  onChange={(e) => setEditingName(e.target.value)}
-                                  onKeyDown={handleEditKeyDown}
-                                  onBlur={handleSaveEditing}
-                                />
-                              ) : (
-                                <div
-                                  className="flex items-center gap-1.5 cursor-pointer group"
-                                  onDoubleClick={() => handleStartEditing(idx)}
-                                  title="Clique 2x para editar o nome"
-                                >
-                                  <span className="text-sm font-medium group-hover:text-primary transition-colors">
-                                    {row.template.nome}
-                                  </span>
-                                  <PenLine className="h-3 w-3 text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  {!row.sugerido && (
-                                    <Badge variant="outline" className="text-[9px] text-neutral-400 border-neutral-200">
-                                      opcional
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-medium">
+                                  {row.template.nome}
+                                </span>
+                                {!row.sugerido && (
+                                  <Badge variant="outline" className="text-[9px] text-neutral-400 border-neutral-200">
+                                    opcional
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                             <Badge variant="secondary" className="text-[10px] shrink-0">
                               {AREA_LABELS[row.template.areaTipo]}
@@ -1009,15 +661,6 @@ export function GerarServicosDialog({
                                 <X className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-neutral-300 hover:text-red-500 shrink-0"
-                              onClick={() => handleRemoveRow(idx)}
-                              title="Remover servico"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
                           </div>
                           {/* SINAPI linked info */}
                           {row.sinapiComposicaoId && (
@@ -1066,167 +709,15 @@ export function GerarServicosDialog({
                         </div>
                       )
                     })}
-
-                    {/* Manual form (inline creation) */}
-                    {manualForm && manualForm.etapa === group.label && (
-                      <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Input
-                            className="h-7 text-sm flex-1 min-w-[160px]"
-                            placeholder="Nome do servico..."
-                            value={manualForm.nome}
-                            onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveManual()
-                              if (e.key === 'Escape') setManualForm(null)
-                            }}
-                            autoFocus
-                          />
-                          <Input
-                            className="h-7 text-xs w-28"
-                            placeholder="Etapa"
-                            value={manualForm.etapa}
-                            onChange={(e) => setManualForm({ ...manualForm, etapa: e.target.value })}
-                          />
-                          <Select
-                            value={manualForm.areaTipo}
-                            onValueChange={(v) => setManualForm({ ...manualForm, areaTipo: v as AreaTipo })}
-                          >
-                            <SelectTrigger className="h-7 w-36 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {AREA_TIPO_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <label className="flex items-center gap-1 text-xs text-neutral-500 cursor-pointer">
-                            <Checkbox
-                              checked={manualForm.padrao}
-                              onChange={() => setManualForm({ ...manualForm, padrao: !manualForm.padrao })}
-                            />
-                            Padrao
-                          </label>
-                          <Button size="sm" className="h-7 text-xs" onClick={handleSaveManual}>
-                            Criar
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setManualForm(null)}>
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Add service buttons */}
-                    {!(manualForm && manualForm.etapa === group.label) && (
-                      <div className="flex gap-2 mt-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-blue-600 hover:text-blue-800"
-                          onClick={() => handleOpenAddSinapi(group.label)}
-                        >
-                          <Search className="h-3 w-3 mr-1" />
-                          Buscar no SINAPI
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-neutral-500 hover:text-neutral-700"
-                          onClick={() => handleOpenManualForm(group.label)}
-                        >
-                          <Plus className="h-3 w-3 mr-1" />
-                          Criar manual
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
-
-              {/* General add (new etapa) */}
-              {manualForm && !groupedRows.some((g) => g.label === manualForm.etapa) && (
-                <div className="border-t pt-3">
-                  <div className="rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-3 py-2 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Input
-                        className="h-7 text-sm flex-1 min-w-[160px]"
-                        placeholder="Nome do servico..."
-                        value={manualForm.nome}
-                        onChange={(e) => setManualForm({ ...manualForm, nome: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveManual()
-                          if (e.key === 'Escape') setManualForm(null)
-                        }}
-                        autoFocus
-                      />
-                      <Input
-                        className="h-7 text-xs w-28"
-                        placeholder="Etapa"
-                        value={manualForm.etapa}
-                        onChange={(e) => setManualForm({ ...manualForm, etapa: e.target.value })}
-                      />
-                      <Select
-                        value={manualForm.areaTipo}
-                        onValueChange={(v) => setManualForm({ ...manualForm, areaTipo: v as AreaTipo })}
-                      >
-                        <SelectTrigger className="h-7 w-36 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AREA_TIPO_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <label className="flex items-center gap-1 text-xs text-neutral-500 cursor-pointer">
-                        <Checkbox
-                          checked={manualForm.padrao}
-                          onChange={() => setManualForm({ ...manualForm, padrao: !manualForm.padrao })}
-                        />
-                        Padrao
-                      </label>
-                      <Button size="sm" className="h-7 text-xs" onClick={handleSaveManual}>
-                        Criar
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setManualForm(null)}>
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {!manualForm && (
-                <div className="border-t pt-3">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleOpenAddSinapi('Outros')}
-                    >
-                      <Search className="h-3.5 w-3.5 mr-1.5" />
-                      Adicionar do SINAPI
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleOpenManualForm('')}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />
-                      Criar servico manual
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {/* Footer */}
           <div className="flex items-center justify-between pt-3 border-t">
-            <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+            <Button variant="ghost" size="sm" onClick={handleSelectAll} disabled={rows.length === 0}>
               {rows.every((r) => r.checked) ? 'Desmarcar todos' : 'Selecionar todos'}
             </Button>
             <div className="flex items-center gap-3">
@@ -1253,14 +744,6 @@ export function GerarServicosDialog({
         onOpenChange={setSearchOpen}
         mode="composicoes"
         onSelectComposicao={handleSelectComposicao}
-      />
-
-      {/* SINAPI Search Dialog (for adding new template) */}
-      <SinapiSearchDialog
-        open={addSearchOpen}
-        onOpenChange={setAddSearchOpen}
-        mode="composicoes"
-        onSelectComposicao={handleAddFromSinapi}
       />
     </>
   )

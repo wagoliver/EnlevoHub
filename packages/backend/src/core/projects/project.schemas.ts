@@ -18,6 +18,7 @@ export const createProjectSchema = z.object({
   startDate: z.string().datetime().optional(),
   expectedEndDate: z.string().datetime().optional(),
   budget: z.number().positive(),
+  quantidadeUnidades: z.number().int().min(1).default(1).optional(),
   metadata: z.record(z.any()).optional(),
 })
 
@@ -30,6 +31,7 @@ export const updateProjectSchema = z.object({
   expectedEndDate: z.string().datetime().nullable().optional(),
   actualEndDate: z.string().datetime().nullable().optional(),
   budget: z.number().positive().optional(),
+  quantidadeUnidades: z.number().int().min(1).optional(),
   metadata: z.record(z.any()).optional(),
 })
 

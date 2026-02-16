@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, Layers } from 'lucide-react'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -10,9 +10,10 @@ interface AmbienteResumoProps {
   ambientes: any[]
   itens: any[]
   activityGroups?: any
+  quantidadeUnidades?: number
 }
 
-export function AmbienteResumo({ ambientes, itens, activityGroups }: AmbienteResumoProps) {
+export function AmbienteResumo({ ambientes, itens, activityGroups, quantidadeUnidades = 1 }: AmbienteResumoProps) {
   const resumo = useMemo(() => {
     const ambientesData = ambientes.map((amb) => {
       const comp = Number(amb.comprimento)
@@ -112,6 +113,28 @@ export function AmbienteResumo({ ambientes, itens, activityGroups }: AmbienteRes
           </CardContent>
         </Card>
       </div>
+
+      {/* Multiplicador de unidades */}
+      {quantidadeUnidades > 1 && resumo.totalGeral > 0 && (
+        <Card className="bg-blue-50/60 border-blue-200">
+          <CardContent className="py-4 px-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Layers className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Multiplicador de Unidades</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-blue-600">Total por unidade</p>
+                <p className="text-lg font-bold text-blue-800">{formatCurrency(resumo.totalGeral)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-blue-600">Total x {quantidadeUnidades} unidades</p>
+                <p className="text-lg font-bold text-blue-900">{formatCurrency(resumo.totalGeral * quantidadeUnidades)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Per-ambiente breakdown */}
       {resumo.ambientesData.length > 0 && (

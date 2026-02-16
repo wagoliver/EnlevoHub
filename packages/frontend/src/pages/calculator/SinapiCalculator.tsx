@@ -32,7 +32,7 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: Sina
     mutationFn: (data: any) => levantamentoAPI.addFromComposicao(projectId, levantamentoId, data),
     onSuccess: (data) => {
       toast.success(`${data.addedCount} itens importados da composição ${data.composicao.codigo}`)
-      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
     },
     onError: (e: Error) => toast.error(e.message),

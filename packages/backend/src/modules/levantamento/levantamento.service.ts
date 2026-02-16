@@ -88,6 +88,30 @@ export class LevantamentoService {
     })
   }
 
+  async getOrCreateForProject(tenantId: string, projectId: string) {
+    const existing = await this.prisma.projetoLevantamento.findFirst({
+      where: { projectId, tenantId, floorPlanId: null },
+      include: {
+        itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    })
+    if (existing) return existing
+
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    return this.prisma.projetoLevantamento.create({
+      data: { tenantId, projectId, floorPlanId: null, nome: project.name },
+      include: {
+        itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    })
+  }
+
   async create(tenantId: string, projectId: string, data: CreateLevantamentoInput) {
     // Verify project belongs to tenant
     const project = await this.prisma.project.findFirst({

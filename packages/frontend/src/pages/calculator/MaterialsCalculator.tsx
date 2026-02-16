@@ -1,17 +1,13 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI, projectsAPI } from '@/lib/api-client'
 import { usePermission } from '@/hooks/usePermission'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Calculator, Loader2, Home, Settings } from 'lucide-react'
+import { Loader2, Calculator } from 'lucide-react'
 import { AmbienteSidebar } from './AmbienteSidebar'
 import { AmbienteDetail } from './AmbienteDetail'
 import { AmbienteResumo } from './AmbienteResumo'
 import { AmbienteForm } from './AmbienteForm'
-import { ServicoTemplateAdmin } from './ServicoTemplateAdmin'
 
 interface MaterialsCalculatorProps {
   projectId: string
@@ -21,35 +17,26 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   const queryClient = useQueryClient()
   const canEdit = usePermission('projects:edit')
 
-  const [selectedFloorPlanId, setSelectedFloorPlanId] = useState<string | null>(null)
   const [selectedAmbienteId, setSelectedAmbienteId] = useState<string | null>(null)
 
   // Ambiente form state
   const [ambienteFormOpen, setAmbienteFormOpen] = useState(false)
   const [editingAmbiente, setEditingAmbiente] = useState<any>(null)
 
-  // Template admin
-  const [templateAdminOpen, setTemplateAdminOpen] = useState(false)
-
-  // Fetch floor plans
-  const { data: floorPlans, isLoading: fpLoading } = useQuery({
-    queryKey: ['floor-plans', projectId],
-    queryFn: () => projectsAPI.listFloorPlans(projectId),
-  })
-
-  // Auto-select first floor plan
-  useEffect(() => {
-    if (!selectedFloorPlanId && floorPlans && floorPlans.length > 0) {
-      setSelectedFloorPlanId(floorPlans[0].id)
-    }
-  }, [floorPlans, selectedFloorPlanId])
-
-  // Get or create levantamento for selected floor plan
+  // Get or create levantamento for this project (project-level, no FloorPlan)
   const { data: levantamento, isLoading: levLoading } = useQuery({
-    queryKey: ['levantamento-fp', projectId, selectedFloorPlanId],
-    queryFn: () => levantamentoAPI.getForFloorPlan(projectId, selectedFloorPlanId!),
-    enabled: !!selectedFloorPlanId,
+    queryKey: ['levantamento-project', projectId],
+    queryFn: () => levantamentoAPI.getForProject(projectId),
   })
+
+  // Fetch project data for quantidadeUnidades
+  const { data: project } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projectsAPI.getById(projectId),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const quantidadeUnidades = project?.quantidadeUnidades ?? 1
 
   // Buscar atividades do projeto para extrair etapas (PHASE/STAGE)
   const { data: activities } = useQuery({
@@ -86,7 +73,7 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     return hasStages(activities)
   }, [activities])
 
-  // Fetch templates grouped by activity (includes phases hierarchy + legacy groups)
+  // Fetch templates grouped by activity (includes phases hierarchy)
   const { data: activityGroupsData } = useQuery({
     queryKey: ['templates-by-activity', projectId],
     queryFn: () => levantamentoAPI.getTemplatesByActivity(projectId),
@@ -94,29 +81,12 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     staleTime: 2 * 60 * 1000,
   })
 
-  // Detect if project uses new SINAPI-activity mode or legacy template-link mode
-  const hasSinapiActivities = activityGroupsData?.hasSinapiActivities ?? false
-
-  // Auto-link activities to templates (fire-and-forget, idempotent) — only in legacy mode
-  const autoLinkMutation = useMutation({
-    mutationFn: () => levantamentoAPI.autoLinkActivities(projectId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates-by-activity', projectId] })
-    },
-  })
-
-  useEffect(() => {
-    if (hasActivities && !hasSinapiActivities) {
-      autoLinkMutation.mutate()
-    }
-  }, [hasActivities, hasSinapiActivities]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // Ambiente mutations
   const createAmbienteMutation = useMutation({
     mutationFn: (data: any) => levantamentoAPI.createAmbiente(projectId, levantamento!.id, data),
     onSuccess: (data) => {
       toast.success('Ambiente criado')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId, selectedFloorPlanId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       setAmbienteFormOpen(false)
       setEditingAmbiente(null)
       setSelectedAmbienteId(data.id)
@@ -129,7 +99,7 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
       levantamentoAPI.updateAmbiente(projectId, levantamento!.id, id, data),
     onSuccess: () => {
       toast.success('Ambiente atualizado')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId, selectedFloorPlanId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       setAmbienteFormOpen(false)
       setEditingAmbiente(null)
     },
@@ -140,13 +110,12 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     mutationFn: (id: string) => levantamentoAPI.deleteAmbiente(projectId, levantamento!.id, id),
     onSuccess: () => {
       toast.success('Ambiente removido')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-fp', projectId, selectedFloorPlanId] })
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       if (selectedAmbienteId) setSelectedAmbienteId(null)
     },
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const fpList = floorPlans || []
   const ambientes = levantamento?.ambientes || []
   const itens = levantamento?.itens || []
   const selectedAmbiente = ambientes.find((a: any) => a.id === selectedAmbienteId)
@@ -162,108 +131,55 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Calculator className="h-5 w-5 text-neutral-500" />
-          <h2 className="text-lg font-semibold">Calculadora de Materiais</h2>
-        </div>
-        {canEdit && (
-          <Button variant="outline" size="sm" onClick={() => setTemplateAdminOpen(true)} title="Configurar templates de servicos">
-            <Settings className="h-4 w-4 mr-1.5" />
-            Templates
-          </Button>
-        )}
+      <div className="flex items-center gap-3">
+        <Calculator className="h-5 w-5 text-neutral-500" />
+        <h2 className="text-lg font-semibold">Calculadora de Materiais</h2>
       </div>
 
-      {/* Floor plan tabs */}
-      {fpLoading ? (
+      {/* Loading levantamento */}
+      {levLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
         </div>
-      ) : fpList.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Home className="h-10 w-10 text-neutral-300" />
-            <h3 className="mt-3 text-sm font-medium text-neutral-700">
-              Nenhuma planta cadastrada
-            </h3>
-            <p className="mt-1 text-xs text-neutral-500 max-w-md text-center">
-              Cadastre plantas (tipos de unidade) na aba "Unidades" do projeto
-              para comecar o levantamento de materiais.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Floor plan selector */}
-          <div className="flex gap-2 flex-wrap">
-            {fpList.map((fp: any) => (
-              <button
-                key={fp.id}
-                type="button"
-                onClick={() => { setSelectedFloorPlanId(fp.id); setSelectedAmbienteId(null) }}
-                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                  selectedFloorPlanId === fp.id
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
-                }`}
-              >
-                <span>{fp.name}</span>
-                <Badge
-                  variant={selectedFloorPlanId === fp.id ? 'secondary' : 'outline'}
-                  className="ml-2 text-[10px]"
-                >
-                  {Number(fp.area).toFixed(0)} m²
-                </Badge>
-              </button>
-            ))}
+      ) : levantamento ? (
+        /* Sidebar + Content layout */
+        <div className="flex gap-0 border rounded-lg overflow-hidden bg-white min-h-[500px]">
+          {/* Sidebar */}
+          <div className="w-56 flex-shrink-0 border-r bg-neutral-50/50">
+            <AmbienteSidebar
+              ambientes={ambientes}
+              itens={itens}
+              selectedId={selectedAmbienteId}
+              onSelect={setSelectedAmbienteId}
+              onAdd={() => { setEditingAmbiente(null); setAmbienteFormOpen(true) }}
+              onEdit={(amb) => { setEditingAmbiente(amb); setAmbienteFormOpen(true) }}
+              onDelete={(id) => deleteAmbienteMutation.mutate(id)}
+              canEdit={canEdit}
+            />
           </div>
 
-          {/* Loading levantamento */}
-          {levLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
-            </div>
-          ) : levantamento ? (
-            /* Sidebar + Content layout */
-            <div className="flex gap-0 border rounded-lg overflow-hidden bg-white min-h-[500px]">
-              {/* Sidebar */}
-              <div className="w-56 flex-shrink-0 border-r bg-neutral-50/50">
-                <AmbienteSidebar
-                  ambientes={ambientes}
-                  itens={itens}
-                  selectedId={selectedAmbienteId}
-                  onSelect={setSelectedAmbienteId}
-                  onAdd={() => { setEditingAmbiente(null); setAmbienteFormOpen(true) }}
-                  onEdit={(amb) => { setEditingAmbiente(amb); setAmbienteFormOpen(true) }}
-                  onDelete={(id) => deleteAmbienteMutation.mutate(id)}
-                  canEdit={canEdit}
-                />
-              </div>
-
-              {/* Main content */}
-              <div className="flex-1 p-4 overflow-y-auto">
-                {selectedAmbiente ? (
-                  <AmbienteDetail
-                    ambiente={selectedAmbiente}
-                    projectId={projectId}
-                    levantamentoId={levantamento.id}
-                    itens={itens}
-                    etapas={etapas}
-                    activityGroups={activityGroupsData}
-                  />
-                ) : (
-                  <AmbienteResumo
-                    ambientes={ambientes}
-                    itens={itens}
-                    activityGroups={activityGroupsData}
-                  />
-                )}
-              </div>
-            </div>
-          ) : null}
-        </>
-      )}
+          {/* Main content */}
+          <div className="flex-1 p-4 overflow-y-auto">
+            {selectedAmbiente ? (
+              <AmbienteDetail
+                ambiente={selectedAmbiente}
+                projectId={projectId}
+                levantamentoId={levantamento.id}
+                itens={itens}
+                etapas={etapas}
+                activityGroups={activityGroupsData}
+              />
+            ) : (
+              <AmbienteResumo
+                ambientes={ambientes}
+                itens={itens}
+                activityGroups={activityGroupsData}
+                quantidadeUnidades={quantidadeUnidades}
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {/* Ambiente form dialog */}
       <AmbienteForm
@@ -272,12 +188,6 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
         onSubmit={handleAmbienteFormSubmit}
         isPending={createAmbienteMutation.isPending || updateAmbienteMutation.isPending}
         editData={editingAmbiente}
-      />
-
-      {/* Template admin dialog */}
-      <ServicoTemplateAdmin
-        open={templateAdminOpen}
-        onOpenChange={setTemplateAdminOpen}
       />
     </div>
   )

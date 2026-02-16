@@ -16,6 +16,7 @@ export class ProjectService {
         startDate: data.startDate ? new Date(data.startDate) : null,
         expectedEndDate: data.expectedEndDate ? new Date(data.expectedEndDate) : null,
         budget: data.budget,
+        quantidadeUnidades: data.quantidadeUnidades ?? 1,
         metadata: data.metadata as any,
       },
       include: {
@@ -139,6 +140,7 @@ export class ProjectService {
           actualEndDate: data.actualEndDate ? new Date(data.actualEndDate) : null,
         }),
         ...(data.budget !== undefined && { budget: data.budget }),
+        ...(data.quantidadeUnidades !== undefined && { quantidadeUnidades: data.quantidadeUnidades }),
         ...(data.metadata !== undefined && { metadata: data.metadata as any }),
       },
       include: {

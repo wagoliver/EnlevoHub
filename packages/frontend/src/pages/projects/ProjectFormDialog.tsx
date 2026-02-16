@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -73,6 +74,7 @@ const statusLabels: Record<string, string> = {
 
 export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDialogProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const isEdit = !!project
 
   const [step, setStep] = useState(1)
@@ -194,6 +196,9 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       handleClose()
+      if (!isEdit) {
+        navigate('/?phase=1')
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message)

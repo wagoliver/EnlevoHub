@@ -71,9 +71,21 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
       queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
       queryClient.invalidateQueries({ queryKey: ['activity-review-summary', projectId] })
+      // Auto-save composição to template
+      const parsed = parseActivityValue(selectedActivity)
+      if (parsed.etapa && data.composicao) {
+        levantamentoAPI.ensureTemplate({
+          nomeCustom: data.composicao.descricao || `Composição ${data.composicao.codigo}`,
+          etapa: parsed.etapa,
+          sinapiCodigo: data.composicao.codigo,
+        }).catch(() => {}) // best-effort
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   })
+
+  // Ref to keep insumo+etapa for ensureTemplate after add
+  const pendingTemplateRef = { current: null as { nome: string; etapa: string; sinapiCodigo?: string } | null }
 
   const addInsumoMutation = useMutation({
     mutationFn: (data: any) => levantamentoAPI.addItem(projectId, levantamentoId, data),
@@ -82,6 +94,16 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
       queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
       queryClient.invalidateQueries({ queryKey: ['activity-review-summary', projectId] })
+      // Auto-save to template if linked to an activity
+      if (pendingTemplateRef.current) {
+        const tpl = pendingTemplateRef.current
+        levantamentoAPI.ensureTemplate({
+          nomeCustom: tpl.nome,
+          etapa: tpl.etapa,
+          sinapiCodigo: tpl.sinapiCodigo,
+        }).catch(() => {}) // silent — template enrichment is best-effort
+        pendingTemplateRef.current = null
+      }
       setSelectedInsumo(null)
       setInsumoQtd('1')
       setInsumoPreco('')
@@ -108,6 +130,14 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
       return
     }
     const parsed = parseActivityValue(selectedActivity)
+    // Save info for template enrichment after successful add
+    if (parsed.etapa) {
+      pendingTemplateRef.current = {
+        nome: selectedInsumo.descricao,
+        etapa: parsed.etapa,
+        sinapiCodigo: selectedInsumo.codigo,
+      }
+    }
     addInsumoMutation.mutate({
       nome: selectedInsumo.descricao,
       unidade: selectedInsumo.unidade || 'UN',

@@ -167,6 +167,54 @@ export class ServicoTemplateService {
     })
   }
 
+  /**
+   * Ensure a template exists for the given etapa + identifier.
+   * If sinapiCodigo is provided, checks by code. Otherwise checks by nomeCustom+etapa.
+   * Creates one if missing. Idempotent.
+   */
+  async ensureTemplate(tenantId: string, input: {
+    nomeCustom: string
+    etapa: string
+    sinapiCodigo?: string | null
+    unidade?: string
+  }) {
+    await this.seedDefaults(tenantId)
+
+    // Check if exists by sinapiCodigo or nomeCustom+etapa
+    const conditions: any[] = []
+    if (input.sinapiCodigo) {
+      conditions.push({ sinapiCodigo: input.sinapiCodigo, etapa: input.etapa })
+    }
+    conditions.push({ nomeCustom: input.nomeCustom, etapa: input.etapa })
+
+    const existing = await this.prisma.servicoTemplate.findFirst({
+      where: { tenantId, OR: conditions },
+    })
+
+    if (existing) return { created: false, template: existing }
+
+    // Get max order for this etapa
+    const maxOrder = await this.prisma.servicoTemplate.aggregate({
+      where: { tenantId, etapa: input.etapa },
+      _max: { order: true },
+    })
+
+    const template = await this.prisma.servicoTemplate.create({
+      data: {
+        tenantId,
+        nomeCustom: input.nomeCustom,
+        sinapiCodigo: input.sinapiCodigo || null,
+        areaTipo: 'MANUAL',
+        tags: [],
+        padrao: false,
+        etapa: input.etapa,
+        order: (maxOrder._max.order ?? 0) + 1,
+      },
+    })
+
+    return { created: true, template }
+  }
+
   async delete(tenantId: string, id: string) {
     const template = await this.prisma.servicoTemplate.findFirst({
       where: { id, tenantId },

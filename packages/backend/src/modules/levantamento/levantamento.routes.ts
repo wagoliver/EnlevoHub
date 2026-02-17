@@ -418,6 +418,24 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.post('/servico-templates/ensure', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const body = request.body as { nomeCustom: string; etapa: string; sinapiCodigo?: string }
+      if (!body.nomeCustom || !body.etapa) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'nomeCustom e etapa são obrigatórios' })
+      }
+      const result = await templateService.ensureTemplate(getTenantId(request), body)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   fastify.post('/servico-templates/reset', {
     preHandler: [authMiddleware, requirePermission('projects:edit')],
   }, async (request, reply) => {

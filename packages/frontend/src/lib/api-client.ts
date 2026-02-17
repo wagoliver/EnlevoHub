@@ -783,6 +783,8 @@ export const levantamentoAPI = {
     apiClient.patch<any>(`/projects/servico-templates/${id}`, data),
   deleteTemplate: (id: string) =>
     apiClient.delete<any>(`/projects/servico-templates/${id}`),
+  ensureTemplate: (data: { nomeCustom: string; etapa: string; sinapiCodigo?: string }) =>
+    apiClient.post<any>('/projects/servico-templates/ensure', data),
   resetTemplates: () =>
     apiClient.post<any>('/projects/servico-templates/reset', {}),
   getStageSuggestions: () =>

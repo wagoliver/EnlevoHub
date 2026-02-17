@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { projectsAPI } from '@/lib/api-client'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { projectsAPI, levantamentoAPI } from '@/lib/api-client'
 import { WorkflowStepper } from '@/components/WorkflowStepper'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +25,7 @@ import {
   ClipboardList,
   Package,
   BarChart3,
+  Database,
 } from 'lucide-react'
 
 function formatCurrency(value: number): string {
@@ -119,6 +121,11 @@ function ReviewActivityRow({
                 {activity.level === 'PHASE' ? 'Fase' : 'Etapa'}
               </Badge>
             )}
+            {activity.sinapiCodigo && (
+              <Badge variant="outline" className="ml-2 text-[10px] border-blue-300 text-blue-600">
+                SINAPI {activity.sinapiCodigo}
+              </Badge>
+            )}
           </div>
         </TableCell>
         <TableCell className="text-center">
@@ -199,8 +206,23 @@ export function ActivityReviewPage() {
     )
   }
 
+  const propagateMutation = useMutation({
+    mutationFn: () => levantamentoAPI.propagateSinapi(id!),
+    onSuccess: (data) => {
+      if (data.created > 0) {
+        toast.success(`${data.created} atividades criadas com código SINAPI`)
+      } else {
+        toast.info(data.message || 'Todas as atividades SINAPI já existem')
+      }
+      queryClient.invalidateQueries({ queryKey: ['activity-review-summary', id] })
+      queryClient.invalidateQueries({ queryKey: ['project-activities', id] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const summary = reviewData?.summary || { totalLeafActivities: 0, coveredActivities: 0, coveragePercentage: 0 }
   const activities = reviewData?.activities || []
+  const hasUncovered = summary.totalLeafActivities > summary.coveredActivities
 
   return (
     <div className="space-y-6">
@@ -268,6 +290,35 @@ export function ActivityReviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Propagate SINAPI button */}
+      {hasUncovered && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+          <Database className="h-5 w-5 text-blue-600 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-800">
+              Atividades sem cobertura detectadas
+            </p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              Propague os códigos SINAPI dos templates para criar atividades vinculadas automaticamente.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-blue-300 text-blue-700 hover:bg-blue-100 shrink-0"
+            disabled={propagateMutation.isPending}
+            onClick={() => propagateMutation.mutate()}
+          >
+            {propagateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Database className="h-4 w-4 mr-1.5" />
+            )}
+            Propagar SINAPI
+          </Button>
+        </div>
+      )}
 
       {/* Activities tree table */}
       {activities.length === 0 ? (

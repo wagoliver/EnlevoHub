@@ -691,6 +691,8 @@ export class ProjectActivityService {
         parentId: true,
         order: true,
         weight: true,
+        sinapiCodigo: true,
+        areaTipo: true,
         _count: {
           select: { levantamentoItens: true },
         },
@@ -729,6 +731,8 @@ export class ProjectActivityService {
         parentId: a.parentId,
         order: a.order,
         weight: Number(a.weight),
+        sinapiCodigo: a.sinapiCodigo || null,
+        areaTipo: a.areaTipo || null,
         itemCount: a._count.levantamentoItens,
         totalCost: costMap.get(a.id) || 0,
         children: [],

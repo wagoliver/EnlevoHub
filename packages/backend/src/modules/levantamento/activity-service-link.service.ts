@@ -236,6 +236,141 @@ export class ActivityServiceLinkService {
   }
 
   /**
+   * Propagate SINAPI codes from templates to ACTIVITY-level nodes.
+   * For each template with a sinapiCodigo, finds the matching STAGE
+   * (via existing ActivityServiceLink or name matching) and creates
+   * an ACTIVITY child with the template's SINAPI data.
+   * Idempotent — skips activities that already have the same sinapiCodigo.
+   */
+  async propagateSinapiFromTemplates(tenantId: string, projectId: string) {
+    // Ensure templates exist
+    await this.templateService.seedDefaults(tenantId)
+
+    // Get all active templates with sinapiCodigo
+    const templates = await this.prisma.servicoTemplate.findMany({
+      where: { tenantId, ativo: true, sinapiCodigo: { not: null } },
+      orderBy: [{ order: 'asc' }],
+    })
+
+    if (templates.length === 0) {
+      return { created: 0, skipped: 0, message: 'Nenhum template com código SINAPI encontrado' }
+    }
+
+    // Get all STAGE-level activities with their existing links
+    const stages = await this.prisma.projectActivity.findMany({
+      where: { projectId, level: 'STAGE' },
+      select: {
+        id: true,
+        name: true,
+        order: true,
+        serviceLinks: {
+          select: { servicoTemplateId: true },
+        },
+      },
+    })
+
+    // Get existing ACTIVITY-level nodes with sinapiCodigo
+    const existingActivities = await this.prisma.projectActivity.findMany({
+      where: { projectId, level: 'ACTIVITY', sinapiCodigo: { not: null } },
+      select: { sinapiCodigo: true, parentId: true },
+    })
+
+    // Map: parentId+sinapiCodigo → exists
+    const existingSet = new Set(
+      existingActivities.map(a => `${a.parentId}::${a.sinapiCodigo}`)
+    )
+
+    // Build stage-to-template mapping using links + name fallback
+    const normalizedStages = stages.map(s => ({
+      ...s,
+      normalized: normalize(s.name),
+      linkedTemplateIds: new Set(s.serviceLinks.map(l => l.servicoTemplateId)),
+    }))
+
+    // Get project units for UnitActivity creation
+    const units = await this.prisma.unit.findMany({
+      where: { projectId },
+      select: { id: true },
+    })
+
+    let created = 0
+    let skipped = 0
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const template of templates) {
+        if (!template.sinapiCodigo) continue
+
+        // Find matching stage: first by existing link, then by name
+        let matchedStage = normalizedStages.find(s =>
+          s.linkedTemplateIds.has(template.id)
+        )
+
+        if (!matchedStage) {
+          const normalizedEtapa = normalize(template.etapa)
+          matchedStage = normalizedStages.find(s => s.normalized === normalizedEtapa)
+        }
+
+        if (!matchedStage) {
+          skipped++
+          continue
+        }
+
+        // Check if activity already exists
+        const key = `${matchedStage.id}::${template.sinapiCodigo}`
+        if (existingSet.has(key)) {
+          skipped++
+          continue
+        }
+
+        // Get max order for siblings
+        const maxOrder = await tx.projectActivity.aggregate({
+          where: { parentId: matchedStage.id },
+          _max: { order: true },
+        })
+
+        // Create ACTIVITY-level node with SINAPI data
+        const activity = await tx.projectActivity.create({
+          data: {
+            projectId,
+            name: template.nomeCustom || `SINAPI ${template.sinapiCodigo}`,
+            weight: 1,
+            order: (maxOrder._max.order ?? -1) + 1,
+            level: 'ACTIVITY',
+            parentId: matchedStage.id,
+            scope: 'ALL_UNITS',
+            sinapiCodigo: template.sinapiCodigo,
+            areaTipo: template.areaTipo,
+            tags: template.tags,
+            padrao: template.padrao,
+          },
+        })
+
+        // Create UnitActivity for each unit
+        if (units.length > 0) {
+          await tx.unitActivity.createMany({
+            data: units.map(u => ({
+              activityId: activity.id,
+              unitId: u.id,
+            })),
+          })
+        }
+
+        existingSet.add(key)
+        created++
+      }
+    })
+
+    return {
+      created,
+      skipped,
+      total: templates.length,
+      message: created > 0
+        ? `${created} atividades criadas com código SINAPI`
+        : 'Todas as atividades SINAPI já existem',
+    }
+  }
+
+  /**
    * Manual link: create a specific link between activity and template
    */
   async link(projectActivityId: string, servicoTemplateId: string) {

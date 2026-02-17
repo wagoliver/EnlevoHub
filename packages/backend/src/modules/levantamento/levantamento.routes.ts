@@ -449,6 +449,21 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     }
   })
 
+  fastify.post('/:projectId/propagate-sinapi', {
+    preHandler: [authMiddleware, requirePermission('projects:edit')],
+  }, async (request, reply) => {
+    try {
+      const { projectId } = request.params as { projectId: string }
+      const result = await linkService.propagateSinapiFromTemplates(getTenantId(request), projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   fastify.get('/:projectId/templates-by-activity', {
     preHandler: [authMiddleware, requirePermission('projects:view')],
   }, async (request, reply) => {

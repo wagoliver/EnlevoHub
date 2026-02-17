@@ -771,6 +771,8 @@ export const levantamentoAPI = {
     apiClient.post<any>(`/projects/${projectId}/activity-service-links`, data),
   unlinkActivity: (projectId: string, linkId: string) =>
     apiClient.delete<any>(`/projects/${projectId}/activity-service-links/${linkId}`),
+  propagateSinapi: (projectId: string) =>
+    apiClient.post<any>(`/projects/${projectId}/propagate-sinapi`),
 
   // Servico Templates
   listTemplates: () =>

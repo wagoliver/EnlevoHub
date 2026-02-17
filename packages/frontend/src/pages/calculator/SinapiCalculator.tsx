@@ -24,9 +24,12 @@ interface SinapiCalculatorProps {
   levantamentoId: string
   ambienteId?: string
   activityGroups?: any
+  fixedActivityId?: string
+  fixedActivityName?: string
+  baseQuantity?: number
 }
 
-export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activityGroups }: SinapiCalculatorProps) {
+export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activityGroups, fixedActivityId, fixedActivityName, baseQuantity }: SinapiCalculatorProps) {
   const role = useRole()
   const queryClient = useQueryClient()
   const isRoot = role === 'ROOT'
@@ -72,11 +75,11 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
       queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
       queryClient.invalidateQueries({ queryKey: ['activity-review-summary', projectId] })
       // Auto-save composição to template
-      const parsed = parseActivityValue(selectedActivity)
-      if (parsed.etapa && data.composicao) {
+      const etapaName = fixedActivityName || parseActivityValue(selectedActivity).etapa
+      if (etapaName && data.composicao) {
         levantamentoAPI.ensureTemplate({
           nomeCustom: data.composicao.descricao || `Composição ${data.composicao.codigo}`,
-          etapa: parsed.etapa,
+          etapa: etapaName,
           sinapiCodigo: data.composicao.codigo,
         }).catch(() => {}) // best-effort
       }
@@ -129,25 +132,45 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
       toast.error('Informe um preço válido')
       return
     }
-    const parsed = parseActivityValue(selectedActivity)
-    // Save info for template enrichment after successful add
-    if (parsed.etapa) {
-      pendingTemplateRef.current = {
-        nome: selectedInsumo.descricao,
-        etapa: parsed.etapa,
-        sinapiCodigo: selectedInsumo.codigo,
+    if (fixedActivityId) {
+      if (fixedActivityName) {
+        pendingTemplateRef.current = {
+          nome: selectedInsumo.descricao,
+          etapa: fixedActivityName,
+          sinapiCodigo: selectedInsumo.codigo,
+        }
       }
+      addInsumoMutation.mutate({
+        nome: selectedInsumo.descricao,
+        unidade: selectedInsumo.unidade || 'UN',
+        quantidade: qtd,
+        precoUnitario: preco,
+        sinapiInsumoId: selectedInsumo.id,
+        ambienteId: ambienteId || undefined,
+        projectActivityId: fixedActivityId,
+        etapa: fixedActivityName || undefined,
+      })
+    } else {
+      const parsed = parseActivityValue(selectedActivity)
+      // Save info for template enrichment after successful add
+      if (parsed.etapa) {
+        pendingTemplateRef.current = {
+          nome: selectedInsumo.descricao,
+          etapa: parsed.etapa,
+          sinapiCodigo: selectedInsumo.codigo,
+        }
+      }
+      addInsumoMutation.mutate({
+        nome: selectedInsumo.descricao,
+        unidade: selectedInsumo.unidade || 'UN',
+        quantidade: qtd,
+        precoUnitario: preco,
+        sinapiInsumoId: selectedInsumo.id,
+        ambienteId: ambienteId || undefined,
+        projectActivityId: parsed.projectActivityId || undefined,
+        etapa: parsed.etapa || undefined,
+      })
     }
-    addInsumoMutation.mutate({
-      nome: selectedInsumo.descricao,
-      unidade: selectedInsumo.unidade || 'UN',
-      quantidade: qtd,
-      precoUnitario: preco,
-      sinapiInsumoId: selectedInsumo.id,
-      ambienteId: ambienteId || undefined,
-      projectActivityId: parsed.projectActivityId || undefined,
-      etapa: parsed.etapa || undefined,
-    })
   }
 
   const handleSelectComposicao = (composicao: any) => {
@@ -156,21 +179,31 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
   }
 
   const handleImportComposicao = (data: any) => {
-    const parsed = parseActivityValue(selectedActivity)
-    importComposicaoMutation.mutate({
-      ...data,
-      ambienteId: ambienteId || undefined,
-      projectActivityId: parsed.projectActivityId || undefined,
-      etapa: data.etapa || parsed.etapa || undefined,
-    })
+    if (fixedActivityId) {
+      importComposicaoMutation.mutate({
+        ...data,
+        ambienteId: ambienteId || undefined,
+        projectActivityId: fixedActivityId,
+        etapa: data.etapa || fixedActivityName || undefined,
+        baseQuantity: baseQuantity && baseQuantity > 0 ? baseQuantity : undefined,
+      })
+    } else {
+      const parsed = parseActivityValue(selectedActivity)
+      importComposicaoMutation.mutate({
+        ...data,
+        ambienteId: ambienteId || undefined,
+        projectActivityId: parsed.projectActivityId || undefined,
+        etapa: data.etapa || parsed.etapa || undefined,
+      })
+    }
   }
 
   return (
     <div className="space-y-4">
       <SinapiHelpText />
 
-      {/* Activity selector */}
-      {activityOptions.length > 0 && (
+      {/* Activity selector — hidden when activity is pre-fixed */}
+      {activityOptions.length > 0 && !fixedActivityId && (
         <div className="flex items-center gap-2">
           <GitBranch className="h-4 w-4 text-neutral-400 flex-shrink-0" />
           <span className="text-sm text-neutral-600 flex-shrink-0">Vincular à atividade:</span>

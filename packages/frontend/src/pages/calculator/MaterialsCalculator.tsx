@@ -1,27 +1,31 @@
 import { useState, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { levantamentoAPI, projectsAPI } from '@/lib/api-client'
-import { usePermission } from '@/hooks/usePermission'
-import { Loader2 } from 'lucide-react'
-import { AmbienteSidebar } from './AmbienteSidebar'
-import { AmbienteDetail } from './AmbienteDetail'
-import { AmbienteResumo } from './AmbienteResumo'
-import { AmbienteForm } from './AmbienteForm'
+import { Loader2, AlertCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ActivitySidebar } from './ActivitySidebar'
+import { ActivityDetail } from './ActivityDetail'
+import { ActivityResumo } from './ActivityResumo'
 
 interface MaterialsCalculatorProps {
   projectId: string
 }
 
+/** Collect all STAGE-level activities from the tree */
+function collectStages(items: any[]): any[] {
+  const stages: any[] = []
+  for (const item of items) {
+    if (item.level === 'STAGE') stages.push(item)
+    if (item.children?.length) stages.push(...collectStages(item.children))
+  }
+  return stages
+}
+
 export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
-  const queryClient = useQueryClient()
-  const canEdit = usePermission('projects:edit')
+  const navigate = useNavigate()
 
-  const [selectedAmbienteId, setSelectedAmbienteId] = useState<string | null>(null)
-
-  // Ambiente form state
-  const [ambienteFormOpen, setAmbienteFormOpen] = useState(false)
-  const [editingAmbiente, setEditingAmbiente] = useState<any>(null)
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null)
 
   // Get or create levantamento for this project (project-level, no FloorPlan)
   const { data: levantamento, isLoading: levLoading } = useQuery({
@@ -38,42 +42,20 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
 
   const quantidadeUnidades = project?._count?.units ?? 1
 
-  // Buscar atividades do projeto para extrair etapas (PHASE/STAGE)
-  const { data: activities } = useQuery({
+  // Buscar atividades do projeto
+  const { data: activities, isLoading: activitiesLoading } = useQuery({
     queryKey: ['project-activities', projectId],
     queryFn: () => projectsAPI.listActivities(projectId),
     staleTime: 5 * 60 * 1000,
   })
 
-  const etapas = useMemo(() => {
-    if (!activities || !Array.isArray(activities)) return []
-    const nomes: string[] = []
-    function extract(items: any[]) {
-      for (const item of items) {
-        if (item.level === 'PHASE' || item.level === 'STAGE') {
-          nomes.push(item.name)
-        }
-        if (item.children?.length) extract(item.children)
-      }
-    }
-    extract(activities)
-    return nomes
-  }, [activities])
-
   // Check if project has STAGE activities
   const hasActivities = useMemo(() => {
     if (!activities || !Array.isArray(activities)) return false
-    function hasStages(items: any[]): boolean {
-      for (const item of items) {
-        if (item.level === 'STAGE') return true
-        if (item.children?.length && hasStages(item.children)) return true
-      }
-      return false
-    }
-    return hasStages(activities)
+    return collectStages(activities).length > 0
   }, [activities])
 
-  // Fetch templates grouped by activity (includes phases hierarchy)
+  // Fetch templates grouped by activity
   const { data: activityGroupsData } = useQuery({
     queryKey: ['templates-by-activity', projectId],
     queryFn: () => levantamentoAPI.getTemplatesByActivity(projectId),
@@ -81,108 +63,74 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     staleTime: 2 * 60 * 1000,
   })
 
-  // Ambiente mutations
-  const createAmbienteMutation = useMutation({
-    mutationFn: (data: any) => levantamentoAPI.createAmbiente(projectId, levantamento!.id, data),
-    onSuccess: (data) => {
-      toast.success('Ambiente criado')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
-      setAmbienteFormOpen(false)
-      setEditingAmbiente(null)
-      setSelectedAmbienteId(data.id)
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-
-  const updateAmbienteMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      levantamentoAPI.updateAmbiente(projectId, levantamento!.id, id, data),
-    onSuccess: () => {
-      toast.success('Ambiente atualizado')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
-      setAmbienteFormOpen(false)
-      setEditingAmbiente(null)
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-
-  const deleteAmbienteMutation = useMutation({
-    mutationFn: (id: string) => levantamentoAPI.deleteAmbiente(projectId, levantamento!.id, id),
-    onSuccess: () => {
-      toast.success('Ambiente removido')
-      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
-      if (selectedAmbienteId) setSelectedAmbienteId(null)
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-
-  const ambientes = levantamento?.ambientes || []
   const itens = levantamento?.itens || []
-  const selectedAmbiente = ambientes.find((a: any) => a.id === selectedAmbienteId)
 
-  const handleAmbienteFormSubmit = (data: any) => {
-    if (editingAmbiente) {
-      updateAmbienteMutation.mutate({ id: editingAmbiente.id, data })
-    } else {
-      createAmbienteMutation.mutate(data)
-    }
-  }
+  // Find selected activity from the tree
+  const selectedActivity = useMemo(() => {
+    if (!selectedActivityId || !activities) return null
+    const stages = collectStages(activities)
+    return stages.find((s) => s.id === selectedActivityId) || null
+  }, [selectedActivityId, activities])
+
+  const isLoading = levLoading || activitiesLoading
 
   return (
     <div className="space-y-4">
-      {/* Loading levantamento */}
-      {levLoading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+        </div>
+      ) : !hasActivities ? (
+        /* Empty state — no activities */
+        <div className="rounded-lg border-2 border-dashed border-amber-200 bg-amber-50 p-8 text-center">
+          <AlertCircle className="h-10 w-10 text-amber-400 mx-auto" />
+          <h3 className="mt-3 text-sm font-semibold text-neutral-700">
+            Nenhuma atividade cadastrada
+          </h3>
+          <p className="mt-1 text-xs text-neutral-500 max-w-md mx-auto">
+            Cadastre as atividades do projeto na Fase 01 (Planejamento) para iniciar o levantamento de materiais.
+          </p>
+          <Button
+            size="sm"
+            className="mt-4"
+            onClick={() => navigate('/?phase=1')}
+          >
+            Ir para Planejamento
+          </Button>
         </div>
       ) : levantamento ? (
         /* Sidebar + Content layout */
         <div className="flex gap-0 border rounded-lg overflow-hidden bg-white min-h-[500px]">
           {/* Sidebar */}
           <div className="w-56 flex-shrink-0 border-r bg-neutral-50/50">
-            <AmbienteSidebar
-              ambientes={ambientes}
+            <ActivitySidebar
+              activities={activities || []}
               itens={itens}
-              selectedId={selectedAmbienteId}
-              onSelect={setSelectedAmbienteId}
-              onAdd={() => { setEditingAmbiente(null); setAmbienteFormOpen(true) }}
-              onEdit={(amb) => { setEditingAmbiente(amb); setAmbienteFormOpen(true) }}
-              onDelete={(id) => deleteAmbienteMutation.mutate(id)}
-              canEdit={canEdit}
+              selectedActivityId={selectedActivityId}
+              onSelect={setSelectedActivityId}
             />
           </div>
 
           {/* Main content */}
           <div className="flex-1 p-4 overflow-y-auto">
-            {selectedAmbiente ? (
-              <AmbienteDetail
-                ambiente={selectedAmbiente}
+            {selectedActivity ? (
+              <ActivityDetail
+                activity={selectedActivity}
                 projectId={projectId}
                 levantamentoId={levantamento.id}
                 itens={itens}
-                etapas={etapas}
                 activityGroups={activityGroupsData}
               />
             ) : (
-              <AmbienteResumo
-                ambientes={ambientes}
+              <ActivityResumo
+                activities={activities || []}
                 itens={itens}
-                activityGroups={activityGroupsData}
                 quantidadeUnidades={quantidadeUnidades}
               />
             )}
           </div>
         </div>
       ) : null}
-
-      {/* Ambiente form dialog */}
-      <AmbienteForm
-        open={ambienteFormOpen}
-        onOpenChange={(open) => { setAmbienteFormOpen(open); if (!open) setEditingAmbiente(null) }}
-        onSubmit={handleAmbienteFormSubmit}
-        isPending={createAmbienteMutation.isPending || updateAmbienteMutation.isPending}
-        editData={editingAmbiente}
-      />
     </div>
   )
 }

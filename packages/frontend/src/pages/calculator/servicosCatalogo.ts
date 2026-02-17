@@ -6,7 +6,7 @@
  *  - em quais tipos de ambiente ele é sugerido (ALL = todos)
  */
 
-export type AreaTipo = 'PISO' | 'PAREDE_LIQ' | 'PAREDE_BRUTA' | 'TETO' | 'PERIMETRO' | 'MANUAL'
+export type AreaTipo = 'PISO' | 'PAREDE_LIQ' | 'PAREDE_BRUTA' | 'TETO' | 'PERIMETRO' | 'MANUAL' | 'VOLUME' | 'LINEAR'
 
 export interface ServicoSugerido {
   id: string
@@ -86,6 +86,32 @@ export const AREA_LABELS: Record<AreaTipo, string> = {
   TETO: 'teto',
   PERIMETRO: 'perímetro',
   MANUAL: 'manual',
+  VOLUME: 'volume',
+  LINEAR: 'linear',
+}
+
+/** Mapa areaTipo → unidade de medida */
+export function getUnitForAreaTipo(areaTipo?: string | null): string {
+  switch (areaTipo) {
+    case 'PISO': case 'PAREDE_LIQ': case 'PAREDE_BRUTA': case 'TETO': return 'm²'
+    case 'PERIMETRO': case 'LINEAR': return 'm'
+    case 'VOLUME': return 'm³'
+    default: return 'UN'
+  }
+}
+
+/** Mapa areaTipo → label para o input de quantidade */
+export function getQuantityLabel(areaTipo?: string | null): string {
+  switch (areaTipo) {
+    case 'PISO': return 'Área do piso'
+    case 'PAREDE_LIQ': return 'Área de paredes (líquida)'
+    case 'PAREDE_BRUTA': return 'Área de paredes (bruta)'
+    case 'TETO': return 'Área do teto'
+    case 'PERIMETRO': return 'Perímetro'
+    case 'LINEAR': return 'Comprimento'
+    case 'VOLUME': return 'Volume'
+    default: return 'Quantidade'
+  }
 }
 
 /** Lista única de etapas extraídas do catálogo, na ordem natural de obra. */

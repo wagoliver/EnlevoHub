@@ -34,6 +34,8 @@ interface ManualCalculatorProps {
   ambienteId?: string
   etapas?: string[]
   activityGroups?: any
+  fixedActivityId?: string
+  fixedActivityName?: string
 }
 
 interface EditingItem {
@@ -47,7 +49,7 @@ interface EditingItem {
 
 const emptyItem: EditingItem = { nome: '', unidade: 'UN', quantidade: '', precoUnitario: '', etapa: '' }
 
-export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [], activityGroups }: ManualCalculatorProps) {
+export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [], activityGroups, fixedActivityId, fixedActivityName }: ManualCalculatorProps) {
   const queryClient = useQueryClient()
 
   // Derive dropdown options from activityGroups (STAGE names) or fallback to etapas
@@ -213,16 +215,28 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
       toast.error('Preencha nome, quantidade e preço')
       return
     }
-    const parsed = parseEtapaValue(newItem.etapa)
-    addMutation.mutate({
-      nome: newItem.nome,
-      unidade: newItem.unidade || 'UN',
-      quantidade: qtd,
-      precoUnitario: preco,
-      etapa: parsed.etapa || undefined,
-      projectActivityId: parsed.projectActivityId || undefined,
-      ambienteId: ambienteId || undefined,
-    })
+    if (fixedActivityId) {
+      addMutation.mutate({
+        nome: newItem.nome,
+        unidade: newItem.unidade || 'UN',
+        quantidade: qtd,
+        precoUnitario: preco,
+        etapa: fixedActivityName || undefined,
+        projectActivityId: fixedActivityId,
+        ambienteId: ambienteId || undefined,
+      })
+    } else {
+      const parsed = parseEtapaValue(newItem.etapa)
+      addMutation.mutate({
+        nome: newItem.nome,
+        unidade: newItem.unidade || 'UN',
+        quantidade: qtd,
+        precoUnitario: preco,
+        etapa: parsed.etapa || undefined,
+        projectActivityId: parsed.projectActivityId || undefined,
+        ambienteId: ambienteId || undefined,
+      })
+    }
   }
 
   const handleSaveEdit = () => {
@@ -233,18 +247,32 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
       toast.error('Preencha nome, quantidade e preço')
       return
     }
-    const parsed = parseEtapaValue(editingData.etapa)
-    updateMutation.mutate({
-      itemId: editingId,
-      data: {
-        nome: editingData.nome,
-        unidade: editingData.unidade,
-        quantidade: qtd,
-        precoUnitario: preco,
-        etapa: parsed.etapa || null,
-        projectActivityId: parsed.projectActivityId || null,
-      },
-    })
+    if (fixedActivityId) {
+      updateMutation.mutate({
+        itemId: editingId,
+        data: {
+          nome: editingData.nome,
+          unidade: editingData.unidade,
+          quantidade: qtd,
+          precoUnitario: preco,
+          etapa: fixedActivityName || null,
+          projectActivityId: fixedActivityId,
+        },
+      })
+    } else {
+      const parsed = parseEtapaValue(editingData.etapa)
+      updateMutation.mutate({
+        itemId: editingId,
+        data: {
+          nome: editingData.nome,
+          unidade: editingData.unidade,
+          quantidade: qtd,
+          precoUnitario: preco,
+          etapa: parsed.etapa || null,
+          projectActivityId: parsed.projectActivityId || null,
+        },
+      })
+    }
   }
 
   const startEdit = (item: any) => {
@@ -276,7 +304,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
           <TableCell><Input className="h-7 text-xs text-right" type="number" value={editingData.quantidade} onChange={(e) => setEditingData({ ...editingData, quantidade: e.target.value })} /></TableCell>
           <TableCell><Input className="h-7 text-xs text-right" type="number" step="0.01" value={editingData.precoUnitario} onChange={(e) => setEditingData({ ...editingData, precoUnitario: e.target.value })} /></TableCell>
           <TableCell className="text-xs text-right font-medium">-</TableCell>
-          {viewMode === 'simple' && (
+          {viewMode === 'simple' && !fixedActivityId && (
             <TableCell>
               <Select value={editingData.etapa || '_none'} onValueChange={(v) => setEditingData({ ...editingData, etapa: v === '_none' ? '' : v })}>
                 <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
@@ -315,7 +343,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
         <TableCell className="text-xs text-right font-mono">{Number(item.quantidade).toFixed(2)}</TableCell>
         <TableCell className="text-xs text-right font-mono">{formatCurrency(Number(item.precoUnitario))}</TableCell>
         <TableCell className="text-xs text-right font-mono font-medium">{formatCurrency(total)}</TableCell>
-        {viewMode === 'simple' && (
+        {viewMode === 'simple' && !fixedActivityId && (
           <TableCell className="text-xs text-neutral-500">{item.etapa || '-'}</TableCell>
         )}
         <TableCell>
@@ -355,7 +383,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
         <Input className="h-7 text-xs text-right" type="number" step="0.01" placeholder="0,00" value={newItem.precoUnitario} onChange={(e) => setNewItem({ ...newItem, precoUnitario: e.target.value })} />
       </TableCell>
       <TableCell />
-      {viewMode === 'simple' && (
+      {viewMode === 'simple' && !fixedActivityId && (
         <TableCell>
           <Select value={newItem.etapa || '_none'} onValueChange={(v) => setNewItem({ ...newItem, etapa: v === '_none' ? '' : v })}>
             <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Etapa" /></SelectTrigger>
@@ -434,7 +462,7 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
                 <TableHead className="text-xs w-24 text-right">Qtd</TableHead>
                 <TableHead className="text-xs w-28 text-right">Preço Unit.</TableHead>
                 <TableHead className="text-xs w-28 text-right">Total</TableHead>
-                <TableHead className="text-xs w-32">Etapa</TableHead>
+                {!fixedActivityId && <TableHead className="text-xs w-32">Etapa</TableHead>}
                 <TableHead className="text-xs w-20" />
               </TableRow>
             </TableHeader>

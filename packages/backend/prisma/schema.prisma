@@ -1107,6 +1107,8 @@ enum AreaTipo {
   TETO
   PERIMETRO
   MANUAL
+  VOLUME
+  LINEAR
 }
 
 model ServicoTemplate {

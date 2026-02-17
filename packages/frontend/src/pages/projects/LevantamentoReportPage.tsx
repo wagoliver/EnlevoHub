@@ -71,8 +71,7 @@ export function LevantamentoReportPage() {
   }
 
   const stats = reportData?.stats || { totalItens: 0, totalGeral: 0, totalAmbientes: 0, qtdEtapas: 0 }
-  const items = reportData?.items || []
-  const byEtapa = reportData?.byEtapa || []
+  const items = (reportData?.items || []) as Array<{ id: string; nome: string; unidade: string; quantidade: number; precoUnitario: number; total: number; etapa: string | null; ambienteNome: string | null }>
 
   // Group items by etapa for display
   const groupedByEtapa = new Map<string, typeof items>()

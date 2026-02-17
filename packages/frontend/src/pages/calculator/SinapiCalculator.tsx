@@ -5,6 +5,7 @@ import { levantamentoAPI } from '@/lib/api-client'
 import { useRole } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -12,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Search, Database, Upload, Loader2, GitBranch } from 'lucide-react'
+import { Search, Database, Upload, Loader2, GitBranch, Plus, X, Package } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
 import { ComposicaoDetailDialog } from './ComposicaoDetailDialog'
 import { SinapiImportDialog } from './SinapiImportDialog'
@@ -36,6 +37,11 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
   const [selectedComposicaoId, setSelectedComposicaoId] = useState<string>('')
   const [importOpen, setImportOpen] = useState(false)
   const [selectedActivity, setSelectedActivity] = useState<string>('_none')
+
+  // Selected insumo for add form
+  const [selectedInsumo, setSelectedInsumo] = useState<any>(null)
+  const [insumoQtd, setInsumoQtd] = useState('1')
+  const [insumoPreco, setInsumoPreco] = useState('')
 
   // Build activity dropdown options from activityGroups (same pattern as ManualCalculator)
   const activityOptions = useMemo(() => {
@@ -69,8 +75,49 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
     onError: (e: Error) => toast.error(e.message),
   })
 
+  const addInsumoMutation = useMutation({
+    mutationFn: (data: any) => levantamentoAPI.addItem(projectId, levantamentoId, data),
+    onSuccess: () => {
+      toast.success('Insumo adicionado ao levantamento')
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
+      queryClient.invalidateQueries({ queryKey: ['activity-review-summary', projectId] })
+      setSelectedInsumo(null)
+      setInsumoQtd('1')
+      setInsumoPreco('')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const handleSelectInsumo = (insumo: any) => {
-    toast.info(`Insumo ${insumo.codigo} selecionado. Use o modo Manual para adicionar com preço personalizado.`)
+    setSelectedInsumo(insumo)
+    setInsumoQtd('1')
+    setInsumoPreco('')
+  }
+
+  const handleAddInsumo = () => {
+    if (!selectedInsumo) return
+    const qtd = parseFloat(insumoQtd)
+    const preco = parseFloat(insumoPreco)
+    if (isNaN(qtd) || qtd <= 0) {
+      toast.error('Informe uma quantidade válida')
+      return
+    }
+    if (isNaN(preco) || preco < 0) {
+      toast.error('Informe um preço válido')
+      return
+    }
+    const parsed = parseActivityValue(selectedActivity)
+    addInsumoMutation.mutate({
+      nome: selectedInsumo.descricao,
+      unidade: selectedInsumo.unidade || 'UN',
+      quantidade: qtd,
+      precoUnitario: preco,
+      sinapiInsumoId: selectedInsumo.id,
+      ambienteId: ambienteId || undefined,
+      projectActivityId: parsed.projectActivityId || undefined,
+      etapa: parsed.etapa || undefined,
+    })
   }
 
   const handleSelectComposicao = (composicao: any) => {
@@ -135,33 +182,105 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
             Importar Base SINAPI
           </Button>
         )}
-        {importComposicaoMutation.isPending && (
+        {(importComposicaoMutation.isPending || addInsumoMutation.isPending) && (
           <Badge variant="secondary" className="gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Importando...
+            {importComposicaoMutation.isPending ? 'Importando...' : 'Adicionando...'}
           </Badge>
         )}
       </div>
 
-      <div className="rounded-lg border bg-neutral-50 p-8 text-center">
-        <Database className="h-10 w-10 text-neutral-300 mx-auto" />
-        <h3 className="mt-3 text-sm font-medium text-neutral-700">
-          Calculadora SINAPI
-        </h3>
-        <p className="mt-1 text-xs text-neutral-500 max-w-md mx-auto">
-          Busque composições de serviços da base SINAPI e importe automaticamente os insumos
-          com coeficientes e preços de referência para o seu levantamento.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={() => { setSearchMode('composicoes'); setSearchOpen(true) }}
-        >
-          <Search className="h-3.5 w-3.5 mr-1" />
-          Iniciar Busca
-        </Button>
-      </div>
+      {/* Selected insumo — add form */}
+      {selectedInsumo && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 flex-1 min-w-0">
+              <Package className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600 shrink-0">
+                    SINAPI {selectedInsumo.codigo}
+                  </Badge>
+                  <Badge variant="secondary" className="text-[10px] shrink-0">
+                    {selectedInsumo.unidade}
+                  </Badge>
+                </div>
+                <p className="text-sm font-medium text-neutral-800 mt-1">{selectedInsumo.descricao}</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-neutral-400 hover:text-neutral-600 shrink-0"
+              onClick={() => setSelectedInsumo(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-neutral-600">Quantidade</label>
+              <Input
+                type="number"
+                className="h-8 w-28 text-sm"
+                value={insumoQtd}
+                onChange={(e) => setInsumoQtd(e.target.value)}
+                min="0.01"
+                step="0.01"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-neutral-600">Preço Unitário (R$)</label>
+              <Input
+                type="number"
+                className="h-8 w-32 text-sm"
+                placeholder="0,00"
+                value={insumoPreco}
+                onChange={(e) => setInsumoPreco(e.target.value)}
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={handleAddInsumo}
+              disabled={addInsumoMutation.isPending}
+            >
+              {addInsumoMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-1.5" />
+              )}
+              Adicionar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!selectedInsumo && (
+        <div className="rounded-lg border bg-neutral-50 p-8 text-center">
+          <Database className="h-10 w-10 text-neutral-300 mx-auto" />
+          <h3 className="mt-3 text-sm font-medium text-neutral-700">
+            Calculadora SINAPI
+          </h3>
+          <p className="mt-1 text-xs text-neutral-500 max-w-md mx-auto">
+            Busque composições de serviços da base SINAPI e importe automaticamente os insumos
+            com coeficientes e preços de referência para o seu levantamento.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => { setSearchMode('composicoes'); setSearchOpen(true) }}
+          >
+            <Search className="h-3.5 w-3.5 mr-1" />
+            Iniciar Busca
+          </Button>
+        </div>
+      )}
 
       {/* Dialogs */}
       <SinapiSearchDialog

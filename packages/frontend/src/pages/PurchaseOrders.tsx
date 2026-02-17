@@ -317,8 +317,7 @@ export function PurchaseOrders() {
             }}
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: ['workflow-check'] })
-              const nextPhase = parseInt(phaseParam, 10) + 1
-              navigate(nextPhase <= 8 ? `/?phase=${nextPhase}` : '/')
+              navigate(`/?phase=${phaseParam}`)
             }}
           >
             <CheckCircle2 className="h-5 w-5" />

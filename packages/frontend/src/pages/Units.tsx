@@ -32,13 +32,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Separator } from '@/components/ui/separator'
 import { UnitFormDialog } from './projects/UnitFormDialog'
 import { FloorPlanManager } from './projects/FloorPlanManager'
 import { BlockManager } from './projects/BlockManager'
 import { BulkGenerateWizard } from './projects/BulkGenerateWizard'
 import {
-  Plus,
   Edit,
   Trash2,
   Home,
@@ -47,9 +46,23 @@ import {
   Layers,
   X,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
+  ChevronLeft,
+  FileImage,
+  Building2,
+  MapPin,
+  FolderOpen,
 } from 'lucide-react'
 import { WorkflowStepper } from '@/components/WorkflowStepper'
+
+const statusLabels: Record<string, string> = {
+  PLANNING: 'Planejamento',
+  IN_PROGRESS: 'Em Andamento',
+  PAUSED: 'Pausado',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+}
 
 const unitTypeLabel: Record<string, string> = {
   APARTMENT: 'Apartamento',
@@ -70,10 +83,6 @@ const unitStatusVariant: Record<string, any> = {
   RESERVED: 'reserved',
   SOLD: 'sold',
   BLOCKED: 'blocked',
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
 export function Units() {
@@ -97,6 +106,7 @@ export function Units() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [unitToDelete, setUnitToDelete] = useState<any>(null)
   const [showWizard, setShowWizard] = useState(false)
+  const [wizardStep, setWizardStep] = useState(1) // 1=Plantas, 2=Blocos, 3=Unidades
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
 
@@ -231,49 +241,166 @@ export function Units() {
       )}
 
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Unidades</h1>
-        <p className="text-neutral-500 mt-1">Gerencie plantas, blocos e unidades dos seus projetos.</p>
-      </div>
-
-      {/* Project Selector */}
-      <div className="w-[300px]">
-        <Select value={selectedProject} onValueChange={setSelectedProject}>
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione um projeto" />
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((p: any) => (
-              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <h1 className="text-2xl font-bold text-neutral-900">Plantas, Blocos e Unidades</h1>
+        <p className="text-neutral-500 mt-1">Defina a estrutura do projeto — modelos de planta, blocos/torres e unidades individuais.</p>
       </div>
 
       {!selectedProject ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-16">
-          <Home className="h-12 w-12 text-neutral-300" />
-          <h3 className="mt-4 text-lg font-medium text-neutral-900">Selecione um projeto</h3>
-          <p className="mt-2 text-sm text-neutral-500">
-            Escolha um projeto acima para gerenciar suas unidades.
-          </p>
+        <div>
+          <div className="text-center mb-6">
+            <FolderOpen className="h-12 w-12 text-neutral-300 mx-auto" />
+            <h3 className="mt-4 text-lg font-medium text-neutral-900">Selecione um projeto</h3>
+            <p className="mt-1 text-sm text-neutral-500">
+              Escolha um projeto para gerenciar suas plantas, blocos e unidades.
+            </p>
+          </div>
+
+          {projects.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
+              <Home className="h-10 w-10 text-neutral-300" />
+              <p className="mt-3 text-sm text-neutral-500">
+                Nenhum projeto cadastrado. Crie um projeto primeiro no Dashboard.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate('/?phase=1')}
+              >
+                Ir para o Dashboard
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {projects.map((p: any) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelectedProject(p.id)}
+                  className="flex flex-col items-start gap-3 rounded-xl border-2 border-neutral-200 bg-white p-5 text-left transition-all duration-200 hover:border-[#b8a378] hover:shadow-md hover:scale-[1.01]"
+                >
+                  <div className="flex items-center gap-3 w-full">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#b8a378]/10 flex items-center justify-center">
+                      <Home className="h-5 w-5 text-[#b8a378]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-neutral-900 truncate">{p.name}</h4>
+                      <Badge variant="secondary" className="text-[10px] mt-0.5">
+                        {statusLabels[p.status as string] || p.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  {p.address && (
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">
+                        {p.address.neighborhood && `${p.address.neighborhood}, `}{p.address.city}/{p.address.state}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-4 text-xs text-neutral-400">
+                    {(p._count?.units ?? 0) > 0 && (
+                      <span>{p._count.units} unidade{p._count.units > 1 ? 's' : ''}</span>
+                    )}
+                    {(p._count?.units ?? 0) === 0 && (
+                      <span>Sem unidades</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        <Tabs defaultValue="units" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="floor-plans">Plantas</TabsTrigger>
-            <TabsTrigger value="blocks">Blocos</TabsTrigger>
-            <TabsTrigger value="units">Unidades</TabsTrigger>
-          </TabsList>
+        <div className="space-y-6">
+          {/* Selected project indicator */}
+          <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50/50 px-4 py-2.5">
+            <Home className="h-4 w-4 text-[#b8a378] flex-shrink-0" />
+            <span className="text-sm font-medium text-neutral-800 flex-1 truncate">
+              {projects.find((p: any) => p.id === selectedProject)?.name}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-neutral-500 hover:text-neutral-700 flex-shrink-0 h-7"
+              onClick={() => { setSelectedProject(''); setWizardStep(1) }}
+            >
+              Trocar projeto
+            </Button>
+          </div>
 
-          <TabsContent value="floor-plans">
+          {/* Wizard Stepper */}
+          <div className="flex items-center justify-center gap-2">
+            {[
+              { step: 1, label: 'Plantas', icon: FileImage, count: floorPlans.length },
+              { step: 2, label: 'Blocos', icon: Building2, count: blocks.length },
+              { step: 3, label: 'Unidades', icon: Home, count: pagination?.total ?? units.length },
+            ].map((s, idx) => {
+              const isActive = wizardStep === s.step
+              const isDone = wizardStep > s.step
+              const StepIcon = s.icon
+              return (
+                <div key={s.step} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(s.step)}
+                    className="flex flex-col items-center gap-1.5 focus:outline-none group"
+                  >
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300
+                        ${isActive
+                          ? 'bg-gradient-to-br from-[#b8a378] to-[#9a8a6a] text-white shadow-md scale-110'
+                          : isDone
+                            ? 'bg-gradient-to-br from-[#b8a378] to-[#9a8a6a] text-white'
+                            : 'border-2 border-dashed border-neutral-300 bg-white text-neutral-400 group-hover:border-neutral-400'
+                        }
+                      `}
+                    >
+                      {isDone
+                        ? <CheckCircle2 className="h-4 w-4" />
+                        : isActive
+                          ? <StepIcon className="h-4 w-4" />
+                          : <span className="text-xs font-bold">{s.step}</span>
+                      }
+                    </div>
+                    <span className={`text-xs font-medium transition-colors ${
+                      isActive
+                        ? 'text-neutral-900'
+                        : isDone
+                          ? 'text-neutral-600'
+                          : 'text-neutral-400'
+                    }`}>
+                      {s.label}
+                    </span>
+                    {s.count > 0 && (
+                      <span className={`text-[10px] -mt-1 ${isDone || isActive ? 'text-[#b8a378]' : 'text-neutral-400'}`}>
+                        {s.count} cadastrado(s)
+                      </span>
+                    )}
+                  </button>
+                  {idx < 2 && (
+                    <div className={`h-px w-12 mb-7 ${isDone ? 'bg-[#b8a378]' : 'bg-neutral-200'}`} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <Separator />
+
+          {/* Step 1: Plantas */}
+          {wizardStep === 1 && (
             <FloorPlanManager projectId={selectedProject} />
-          </TabsContent>
+          )}
 
-          <TabsContent value="blocks">
+          {/* Step 2: Blocos */}
+          {wizardStep === 2 && (
             <BlockManager projectId={selectedProject} />
-          </TabsContent>
+          )}
 
-          <TabsContent value="units" className="space-y-4">
+          {/* Step 3: Unidades */}
+          {wizardStep === 3 && (
+          <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
@@ -282,20 +409,12 @@ export function Units() {
                 </h3>
                 <FormTooltip text="Código único da unidade dentro do projeto" />
               </div>
-              <div className="flex gap-2">
-                {canCreate && (
-                  <>
-                    <Button variant="outline" onClick={() => setShowWizard(true)}>
-                      <Layers className="mr-2 h-4 w-4" />
-                      Gerar em Lote
-                    </Button>
-                    <Button onClick={() => { setEditingUnit(null); setShowFormDialog(true) }}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Adicionar Unidade
-                    </Button>
-                  </>
-                )}
-              </div>
+              {canCreate && (
+                <Button variant="outline" onClick={() => setShowWizard(true)}>
+                  <Layers className="mr-2 h-4 w-4" />
+                  Gerar em Lote
+                </Button>
+              )}
             </div>
 
             {/* Filters */}
@@ -399,16 +518,10 @@ export function Units() {
                   Nenhuma unidade cadastrada. Use 'Gerar em Lote' para criar várias unidades de uma vez.
                 </p>
                 {canCreate && (
-                  <div className="mt-6 flex gap-3">
-                    <Button variant="outline" onClick={() => setShowWizard(true)}>
-                      <Layers className="mr-2 h-4 w-4" />
-                      Gerar em Lote
-                    </Button>
-                    <Button onClick={() => { setEditingUnit(null); setShowFormDialog(true) }}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Adicionar Unidade
-                    </Button>
-                  </div>
+                  <Button className="mt-6" variant="outline" onClick={() => setShowWizard(true)}>
+                    <Layers className="mr-2 h-4 w-4" />
+                    Gerar em Lote
+                  </Button>
                 )}
               </div>
             ) : (
@@ -431,13 +544,10 @@ export function Units() {
                             <FormTooltip text="Código único da unidade dentro do projeto" />
                           </div>
                         </TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Bloco</TableHead>
                         <TableHead>Planta</TableHead>
+                        <TableHead>Bloco</TableHead>
                         <TableHead>Andar</TableHead>
                         <TableHead>Área (m²)</TableHead>
-                        <TableHead>Quartos</TableHead>
-                        <TableHead>Preço</TableHead>
                         <TableHead>
                           <div className="flex items-center gap-1">
                             Status
@@ -459,13 +569,10 @@ export function Units() {
                             </TableCell>
                           )}
                           <TableCell className="font-medium">{unit.code}</TableCell>
-                          <TableCell>{unitTypeLabel[unit.type] || unit.type}</TableCell>
-                          <TableCell>{unit.block?.name || '-'}</TableCell>
                           <TableCell>{unit.floorPlan?.name || '-'}</TableCell>
+                          <TableCell>{unit.block?.name || '-'}</TableCell>
                           <TableCell>{unit.floor ?? '-'}</TableCell>
-                          <TableCell>{unit.area}</TableCell>
-                          <TableCell>{unit.bedrooms ?? '-'}</TableCell>
-                          <TableCell>{formatCurrency(unit.price)}</TableCell>
+                          <TableCell>{unit.area ?? '-'}</TableCell>
                           <TableCell>
                             <Badge variant={unitStatusVariant[unit.status]}>
                               {unitStatusLabel[unit.status]}
@@ -533,28 +640,57 @@ export function Units() {
                 )}
               </>
             )}
-          </TabsContent>
+          </div>
+          )}
 
-          {/* Concluir button */}
-          {phaseParam && (
-            <div className="flex items-center justify-end pt-4 pb-2">
+          {/* Wizard Navigation */}
+          <Separator />
+          <div className="flex items-center justify-between">
+            {wizardStep > 1 ? (
               <Button
-                size="lg"
-                className="gap-2 text-white font-semibold shadow-md"
+                variant="outline"
+                size="default"
+                className="gap-1.5 border-2 border-neutral-300 text-neutral-600 hover:border-[#b8a378] hover:text-neutral-800 font-medium"
+                onClick={() => setWizardStep(wizardStep - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </Button>
+            ) : (
+              <div />
+            )}
+            {wizardStep < 3 ? (
+              <Button
+                size="default"
+                className="gap-1.5 text-white font-semibold border-2 shadow-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #b8a378, #9a8a6a)',
+                  borderColor: '#9a8a6a',
+                }}
+                onClick={() => setWizardStep(wizardStep + 1)}
+              >
+                Próximo
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            ) : phaseParam ? (
+              <Button
+                size="default"
+                className="gap-2 text-white font-semibold shadow-sm"
                 style={{
                   background: 'linear-gradient(135deg, #b8a378, #9a8a6a)',
                 }}
                 onClick={() => {
                   queryClient.invalidateQueries({ queryKey: ['workflow-check'] })
-                  const nextPhase = parseInt(phaseParam, 10) + 1
-                  navigate(nextPhase <= 8 ? `/?phase=${nextPhase}` : '/')
+                  navigate(`/?phase=${phaseParam}`)
                 }}
               >
                 <CheckCircle2 className="h-5 w-5" />
                 Concluir Etapa
               </Button>
-            </div>
-          )}
+            ) : (
+              <div />
+            )}
+          </div>
 
           {/* Form Dialog */}
           <UnitFormDialog
@@ -636,7 +772,7 @@ export function Units() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </Tabs>
+        </div>
       )}
     </div>
   )

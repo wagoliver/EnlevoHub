@@ -77,7 +77,7 @@ export function BulkGenerateWizard({ projectId, open, onOpenChange }: BulkGenera
 
   // Step 2 - Blocks & Floors
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([])
-  const [floors, setFloors] = useState('3')
+  const [floors, setFloors] = useState('1')
   const [startFloor, setStartFloor] = useState('1')
 
   // Step 3 - Code Pattern
@@ -150,7 +150,7 @@ export function BulkGenerateWizard({ projectId, open, onOpenChange }: BulkGenera
       setStep(1)
       setSelectedPlans([])
       setSelectedBlockIds([])
-      setFloors('3')
+      setFloors('1')
       setStartFloor('1')
       setCodePattern('BLOCO_ANDAR_SEQ')
       setCodePrefix('')
@@ -280,7 +280,7 @@ export function BulkGenerateWizard({ projectId, open, onOpenChange }: BulkGenera
                             <div className="flex gap-3 text-xs text-neutral-500 mt-0.5">
                               <span>{fp.area} m²</span>
                               {fp.bedrooms != null && <span>{fp.bedrooms}q</span>}
-                              <span>{formatCurrency(fp.defaultPrice)}</span>
+                              {fp.defaultPrice != null && <span>{formatCurrency(fp.defaultPrice)}</span>}
                             </div>
                           </div>
                         </div>
@@ -504,7 +504,7 @@ export function BulkGenerateWizard({ projectId, open, onOpenChange }: BulkGenera
                           <TableCell className="text-sm">{unit.blockName || '-'}</TableCell>
                           <TableCell className="text-sm">{unit.floor}</TableCell>
                           <TableCell className="text-sm">{unit.area} m²</TableCell>
-                          <TableCell className="text-sm">{formatCurrency(unit.price)}</TableCell>
+                          <TableCell className="text-sm">{unit.price != null ? formatCurrency(unit.price) : '-'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

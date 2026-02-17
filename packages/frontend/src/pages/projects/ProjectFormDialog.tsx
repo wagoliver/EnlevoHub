@@ -44,7 +44,6 @@ const projectFormSchema = z.object({
   description: z.string().optional(),
   status: z.enum(['PLANNING', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED']),
   budget: z.coerce.number().positive('Orçamento deve ser positivo'),
-  quantidadeUnidades: z.coerce.number().int().min(1, 'Mínimo 1').max(9999, 'Máximo 9999'),
   startDate: z.string().optional(),
   expectedEndDate: z.string().optional(),
   street: z.string().min(2, 'Rua é obrigatória'),
@@ -90,7 +89,6 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
           description: project.description || '',
           status: project.status,
           budget: project.budget,
-          quantidadeUnidades: project.quantidadeUnidades || 1,
           startDate: project.startDate
             ? new Date(project.startDate).toISOString().split('T')[0]
             : '',
@@ -110,7 +108,6 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
           description: '',
           status: 'PLANNING' as const,
           budget: 0,
-          quantidadeUnidades: 1,
           startDate: '',
           expectedEndDate: '',
           street: '',
@@ -125,12 +122,11 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
 
   const mutation = useMutation({
     mutationFn: async (values: ProjectFormValues) => {
-      const payload = {
+      const payload: any = {
         name: values.name,
         description: values.description || undefined,
         status: values.status,
         budget: values.budget,
-        quantidadeUnidades: values.quantidadeUnidades,
         startDate: values.startDate
           ? new Date(values.startDate).toISOString()
           : undefined,
@@ -146,6 +142,11 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
           state: values.state,
           zipCode: values.zipCode,
         },
+      }
+
+      // Store template key in metadata so floor plan can offer contextual room presets
+      if (!isEdit && selectedTemplateKey) {
+        payload.metadata = { templateKey: selectedTemplateKey }
       }
 
       if (isEdit) {
@@ -370,25 +371,6 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
                   {form.formState.errors.budget && (
                     <p className="text-sm text-destructive mt-1">
                       {form.formState.errors.budget.message}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="quantidadeUnidades">Quantidade de Unidades</Label>
-                  <Input
-                    id="quantidadeUnidades"
-                    type="number"
-                    min={1}
-                    max={9999}
-                    {...form.register('quantidadeUnidades')}
-                  />
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Para projetos com múltiplas unidades iguais (ex: condomínio).
-                  </p>
-                  {form.formState.errors.quantidadeUnidades && (
-                    <p className="text-sm text-destructive mt-1">
-                      {form.formState.errors.quantidadeUnidades.message}
                     </p>
                   )}
                 </div>
@@ -643,12 +625,6 @@ export function ProjectFormDialog({ open, onOpenChange, project }: ProjectFormDi
                     form.getValues('budget'),
                   )}
                 </span>
-                {form.getValues('quantidadeUnidades') > 1 && (
-                  <>
-                    <span className="text-neutral-500">Unidades:</span>
-                    <span>{form.getValues('quantidadeUnidades')}</span>
-                  </>
-                )}
                 <span className="text-neutral-500">Endereço:</span>
                 <span>
                   {form.getValues('street')}, {form.getValues('number')}

@@ -171,7 +171,8 @@ model FloorPlan {
   area         Decimal  @db.Decimal(10, 2)
   bedrooms     Int?
   bathrooms    Int?
-  defaultPrice Decimal  @db.Decimal(15, 2)
+  defaultPrice Decimal? @db.Decimal(15, 2)
+  detalhado    Boolean  @default(false)
   metadata     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -179,11 +180,34 @@ model FloorPlan {
   // Relations
   project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   units          Unit[]
+  rooms          FloorPlanRoom[]
   levantamentos  ProjetoLevantamento[]
 
   @@unique([projectId, name])
   @@index([projectId])
   @@map("floor_plans")
+}
+
+model FloorPlanRoom {
+  id           String   @id @default(uuid())
+  floorPlanId  String
+  nome         String
+  presetKey    String?
+  tags         String[] @default([])
+  comprimento  Decimal  @db.Decimal(8, 2)
+  largura      Decimal  @db.Decimal(8, 2)
+  peDireito    Decimal  @db.Decimal(4, 2) @default(2.80)
+  qtdPortas    Int      @default(1)
+  qtdJanelas   Int      @default(1)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  floorPlan FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+
+  @@index([floorPlanId])
+  @@map("floor_plan_rooms")
 }
 
 model Block {
@@ -242,7 +266,7 @@ model Unit {
   area        Decimal    @db.Decimal(10, 2)
   bedrooms    Int?
   bathrooms   Int?
-  price       Decimal    @db.Decimal(15, 2)
+  price       Decimal?   @db.Decimal(15, 2)
   status      UnitStatus @default(AVAILABLE)
   blockId     String?
   floorPlanId String?

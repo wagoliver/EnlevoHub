@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI, projectsAPI } from '@/lib/api-client'
 import { usePermission } from '@/hooks/usePermission'
-import { Loader2, Calculator } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { AmbienteSidebar } from './AmbienteSidebar'
 import { AmbienteDetail } from './AmbienteDetail'
 import { AmbienteResumo } from './AmbienteResumo'
@@ -29,14 +29,14 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
     queryFn: () => levantamentoAPI.getForProject(projectId),
   })
 
-  // Fetch project data for quantidadeUnidades
+  // Fetch project data (uses _count.units as multiplier)
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projectsAPI.getById(projectId),
     staleTime: 5 * 60 * 1000,
   })
 
-  const quantidadeUnidades = project?.quantidadeUnidades ?? 1
+  const quantidadeUnidades = project?._count?.units ?? 1
 
   // Buscar atividades do projeto para extrair etapas (PHASE/STAGE)
   const { data: activities } = useQuery({
@@ -130,12 +130,6 @@ export function MaterialsCalculator({ projectId }: MaterialsCalculatorProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Calculator className="h-5 w-5 text-neutral-500" />
-        <h2 className="text-lg font-semibold">Calculadora de Materiais</h2>
-      </div>
-
       {/* Loading levantamento */}
       {levLoading ? (
         <div className="flex items-center justify-center py-8">

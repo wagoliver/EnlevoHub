@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { projectsAPI } from '@/lib/api-client'
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -20,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Ruler, BedDouble, Bath } from 'lucide-react'
 
 const typeLabels: Record<string, string> = {
   APARTMENT: 'Apartamento',
@@ -53,7 +54,6 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
   const [area, setArea] = useState('')
   const [bedrooms, setBedrooms] = useState('')
   const [bathrooms, setBathrooms] = useState('')
-  const [price, setPrice] = useState('')
   const [status, setStatus] = useState('AVAILABLE')
   const [blockId, setBlockId] = useState('')
   const [floorPlanId, setFloorPlanId] = useState('')
@@ -71,6 +71,11 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
     enabled: open,
   })
 
+  const selectedPlan = useMemo(
+    () => floorPlanId && floorPlanId !== 'NONE' ? floorPlans.find((p: any) => p.id === floorPlanId) : null,
+    [floorPlanId, floorPlans],
+  )
+
   useEffect(() => {
     if (unit) {
       setCode(unit.code || '')
@@ -79,7 +84,6 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
       setArea(unit.area != null ? String(unit.area) : '')
       setBedrooms(unit.bedrooms != null ? String(unit.bedrooms) : '')
       setBathrooms(unit.bathrooms != null ? String(unit.bathrooms) : '')
-      setPrice(unit.price != null ? String(unit.price) : '')
       setStatus(unit.status || 'AVAILABLE')
       setBlockId(unit.blockId || unit.block?.id || '')
       setFloorPlanId(unit.floorPlanId || unit.floorPlan?.id || '')
@@ -90,7 +94,6 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
       setArea('')
       setBedrooms('')
       setBathrooms('')
-      setPrice('')
       setStatus('AVAILABLE')
       setBlockId('')
       setFloorPlanId('')
@@ -108,7 +111,6 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
         setArea(String(fp.area))
         if (fp.bedrooms != null) setBedrooms(String(fp.bedrooms))
         if (fp.bathrooms != null) setBathrooms(String(fp.bathrooms))
-        setPrice(String(fp.defaultPrice))
       }
     }
   }
@@ -119,7 +121,6 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
         code: code.trim(),
         type,
         area: parseFloat(area),
-        price: parseFloat(price),
         status,
         blockId: blockId && blockId !== 'NONE' ? blockId : null,
         floorPlanId: floorPlanId && floorPlanId !== 'NONE' ? floorPlanId : null,
@@ -158,10 +159,6 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
       newErrors.area = 'Área deve ser um número positivo'
     }
 
-    if (!price || parseFloat(price) <= 0 || isNaN(parseFloat(price))) {
-      newErrors.price = 'Preço deve ser um número positivo'
-    }
-
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -187,6 +184,7 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
+            {/* Código — always shown */}
             <div>
               <Label htmlFor="unit-code">Código *</Label>
               <Input
@@ -201,22 +199,7 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
               )}
             </div>
 
-            <div>
-              <Label htmlFor="unit-type">Tipo *</Label>
-              <Select value={type} onValueChange={setType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(typeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+            {/* Planta — moved up, shown first */}
             {floorPlans.length > 0 && (
               <div>
                 <Label htmlFor="unit-floor-plan">Planta</Label>
@@ -236,6 +219,54 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
               </div>
             )}
 
+            {/* Summary from floor plan — replaces type/area/bedrooms/bathrooms */}
+            {selectedPlan && (
+              <div className="sm:col-span-2 rounded-lg border border-neutral-200 bg-neutral-50/60 px-4 py-3">
+                <p className="text-[11px] text-neutral-400 uppercase tracking-wider mb-2">Herdado da planta</p>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-700">
+                  <Badge variant="secondary" className="text-xs">
+                    {typeLabels[selectedPlan.type] || selectedPlan.type}
+                  </Badge>
+                  <span className="flex items-center gap-1">
+                    <Ruler className="h-3.5 w-3.5 text-neutral-400" />
+                    {selectedPlan.area} m²
+                  </span>
+                  {selectedPlan.bedrooms != null && (
+                    <span className="flex items-center gap-1">
+                      <BedDouble className="h-3.5 w-3.5 text-neutral-400" />
+                      {selectedPlan.bedrooms} quartos
+                    </span>
+                  )}
+                  {selectedPlan.bathrooms != null && (
+                    <span className="flex items-center gap-1">
+                      <Bath className="h-3.5 w-3.5 text-neutral-400" />
+                      {selectedPlan.bathrooms} banheiros
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tipo — only shown when no floor plan selected */}
+            {!selectedPlan && (
+              <div>
+                <Label htmlFor="unit-type">Tipo *</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(typeLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Bloco */}
             {blocks.length > 0 && (
               <div>
                 <Label htmlFor="unit-block">Bloco</Label>
@@ -266,59 +297,52 @@ export function UnitFormDialog({ projectId, open, onOpenChange, unit }: UnitForm
               />
             </div>
 
-            <div>
-              <Label htmlFor="unit-area">Área (m²) *</Label>
-              <Input
-                id="unit-area"
-                type="number"
-                step="0.01"
-                value={area}
-                onChange={(e) => setArea(e.target.value)}
-                placeholder="Ex: 65.50"
-              />
-              {errors.area && (
-                <p className="text-sm text-destructive mt-1">{errors.area}</p>
-              )}
-            </div>
+            {/* Área — only shown when no floor plan */}
+            {!selectedPlan && (
+              <div>
+                <Label htmlFor="unit-area">Área (m²) *</Label>
+                <Input
+                  id="unit-area"
+                  type="number"
+                  step="0.01"
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  placeholder="Ex: 65.50"
+                />
+                {errors.area && (
+                  <p className="text-sm text-destructive mt-1">{errors.area}</p>
+                )}
+              </div>
+            )}
 
-            <div>
-              <Label htmlFor="unit-bedrooms">Quartos</Label>
-              <Input
-                id="unit-bedrooms"
-                type="number"
-                min="0"
-                value={bedrooms}
-                onChange={(e) => setBedrooms(e.target.value)}
-                placeholder="Ex: 2"
-              />
-            </div>
+            {/* Quartos/Banheiros — only shown when no floor plan */}
+            {!selectedPlan && (
+              <>
+                <div>
+                  <Label htmlFor="unit-bedrooms">Quartos</Label>
+                  <Input
+                    id="unit-bedrooms"
+                    type="number"
+                    min="0"
+                    value={bedrooms}
+                    onChange={(e) => setBedrooms(e.target.value)}
+                    placeholder="Ex: 2"
+                  />
+                </div>
 
-            <div>
-              <Label htmlFor="unit-bathrooms">Banheiros</Label>
-              <Input
-                id="unit-bathrooms"
-                type="number"
-                min="0"
-                value={bathrooms}
-                onChange={(e) => setBathrooms(e.target.value)}
-                placeholder="Ex: 1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="unit-price">Preço (R$) *</Label>
-              <Input
-                id="unit-price"
-                type="number"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="Ex: 250000.00"
-              />
-              {errors.price && (
-                <p className="text-sm text-destructive mt-1">{errors.price}</p>
-              )}
-            </div>
+                <div>
+                  <Label htmlFor="unit-bathrooms">Banheiros</Label>
+                  <Input
+                    id="unit-bathrooms"
+                    type="number"
+                    min="0"
+                    value={bathrooms}
+                    onChange={(e) => setBathrooms(e.target.value)}
+                    placeholder="Ex: 1"
+                  />
+                </div>
+              </>
+            )}
 
             {isEdit && (
               <div>

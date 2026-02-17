@@ -91,11 +91,23 @@ export function BlockManager({ projectId }: BlockManagerProps) {
       </div>
 
       {blocks.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-neutral-50/50 p-6 text-center">
-          <Building2 className="mx-auto h-8 w-8 text-neutral-300" />
-          <p className="mt-2 text-sm text-neutral-500">
-            Nenhum bloco cadastrado. Blocos são opcionais e representam edifícios ou torres.
+        <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
+          <Building2 className="h-12 w-12 text-neutral-300" />
+          <h3 className="mt-4 text-lg font-medium text-neutral-900">
+            Nenhum bloco cadastrado
+          </h3>
+          <p className="mt-2 text-sm text-neutral-500 text-center max-w-md">
+            Blocos representam edifícios ou torres do projeto. Se o projeto possui apenas
+            uma edificação, pule este passo e vá direto para as unidades.
           </p>
+          {canCreate && (
+            <div className="mt-6">
+              <Button onClick={() => { setEditingBlock(null); setShowFormDialog(true) }}>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Bloco
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

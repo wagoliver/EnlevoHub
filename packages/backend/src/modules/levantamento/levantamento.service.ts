@@ -56,8 +56,55 @@ export class LevantamentoService {
     return levantamento
   }
 
+  /**
+   * Load floor plan rooms for a project and return as Ambiente-ready data.
+   */
+  private async loadRoomsForProject(projectId: string) {
+    const floorPlans = await this.prisma.floorPlan.findMany({
+      where: { projectId },
+      include: { rooms: { orderBy: { order: 'asc' } } },
+      orderBy: { name: 'asc' },
+    })
+
+    return floorPlans.flatMap((fp) =>
+      fp.rooms.map((r, i) => ({
+        nome: r.nome,
+        tags: r.tags,
+        comprimento: r.comprimento,
+        largura: r.largura,
+        peDireito: r.peDireito,
+        qtdPortas: r.qtdPortas,
+        qtdJanelas: r.qtdJanelas,
+        order: i,
+      }))
+    )
+  }
+
+  /**
+   * If an existing levantamento has 0 ambientes, try to import from FloorPlan rooms.
+   * Returns the refreshed levantamento with ambientes.
+   */
+  private async autoImportIfEmpty(levantamento: any, projectId: string) {
+    if (levantamento.ambientes.length > 0) return levantamento
+
+    const rooms = await this.loadRoomsForProject(projectId)
+    if (rooms.length === 0) return levantamento
+
+    await this.prisma.ambiente.createMany({
+      data: rooms.map((r) => ({ levantamentoId: levantamento.id, ...r })),
+    })
+
+    // Re-fetch with populated ambientes
+    return this.prisma.projetoLevantamento.findFirst({
+      where: { id: levantamento.id },
+      include: {
+        itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    })
+  }
+
   async getOrCreateForFloorPlan(tenantId: string, projectId: string, floorPlanId: string) {
-    // Check if levantamento already exists for this floorPlan
     const existing = await this.prisma.projetoLevantamento.findFirst({
       where: { projectId, floorPlanId, tenantId },
       include: {
@@ -65,21 +112,34 @@ export class LevantamentoService {
         ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
       },
     })
-    if (existing) return existing
+    if (existing) return this.autoImportIfEmpty(existing, projectId)
 
-    // Verify floorPlan belongs to project/tenant
     const floorPlan = await this.prisma.floorPlan.findFirst({
       where: { id: floorPlanId, project: { id: projectId, tenantId } },
+      include: { rooms: { orderBy: { order: 'asc' } } },
     })
     if (!floorPlan) throw new Error('Planta não encontrada')
 
-    // Auto-create
     return this.prisma.projetoLevantamento.create({
       data: {
         tenantId,
         projectId,
         floorPlanId,
         nome: floorPlan.name,
+        ...(floorPlan.rooms.length > 0 && {
+          ambientes: {
+            create: floorPlan.rooms.map((r, i) => ({
+              nome: r.nome,
+              tags: r.tags,
+              comprimento: r.comprimento,
+              largura: r.largura,
+              peDireito: r.peDireito,
+              qtdPortas: r.qtdPortas,
+              qtdJanelas: r.qtdJanelas,
+              order: i,
+            })),
+          },
+        }),
       },
       include: {
         itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
@@ -96,15 +156,25 @@ export class LevantamentoService {
         ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
       },
     })
-    if (existing) return existing
+    if (existing) return this.autoImportIfEmpty(existing, projectId)
 
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, tenantId },
     })
     if (!project) throw new Error('Projeto não encontrado')
 
+    const allRooms = await this.loadRoomsForProject(projectId)
+
     return this.prisma.projetoLevantamento.create({
-      data: { tenantId, projectId, floorPlanId: null, nome: project.name },
+      data: {
+        tenantId,
+        projectId,
+        floorPlanId: null,
+        nome: project.name,
+        ...(allRooms.length > 0 && {
+          ambientes: { create: allRooms },
+        }),
+      },
       include: {
         itens: { orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }] },
         ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },

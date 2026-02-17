@@ -78,7 +78,7 @@ const PHASES: Phase[] = [
     tip: 'Comece criando o projeto — isso desbloqueia todas as outras funcionalidades da plataforma.',
     actions: [
       { label: 'Criar Projeto', path: '/projects', requiresProject: false, doneCheck: ({ projectId }) => !!projectId },
-      { label: 'Definir Plantas e Unidades', path: '/units', requiresProject: true, doneCheck: ({ project }) => (project?._count?.units ?? 0) > 0 },
+      { label: 'Definir Plantas, Blocos e Unidades', path: '/units', requiresProject: true, doneCheck: ({ project }) => (project?._count?.units ?? 0) > 0 },
       { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true, doneCheck: ({ project }) => (project?._count?.activities ?? 0) > 0 },
     ],
   },
@@ -99,7 +99,7 @@ const PHASES: Phase[] = [
     ],
     tip: 'Use a Calculadora de Materiais na aba "Levantamento" do projeto para criar orçamentos com preços SINAPI ou valores próprios.',
     actions: [
-      { label: 'Calculadora de Materiais', path: '/projects', projectPath: '/projects/:id/levantamento', requiresProject: true },
+      { label: 'Calculadora de Materiais', path: '/levantamento', requiresProject: false },
       { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true },
     ],
   },

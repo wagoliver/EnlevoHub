@@ -5,7 +5,7 @@ function serializeUnit(unit: any) {
   return {
     ...unit,
     area: Number(unit.area),
-    price: Number(unit.price),
+    price: unit.price != null ? Number(unit.price) : null,
     unitActivities: unit.unitActivities?.map((ua: any) => ({
       ...ua,
       progress: Number(ua.progress),

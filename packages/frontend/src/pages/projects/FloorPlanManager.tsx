@@ -106,11 +106,23 @@ export function FloorPlanManager({ projectId }: FloorPlanManagerProps) {
       </div>
 
       {floorPlans.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-neutral-50/50 p-6 text-center">
-          <LayoutGrid className="mx-auto h-8 w-8 text-neutral-300" />
-          <p className="mt-2 text-sm text-neutral-500">
-            Nenhuma planta cadastrada. Defina plantas para facilitar a criação de unidades em lote.
+        <div className="flex flex-col items-center justify-center rounded-lg border bg-neutral-50 p-12">
+          <LayoutGrid className="h-12 w-12 text-neutral-300" />
+          <h3 className="mt-4 text-lg font-medium text-neutral-900">
+            Nenhuma planta cadastrada
+          </h3>
+          <p className="mt-2 text-sm text-neutral-500 text-center max-w-md">
+            Defina os modelos de planta do projeto — tipo, área, quartos e valor base.
+            As plantas são usadas para gerar unidades em lote.
           </p>
+          {canCreate && (
+            <div className="mt-6">
+              <Button onClick={() => { setEditingPlan(null); setShowFormDialog(true) }}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Planta
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -119,9 +131,16 @@ export function FloorPlanManager({ projectId }: FloorPlanManagerProps) {
               <div className="flex items-start justify-between">
                 <div>
                   <h5 className="font-medium text-neutral-900">{plan.name}</h5>
-                  <Badge variant="secondary" className="mt-1 text-xs">
-                    {typeLabels[plan.type] || plan.type}
-                  </Badge>
+                  <div className="flex gap-1.5 mt-1">
+                    <Badge variant="secondary" className="text-xs">
+                      {typeLabels[plan.type] || plan.type}
+                    </Badge>
+                    {plan.detalhado && (
+                      <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">
+                        {plan.rooms?.length || 0} cômodos
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 {(canEdit || canDelete) && (
                   <div className="flex gap-1">
@@ -160,10 +179,12 @@ export function FloorPlanManager({ projectId }: FloorPlanManagerProps) {
                     <span>{plan.bathrooms} banheiros</span>
                   </div>
                 )}
-                <div className="flex items-center gap-1">
-                  <DollarSign className="h-3.5 w-3.5" />
-                  <span>{formatCurrency(plan.defaultPrice)}</span>
-                </div>
+                {plan.defaultPrice != null && (
+                  <div className="flex items-center gap-1">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    <span>{formatCurrency(plan.defaultPrice)}</span>
+                  </div>
+                )}
               </div>
               {plan._count?.units > 0 && (
                 <p className="mt-2 text-xs text-neutral-400">

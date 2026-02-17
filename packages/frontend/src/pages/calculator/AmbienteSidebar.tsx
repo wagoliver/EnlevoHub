@@ -130,12 +130,7 @@ export function AmbienteSidebar({
         {ambientes.length === 0 && (
           <div className="px-3 py-6 text-center">
             <p className="text-xs text-neutral-400">Nenhum ambiente</p>
-            {canEdit && (
-              <Button variant="outline" size="sm" className="mt-2" onClick={onAdd}>
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Adicionar
-              </Button>
-            )}
+            <p className="text-[10px] text-neutral-300 mt-1">Cadastre cômodos na planta para importar automaticamente</p>
           </div>
         )}
       </div>

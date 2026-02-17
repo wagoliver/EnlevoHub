@@ -5,8 +5,19 @@ function serializeFloorPlan(fp: any) {
   return {
     ...fp,
     area: Number(fp.area),
-    defaultPrice: Number(fp.defaultPrice),
+    defaultPrice: fp.defaultPrice != null ? Number(fp.defaultPrice) : null,
+    rooms: (fp.rooms || []).map((r: any) => ({
+      ...r,
+      comprimento: Number(r.comprimento),
+      largura: Number(r.largura),
+      peDireito: Number(r.peDireito),
+    })),
   }
+}
+
+const ROOMS_INCLUDE = {
+  rooms: { orderBy: { order: 'asc' as const } },
+  _count: { select: { units: true } },
 }
 
 export class FloorPlanService {
@@ -24,9 +35,7 @@ export class FloorPlanService {
     const floorPlans = await this.prisma.floorPlan.findMany({
       where: { projectId },
       orderBy: { name: 'asc' },
-      include: {
-        _count: { select: { units: true } },
-      },
+      include: ROOMS_INCLUDE,
     })
 
     return floorPlans.map(serializeFloorPlan)
@@ -41,22 +50,39 @@ export class FloorPlanService {
       throw new Error('Projeto não encontrado')
     }
 
+    const { rooms, ...floorPlanData } = data
+    const hasRooms = rooms && rooms.length > 0
+
     try {
       const floorPlan = await this.prisma.floorPlan.create({
         data: {
           projectId,
-          name: data.name,
-          description: data.description,
-          type: data.type,
-          area: data.area,
-          bedrooms: data.bedrooms,
-          bathrooms: data.bathrooms,
-          defaultPrice: data.defaultPrice,
-          metadata: data.metadata || undefined,
+          name: floorPlanData.name,
+          description: floorPlanData.description,
+          type: floorPlanData.type,
+          area: floorPlanData.area,
+          bedrooms: floorPlanData.bedrooms,
+          bathrooms: floorPlanData.bathrooms,
+          ...(floorPlanData.defaultPrice !== undefined && { defaultPrice: floorPlanData.defaultPrice }),
+          detalhado: !!hasRooms,
+          metadata: floorPlanData.metadata || undefined,
+          ...(hasRooms && {
+            rooms: {
+              create: rooms.map((r, i) => ({
+                nome: r.nome,
+                presetKey: r.presetKey,
+                tags: r.tags,
+                comprimento: r.comprimento,
+                largura: r.largura,
+                peDireito: r.peDireito,
+                qtdPortas: r.qtdPortas,
+                qtdJanelas: r.qtdJanelas,
+                order: i,
+              })),
+            },
+          }),
         },
-        include: {
-          _count: { select: { units: true } },
-        },
+        include: ROOMS_INCLUDE,
       })
 
       return serializeFloorPlan(floorPlan)
@@ -85,22 +111,48 @@ export class FloorPlanService {
       throw new Error('Planta não encontrada')
     }
 
+    const { rooms, ...floorPlanData } = data
+    const roomsProvided = rooms !== undefined
+
     try {
+      // If rooms are provided, delete existing and recreate
+      if (roomsProvided) {
+        await this.prisma.floorPlanRoom.deleteMany({
+          where: { floorPlanId },
+        })
+      }
+
+      const hasRooms = roomsProvided && rooms && rooms.length > 0
+
       const floorPlan = await this.prisma.floorPlan.update({
         where: { id: floorPlanId },
         data: {
-          ...(data.name !== undefined && { name: data.name }),
-          ...(data.description !== undefined && { description: data.description }),
-          ...(data.type !== undefined && { type: data.type }),
-          ...(data.area !== undefined && { area: data.area }),
-          ...(data.bedrooms !== undefined && { bedrooms: data.bedrooms }),
-          ...(data.bathrooms !== undefined && { bathrooms: data.bathrooms }),
-          ...(data.defaultPrice !== undefined && { defaultPrice: data.defaultPrice }),
-          ...(data.metadata !== undefined && { metadata: data.metadata }),
+          ...(floorPlanData.name !== undefined && { name: floorPlanData.name }),
+          ...(floorPlanData.description !== undefined && { description: floorPlanData.description }),
+          ...(floorPlanData.type !== undefined && { type: floorPlanData.type }),
+          ...(floorPlanData.area !== undefined && { area: floorPlanData.area }),
+          ...(floorPlanData.bedrooms !== undefined && { bedrooms: floorPlanData.bedrooms }),
+          ...(floorPlanData.bathrooms !== undefined && { bathrooms: floorPlanData.bathrooms }),
+          ...(floorPlanData.defaultPrice !== undefined && { defaultPrice: floorPlanData.defaultPrice }),
+          ...(floorPlanData.metadata !== undefined && { metadata: floorPlanData.metadata }),
+          ...(roomsProvided && { detalhado: !!hasRooms }),
+          ...(hasRooms && {
+            rooms: {
+              create: rooms!.map((r, i) => ({
+                nome: r.nome,
+                presetKey: r.presetKey,
+                tags: r.tags,
+                comprimento: r.comprimento,
+                largura: r.largura,
+                peDireito: r.peDireito,
+                qtdPortas: r.qtdPortas,
+                qtdJanelas: r.qtdJanelas,
+                order: i,
+              })),
+            },
+          }),
         },
-        include: {
-          _count: { select: { units: true } },
-        },
+        include: ROOMS_INCLUDE,
       })
 
       return serializeFloorPlan(floorPlan)

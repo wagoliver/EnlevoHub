@@ -120,7 +120,7 @@ export function AmbienteResumo({ ambientes, itens, activityGroups, quantidadeUni
           <CardContent className="py-4 px-5">
             <div className="flex items-center gap-2 mb-2">
               <Layers className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-800">Multiplicador de Unidades</span>
+              <span className="text-sm font-medium text-blue-800">Multiplicador — {quantidadeUnidades} unidades cadastradas</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -247,14 +247,25 @@ export function AmbienteResumo({ ambientes, itens, activityGroups, quantidadeUni
         </Card>
       )}
 
-      {resumo.ambientesData.length === 0 && itens.length === 0 && (
+      {itens.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <BarChart3 className="h-10 w-10 text-neutral-200" />
-            <h3 className="mt-3 text-sm font-medium text-neutral-600">Levantamento vazio</h3>
-            <p className="mt-1 text-xs text-neutral-400 max-w-sm text-center">
-              Adicione ambientes na barra lateral e depois insira materiais em cada ambiente.
-            </p>
+            {ambientes.length > 0 ? (
+              <>
+                <h3 className="mt-3 text-sm font-medium text-neutral-600">Ambientes importados da planta</h3>
+                <p className="mt-1 text-xs text-neutral-400 max-w-sm text-center">
+                  Selecione um ambiente na barra lateral para adicionar materiais e serviços.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="mt-3 text-sm font-medium text-neutral-600">Nenhum ambiente cadastrado</h3>
+                <p className="mt-1 text-xs text-neutral-400 max-w-sm text-center">
+                  Cadastre plantas com cômodos detalhados na etapa anterior. Os ambientes serão importados automaticamente.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

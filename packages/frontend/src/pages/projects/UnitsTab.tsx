@@ -68,13 +68,6 @@ const activityLevelLabel: Record<string, string> = {
   ACTIVITY: 'Atividade',
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value)
-}
-
 interface UnitsTabProps {
   projectId: string
 }
@@ -220,9 +213,8 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Código</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Bloco</TableHead>
                   <TableHead>Planta</TableHead>
+                  <TableHead>Bloco</TableHead>
                   <TableHead>Andar</TableHead>
                   <TableHead>Área (m²)</TableHead>
                   {isContractor ? (
@@ -231,11 +223,7 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
                       <TableHead>Status</TableHead>
                     </>
                   ) : (
-                    <>
-                      <TableHead>Quartos</TableHead>
-                      <TableHead>Preço</TableHead>
-                      <TableHead>Status</TableHead>
-                    </>
+                    <TableHead>Status</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -243,11 +231,10 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
                 {units.map((unit: any) => (
                   <TableRow key={unit.id}>
                     <TableCell className="font-medium">{unit.code}</TableCell>
-                    <TableCell>{unitTypeLabel[unit.type] || unit.type}</TableCell>
-                    <TableCell>{unit.block?.name || '-'}</TableCell>
                     <TableCell>{unit.floorPlan?.name || '-'}</TableCell>
+                    <TableCell>{unit.block?.name || '-'}</TableCell>
                     <TableCell>{unit.floor ?? '-'}</TableCell>
-                    <TableCell>{unit.area}</TableCell>
+                    <TableCell>{unit.area ?? '-'}</TableCell>
                     {isContractor ? (
                       <>
                         <TableCell>
@@ -275,15 +262,11 @@ export function UnitsTab({ projectId }: UnitsTabProps) {
                         </TableCell>
                       </>
                     ) : (
-                      <>
-                        <TableCell>{unit.bedrooms ?? '-'}</TableCell>
-                        <TableCell>{formatCurrency(unit.price)}</TableCell>
-                        <TableCell>
-                          <Badge variant={unitStatusVariant[unit.status]}>
-                            {unitStatusLabel[unit.status]}
-                          </Badge>
-                        </TableCell>
-                      </>
+                      <TableCell>
+                        <Badge variant={unitStatusVariant[unit.status]}>
+                          {unitStatusLabel[unit.status]}
+                        </Badge>
+                      </TableCell>
                     )}
                   </TableRow>
                 ))}

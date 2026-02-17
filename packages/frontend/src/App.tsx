@@ -70,6 +70,7 @@ function App() {
             <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="projects/:id/activities" element={<ProjectActivities />} />
             <Route path="projects/:id/levantamento" element={<ProjectLevantamento />} />
+            <Route path="levantamento" element={<ProjectLevantamento />} />
             <Route path="projects/:id/close" element={<ProjectClose />} />
             <Route path="units" element={<Units />} />
             <Route path="suppliers" element={<Suppliers />} />

@@ -67,7 +67,7 @@ export const createUnitSchema = z.object({
   area: z.number().positive(),
   bedrooms: z.number().int().min(0).optional(),
   bathrooms: z.number().int().min(0).optional(),
-  price: z.number().positive(),
+  price: z.number().positive().optional(),
   status: z.enum(['AVAILABLE', 'RESERVED', 'SOLD', 'BLOCKED']).optional(),
   blockId: z.string().uuid().optional().nullable(),
   floorPlanId: z.string().uuid().optional().nullable(),
@@ -88,6 +88,17 @@ export const listUnitsQuerySchema = z.object({
 
 // ==================== FLOOR PLANS ====================
 
+export const floorPlanRoomSchema = z.object({
+  nome: z.string().min(1),
+  presetKey: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  comprimento: z.number().positive(),
+  largura: z.number().positive(),
+  peDireito: z.number().positive().default(2.80),
+  qtdPortas: z.number().int().min(0).default(1),
+  qtdJanelas: z.number().int().min(0).default(1),
+})
+
 export const createFloorPlanSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
@@ -95,7 +106,8 @@ export const createFloorPlanSchema = z.object({
   area: z.number().positive(),
   bedrooms: z.number().int().min(0).optional(),
   bathrooms: z.number().int().min(0).optional(),
-  defaultPrice: z.number().positive(),
+  defaultPrice: z.number().positive().optional(),
+  rooms: z.array(floorPlanRoomSchema).optional(),
   metadata: z.record(z.any()).optional(),
 })
 

@@ -8,7 +8,6 @@ import {
   Hammer,
   Ruler,
   CheckCircle2,
-  ArrowLeft,
   AlertCircle,
   Check,
   ChevronLeft,
@@ -60,20 +59,8 @@ export function WorkflowStepper({ phase }: WorkflowStepperProps) {
 
   return (
     <div className="rounded-xl bg-neutral-50/80 border border-neutral-200/80 mb-5 overflow-hidden">
-      {/* Row 1: back button + stepper dots */}
+      {/* Row 1: stepper dots */}
       <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-        {/* Dashboard button — prominent */}
-        <button
-          onClick={() => navigate(`/?phase=${phase}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 text-sm font-medium text-neutral-600 hover:border-[#b8a378] hover:text-neutral-800 transition-all flex-shrink-0 shadow-sm"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Dashboard
-        </button>
-
-        <div className="h-5 w-px bg-neutral-200 flex-shrink-0" />
-
-        {/* Stepper dots */}
         <TooltipProvider delayDuration={200}>
           <div className="flex items-center flex-1 min-w-0">
             {STEPS.map((step, idx) => {

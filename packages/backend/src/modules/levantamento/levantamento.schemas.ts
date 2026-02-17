@@ -71,6 +71,7 @@ export const fromComposicaoSchema = z.object({
   desonerado: z.boolean().default(false),
   etapa: z.string().max(200).optional(),
   ambienteId: z.string().uuid().optional(),
+  projectActivityId: z.string().uuid().optional().nullable(),
 })
 
 export const batchCreateItemsSchema = z.object({

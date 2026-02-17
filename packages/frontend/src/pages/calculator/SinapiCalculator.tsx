@@ -1,11 +1,18 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI } from '@/lib/api-client'
 import { useRole } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Search, Database, Upload, Loader2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Search, Database, Upload, Loader2, GitBranch } from 'lucide-react'
 import { SinapiSearchDialog } from './SinapiSearchDialog'
 import { ComposicaoDetailDialog } from './ComposicaoDetailDialog'
 import { SinapiImportDialog } from './SinapiImportDialog'
@@ -15,9 +22,10 @@ interface SinapiCalculatorProps {
   projectId: string
   levantamentoId: string
   ambienteId?: string
+  activityGroups?: any
 }
 
-export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: SinapiCalculatorProps) {
+export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activityGroups }: SinapiCalculatorProps) {
   const role = useRole()
   const queryClient = useQueryClient()
   const isRoot = role === 'ROOT'
@@ -27,6 +35,28 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: Sina
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedComposicaoId, setSelectedComposicaoId] = useState<string>('')
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedActivity, setSelectedActivity] = useState<string>('_none')
+
+  // Build activity dropdown options from activityGroups (same pattern as ManualCalculator)
+  const activityOptions = useMemo(() => {
+    if (activityGroups?.activityGroups?.length > 0) {
+      return activityGroups.activityGroups.map((g: any) => ({
+        value: `${g.activity.id}::${g.activity.name}`,
+        label: g.activity.parentName ? `${g.activity.parentName} > ${g.activity.name}` : g.activity.name,
+      }))
+    }
+    return []
+  }, [activityGroups])
+
+  // Parse selected activity value into { etapa, projectActivityId }
+  const parseActivityValue = (v: string): { etapa: string | null; projectActivityId: string | null } => {
+    if (v === '_none' || !v) return { etapa: null, projectActivityId: null }
+    const sep = v.indexOf('::')
+    if (sep > 0) {
+      return { etapa: v.substring(sep + 2), projectActivityId: v.substring(0, sep) }
+    }
+    return { etapa: null, projectActivityId: null }
+  }
 
   const importComposicaoMutation = useMutation({
     mutationFn: (data: any) => levantamentoAPI.addFromComposicao(projectId, levantamentoId, data),
@@ -34,6 +64,7 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: Sina
       toast.success(`${data.addedCount} itens importados da composição ${data.composicao.codigo}`)
       queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
+      queryClient.invalidateQueries({ queryKey: ['activity-review-summary', projectId] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -48,12 +79,37 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId }: Sina
   }
 
   const handleImportComposicao = (data: any) => {
-    importComposicaoMutation.mutate({ ...data, ambienteId: ambienteId || undefined })
+    const parsed = parseActivityValue(selectedActivity)
+    importComposicaoMutation.mutate({
+      ...data,
+      ambienteId: ambienteId || undefined,
+      projectActivityId: parsed.projectActivityId || undefined,
+      etapa: data.etapa || parsed.etapa || undefined,
+    })
   }
 
   return (
     <div className="space-y-4">
       <SinapiHelpText />
+
+      {/* Activity selector */}
+      {activityOptions.length > 0 && (
+        <div className="flex items-center gap-2">
+          <GitBranch className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+          <span className="text-sm text-neutral-600 flex-shrink-0">Vincular à atividade:</span>
+          <Select value={selectedActivity} onValueChange={setSelectedActivity}>
+            <SelectTrigger className="h-8 text-sm max-w-xs">
+              <SelectValue placeholder="Nenhuma (sem vínculo)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">Nenhuma (sem vínculo)</SelectItem>
+              {activityOptions.map((opt: any) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button

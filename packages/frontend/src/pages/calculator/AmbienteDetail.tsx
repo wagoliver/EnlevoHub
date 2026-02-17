@@ -168,6 +168,7 @@ export function AmbienteDetail({ ambiente, projectId, levantamentoId, itens, eta
                     projectId={projectId}
                     levantamentoId={levantamentoId}
                     ambienteId={ambiente.id}
+                    activityGroups={activityGroups}
                   />
                 </TabsContent>
               </Tabs>

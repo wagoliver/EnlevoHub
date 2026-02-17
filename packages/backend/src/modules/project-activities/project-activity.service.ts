@@ -673,6 +673,133 @@ export class ProjectActivityService {
   }
 
   /**
+   * Get review summary — coverage of levantamento items per activity.
+   */
+  async getReviewSummary(tenantId: string, projectId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    const activities = await this.prisma.projectActivity.findMany({
+      where: { projectId },
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        level: true,
+        parentId: true,
+        order: true,
+        weight: true,
+        _count: {
+          select: { levantamentoItens: true },
+        },
+      },
+    })
+
+    // Get cost per activity (quantidade * precoUnitario)
+    const costDetails = await this.prisma.levantamentoItem.findMany({
+      where: {
+        projectActivityId: { in: activities.map(a => a.id) },
+      },
+      select: {
+        projectActivityId: true,
+        quantidade: true,
+        precoUnitario: true,
+      },
+    })
+
+    const costMap = new Map<string, number>()
+    for (const item of costDetails) {
+      if (!item.projectActivityId) continue
+      const total = Number(item.quantidade) * Number(item.precoUnitario)
+      costMap.set(
+        item.projectActivityId,
+        (costMap.get(item.projectActivityId) || 0) + total
+      )
+    }
+
+    // Build tree
+    const actMap = new Map<string, any>()
+    activities.forEach(a => {
+      actMap.set(a.id, {
+        id: a.id,
+        name: a.name,
+        level: a.level,
+        parentId: a.parentId,
+        order: a.order,
+        weight: Number(a.weight),
+        itemCount: a._count.levantamentoItens,
+        totalCost: costMap.get(a.id) || 0,
+        children: [],
+      })
+    })
+
+    const roots: any[] = []
+    for (const item of actMap.values()) {
+      if (item.parentId && actMap.has(item.parentId)) {
+        actMap.get(item.parentId).children.push(item)
+      } else if (!item.parentId) {
+        roots.push(item)
+      }
+    }
+
+    const sortChildren = (node: any) => {
+      node.children.sort((a: any, b: any) => a.order - b.order)
+      node.children.forEach(sortChildren)
+    }
+    roots.sort((a: any, b: any) => a.order - b.order)
+    roots.forEach(sortChildren)
+
+    // Roll up coverage from leaves to parents
+    const rollUp = (node: any): { itemCount: number; totalCost: number; leafCount: number; coveredCount: number } => {
+      if (!node.children || node.children.length === 0) {
+        const covered = node.itemCount > 0 ? 1 : 0
+        node.leafCount = 1
+        node.coveredCount = covered
+        return { itemCount: node.itemCount, totalCost: node.totalCost, leafCount: 1, coveredCount: covered }
+      }
+      let totalItems = 0
+      let totalCost = 0
+      let leafCount = 0
+      let coveredCount = 0
+      for (const child of node.children) {
+        const r = rollUp(child)
+        totalItems += r.itemCount
+        totalCost += r.totalCost
+        leafCount += r.leafCount
+        coveredCount += r.coveredCount
+      }
+      node.itemCount = totalItems
+      node.totalCost = totalCost
+      node.leafCount = leafCount
+      node.coveredCount = coveredCount
+      return { itemCount: totalItems, totalCost, leafCount, coveredCount }
+    }
+
+    let totalLeafActivities = 0
+    let coveredActivities = 0
+    roots.forEach(root => {
+      const result = rollUp(root)
+      totalLeafActivities += result.leafCount
+      coveredActivities += result.coveredCount
+    })
+
+    const coveragePercentage = totalLeafActivities > 0
+      ? Math.round((coveredActivities / totalLeafActivities) * 100)
+      : 0
+
+    return {
+      summary: {
+        totalLeafActivities,
+        coveredActivities,
+        coveragePercentage,
+      },
+      activities: roots,
+    }
+  }
+
+  /**
    * Build tree from flat activity list for the API response.
    */
   private buildActivityTree(activities: any[]): any[] {

@@ -287,6 +287,32 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // Get activity review summary (levantamento coverage)
+  fastify.get('/:id/activities/review-summary', {
+    preHandler: [authMiddleware, requirePermission('activities:view')],
+    schema: {
+      description: 'Get review summary of levantamento coverage per activity',
+      tags: ['activities'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const result = await activityService.getReviewSummary(getTenantId(request), id)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ==================== MEASUREMENTS ====================
 
   // List measurements for project

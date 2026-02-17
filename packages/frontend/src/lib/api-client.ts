@@ -320,6 +320,8 @@ export const projectsAPI = {
     apiClient.delete<any>(`/projects/${projectId}/activities/${activityId}`),
   getProgress: (projectId: string) =>
     apiClient.get<any>(`/projects/${projectId}/progress`),
+  getReviewSummary: (projectId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/activities/review-summary`),
 
   // Measurements
   listMeasurements: (projectId: string, params?: {

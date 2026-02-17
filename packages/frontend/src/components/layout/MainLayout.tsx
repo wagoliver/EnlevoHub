@@ -39,7 +39,7 @@ export function MainLayout() {
         >
           <Header />
           {phaseName && (
-            <div className="sticky top-16 z-20 border-b border-[#b8a378]/20 bg-gradient-to-r from-[#b8a378]/10 via-[#b8a378]/5 to-transparent">
+            <div className="sticky top-16 z-20 border-b border-[#b8a378]/20 bg-neutral-50 bg-gradient-to-r from-[#b8a378]/10 via-[#b8a378]/5 to-neutral-50">
               <div className="flex items-center gap-3 px-4 lg:px-8 py-2">
                 <button
                   type="button"

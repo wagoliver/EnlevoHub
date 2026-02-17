@@ -761,6 +761,8 @@ export const levantamentoAPI = {
     apiClient.post<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/from-composicao`, data),
   getResumo: (projectId: string, levantamentoId: string) =>
     apiClient.get<any>(`/projects/${projectId}/levantamentos/${levantamentoId}/resumo`),
+  getReport: (projectId: string) =>
+    apiClient.get<any>(`/projects/${projectId}/levantamento-report`),
 
   // Activity-Service Links
   autoLinkActivities: (projectId: string) =>

@@ -339,6 +339,23 @@ export async function levantamentoRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ---- Report ----
+
+  fastify.get('/:projectId/levantamento-report', {
+    preHandler: [authMiddleware, requirePermission('projects:view')],
+  }, async (request, reply) => {
+    try {
+      const { projectId } = request.params as { projectId: string }
+      const result = await service.getReportData(getTenantId(request), projectId)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
   // ---- Servico Templates ----
 
   fastify.get('/servico-templates', {

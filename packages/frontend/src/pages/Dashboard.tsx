@@ -101,6 +101,7 @@ const PHASES: Phase[] = [
     actions: [
       { label: 'Calculadora de Materiais', path: '/levantamento', requiresProject: false },
       { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id/review-activities', requiresProject: true },
+      { label: 'Relatório de Materiais', path: '/projects', projectPath: '/projects/:id/levantamento-report', requiresProject: true },
     ],
   },
   {

@@ -16,6 +16,7 @@ import { ProjectDetail } from './pages/projects/ProjectDetail'
 import { ProjectActivities } from './pages/projects/ProjectActivities'
 import { ProjectClose } from './pages/projects/ProjectClose'
 import { ActivityReviewPage } from './pages/projects/ActivityReviewPage'
+import { LevantamentoReportPage } from './pages/projects/LevantamentoReportPage'
 import { ProjectLevantamento } from './pages/projects/ProjectLevantamento'
 import { Contractors } from './pages/Contractors'
 import { ContractorDetail } from './pages/contractors/ContractorDetail'
@@ -73,6 +74,7 @@ function App() {
             <Route path="projects/:id/levantamento" element={<ProjectLevantamento />} />
             <Route path="levantamento" element={<ProjectLevantamento />} />
             <Route path="projects/:id/review-activities" element={<ActivityReviewPage />} />
+            <Route path="projects/:id/levantamento-report" element={<LevantamentoReportPage />} />
             <Route path="projects/:id/close" element={<ProjectClose />} />
             <Route path="units" element={<Units />} />
             <Route path="suppliers" element={<Suppliers />} />

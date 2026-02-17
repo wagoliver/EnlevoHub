@@ -422,6 +422,111 @@ export class LevantamentoService {
     }
   }
 
+  // --- Report ---
+
+  async getReportData(tenantId: string, projectId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    const levantamento = await this.prisma.projetoLevantamento.findFirst({
+      where: { projectId, tenantId, floorPlanId: null },
+      include: {
+        itens: {
+          orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }],
+          include: { ambiente: { select: { id: true, nome: true } } },
+        },
+        ambientes: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      },
+    })
+
+    if (!levantamento) {
+      return {
+        project: { id: project.id, name: project.name },
+        levantamento: null,
+        stats: { totalItens: 0, totalGeral: 0, totalAmbientes: 0, qtdEtapas: 0 },
+        byEtapa: [],
+        byAmbiente: [],
+        items: [],
+      }
+    }
+
+    const items = levantamento.itens.map((item) => {
+      const quantidade = Number(item.quantidade)
+      const precoUnitario = Number(item.precoUnitario)
+      return {
+        id: item.id,
+        nome: item.nome,
+        unidade: item.unidade,
+        quantidade,
+        precoUnitario,
+        total: Math.round(quantidade * precoUnitario * 100) / 100,
+        etapa: item.etapa || null,
+        ambienteNome: item.ambiente?.nome || null,
+      }
+    })
+
+    // Group by etapa
+    const etapaMap = new Map<string, { itemCount: number; total: number }>()
+    for (const item of items) {
+      const key = item.etapa || '__sem_etapa__'
+      const entry = etapaMap.get(key) || { itemCount: 0, total: 0 }
+      entry.itemCount++
+      entry.total += item.total
+      etapaMap.set(key, entry)
+    }
+    const byEtapa = Array.from(etapaMap.entries()).map(([etapa, data]) => ({
+      etapa: etapa === '__sem_etapa__' ? null : etapa,
+      itemCount: data.itemCount,
+      total: Math.round(data.total * 100) / 100,
+    }))
+
+    // Group by ambiente
+    const ambienteMap = new Map<string, { id: string; nome: string; itemCount: number; total: number }>()
+    for (const amb of levantamento.ambientes) {
+      ambienteMap.set(amb.id, { id: amb.id, nome: amb.nome, itemCount: 0, total: 0 })
+    }
+    let semAmbiente = { itemCount: 0, total: 0 }
+    for (const item of items) {
+      const ambId = levantamento.itens.find((i) => i.id === item.id)?.ambienteId
+      if (ambId && ambienteMap.has(ambId)) {
+        const a = ambienteMap.get(ambId)!
+        a.itemCount++
+        a.total += item.total
+      } else {
+        semAmbiente.itemCount++
+        semAmbiente.total += item.total
+      }
+    }
+    const byAmbiente = Array.from(ambienteMap.values()).map((a) => ({
+      id: a.id,
+      nome: a.nome,
+      itemCount: a.itemCount,
+      total: Math.round(a.total * 100) / 100,
+    }))
+    if (semAmbiente.itemCount > 0) {
+      byAmbiente.push({ id: '', nome: 'Sem ambiente', itemCount: semAmbiente.itemCount, total: Math.round(semAmbiente.total * 100) / 100 })
+    }
+
+    const totalGeral = items.reduce((sum, i) => sum + i.total, 0)
+    const etapasSet = new Set(items.map((i) => i.etapa || '__sem_etapa__'))
+
+    return {
+      project: { id: project.id, name: project.name },
+      levantamento: { id: levantamento.id, nome: levantamento.nome },
+      stats: {
+        totalItens: items.length,
+        totalGeral: Math.round(totalGeral * 100) / 100,
+        totalAmbientes: levantamento.ambientes.length,
+        qtdEtapas: etapasSet.size,
+      },
+      byEtapa,
+      byAmbiente,
+      items,
+    }
+  }
+
   // --- Summary ---
 
   async getResumo(tenantId: string, projectId: string, levantamentoId: string) {

@@ -98,7 +98,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }],
       body: {
         type: 'object',
-        required: ['name', 'address', 'budget'],
+        required: ['name', 'address'],
         properties: {
           name: { type: 'string' },
           description: { type: 'string' },

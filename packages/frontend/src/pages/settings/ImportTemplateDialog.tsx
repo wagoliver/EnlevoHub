@@ -88,6 +88,36 @@ function generateModelXLSX(template: TemplateModel) {
   XLSX.writeFile(wb, `modelo-${template.key}.xlsx`)
 }
 
+function generateSampleXLSX() {
+  const sampleRows: any[][] = [
+    ['Fundação', 30, '#8B4513', 'Terraplanagem', 'Limpeza do terreno', 1, 2, ''],
+    ['Fundação', 30, '#8B4513', 'Terraplanagem', 'Escavação', 2, 3, 'Limpeza do terreno'],
+    ['Fundação', 30, '#8B4513', 'Infraestrutura', 'Sapatas', 4, 8, 'Escavação'],
+    ['Estrutura', 40, '#3498DB', 'Alvenaria', 'Levantamento de paredes', 4, 15, 'Sapatas'],
+    ['Estrutura', 40, '#3498DB', 'Alvenaria', 'Vergas e contravergas', 2, 4, 'Levantamento de paredes'],
+    ['Estrutura', 40, '#3498DB', 'Cobertura', 'Estrutura do telhado', 3, 7, 'Vergas e contravergas'],
+    ['Acabamento', 30, '#27AE60', 'Revestimento', 'Chapisco', 2, 5, 'Levantamento de paredes'],
+    ['Acabamento', 30, '#27AE60', 'Revestimento', 'Reboco', 3, 8, 'Chapisco'],
+    ['Acabamento', 30, '#27AE60', 'Pintura', 'Pintura interna', 2, 6, 'Reboco'],
+  ]
+
+  const ws = XLSX.utils.aoa_to_sheet([HEADERS, ...sampleRows])
+  ws['!cols'] = [
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 20 },
+    { wch: 22 },
+    { wch: 8 },
+    { wch: 16 },
+    { wch: 22 },
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Atividades')
+  XLSX.writeFile(wb, 'modelo-exemplo-atividades.xlsx')
+}
+
 function parseSpreadsheet(
   file: File,
   autoCalcPercentage: boolean
@@ -759,6 +789,15 @@ export function ImportTemplateDialog({
                   className="hidden"
                   onChange={handleFileChange}
                 />
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs text-primary/70 hover:text-primary"
+                  onClick={generateSampleXLSX}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Baixar planilha de exemplo
+                </Button>
               </div>
 
               {/* Auto-calc toggle */}

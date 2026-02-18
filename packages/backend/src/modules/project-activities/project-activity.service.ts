@@ -162,11 +162,15 @@ export class ProjectActivityService {
           weight: data.weight,
           order: data.order,
           scope: data.scope,
+          level: data.level || 'ACTIVITY',
+          parentId: data.parentId || null,
+          sinapiCodigo: data.sinapiCodigo || null,
         },
       })
 
-      // Auto-generate UnitActivities based on scope
-      if (data.scope === 'ALL_UNITS') {
+      // Auto-generate UnitActivities based on scope (only for ACTIVITY level)
+      const effectiveLevel = data.level || 'ACTIVITY'
+      if (effectiveLevel === 'ACTIVITY' && data.scope === 'ALL_UNITS') {
         const units = await tx.unit.findMany({
           where: { projectId },
           select: { id: true },
@@ -179,14 +183,14 @@ export class ProjectActivityService {
             })),
           })
         }
-      } else if (data.scope === 'SPECIFIC_UNITS' && data.unitIds?.length) {
+      } else if (effectiveLevel === 'ACTIVITY' && data.scope === 'SPECIFIC_UNITS' && data.unitIds?.length) {
         await tx.unitActivity.createMany({
           data: data.unitIds.map(unitId => ({
             activityId: activity.id,
             unitId,
           })),
         })
-      } else if (data.scope === 'GENERAL') {
+      } else if (effectiveLevel === 'ACTIVITY' && data.scope === 'GENERAL') {
         await tx.unitActivity.create({
           data: {
             activityId: activity.id,
@@ -226,21 +230,91 @@ export class ProjectActivityService {
     })
     if (!existing) throw new Error('Atividade não encontrada')
 
-    const activity = await this.prisma.projectActivity.update({
-      where: { id: activityId },
-      data: {
-        ...(data.name !== undefined && { name: data.name }),
-        ...(data.weight !== undefined && { weight: data.weight }),
-        ...(data.order !== undefined && { order: data.order }),
-      },
-      include: {
-        unitActivities: {
-          include: {
-            unit: { select: { id: true, code: true, type: true } },
-          },
+    const activity = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.projectActivity.update({
+        where: { id: activityId },
+        data: {
+          ...(data.name !== undefined && { name: data.name }),
+          ...(data.weight !== undefined && { weight: data.weight }),
+          ...(data.order !== undefined && { order: data.order }),
+          ...(data.status !== undefined && { status: data.status }),
         },
-        _count: { select: { unitActivities: true, measurements: true } },
-      },
+        include: {
+          unitActivities: {
+            include: {
+              unit: { select: { id: true, code: true, type: true } },
+            },
+          },
+          _count: { select: { unitActivities: true, measurements: true } },
+        },
+      })
+
+      // When status changes, propagate to children, parent and project
+      if (data.status !== undefined) {
+        // Cascade status to all descendants (e.g. PHASE → STAGEs → ACTIVITYs)
+        const cascadeStatus = async (parentId: string, status: string) => {
+          const children = await tx.projectActivity.findMany({
+            where: { parentId },
+            select: { id: true },
+          })
+          if (children.length > 0) {
+            await tx.projectActivity.updateMany({
+              where: { parentId },
+              data: { status: status as any },
+            })
+            for (const child of children) {
+              await cascadeStatus(child.id, status)
+            }
+          }
+        }
+        await cascadeStatus(activityId, data.status)
+
+        // Recalculate parent status up the hierarchy (ACTIVITY → STAGE → PHASE)
+        const recalcParent = async (parentId: string | null) => {
+          if (!parentId) return
+          const siblings = await tx.projectActivity.findMany({
+            where: { parentId },
+            select: { status: true },
+          })
+          const allCompleted = siblings.every(s => s.status === 'COMPLETED')
+          const anyStarted = siblings.some(s => s.status === 'IN_PROGRESS' || s.status === 'COMPLETED')
+          const newStatus = allCompleted ? 'COMPLETED' : anyStarted ? 'IN_PROGRESS' : 'PENDING'
+          const parent = await tx.projectActivity.update({
+            where: { id: parentId },
+            data: { status: newStatus as any },
+            select: { parentId: true },
+          })
+          await recalcParent(parent.parentId)
+        }
+        await recalcParent(updated.parentId)
+
+        // Auto-transition project status based on root-level activities
+        if (project.status !== 'PAUSED' && project.status !== 'CANCELLED') {
+          const rootActivities = await tx.projectActivity.findMany({
+            where: { projectId, parentId: null },
+            select: { status: true },
+          })
+
+          if (rootActivities.length > 0) {
+            const allCompleted = rootActivities.every(a => a.status === 'COMPLETED')
+            const anyStarted = rootActivities.some(a => a.status === 'IN_PROGRESS' || a.status === 'COMPLETED')
+
+            if (allCompleted && project.status !== 'COMPLETED') {
+              await tx.project.update({
+                where: { id: projectId },
+                data: { status: 'COMPLETED', actualEndDate: new Date() },
+              })
+            } else if (anyStarted && project.status === 'PLANNING') {
+              await tx.project.update({
+                where: { id: projectId },
+                data: { status: 'IN_PROGRESS' },
+              })
+            }
+          }
+        }
+      }
+
+      return updated
     })
 
     return {

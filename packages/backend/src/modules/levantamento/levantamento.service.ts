@@ -57,41 +57,71 @@ export class LevantamentoService {
   }
 
   /**
-   * Load floor plan rooms for a project and return as Ambiente-ready data.
+   * Load floor plan measurements (or rooms as fallback) for a project
+   * and return as Ambiente-ready data.
    */
-  private async loadRoomsForProject(projectId: string) {
+  private async loadMeasurementsForProject(projectId: string) {
     const floorPlans = await this.prisma.floorPlan.findMany({
       where: { projectId },
-      include: { rooms: { orderBy: { order: 'asc' } } },
+      include: {
+        measurements: { orderBy: { order: 'asc' } },
+        rooms: { orderBy: { order: 'asc' } },
+      },
       orderBy: { name: 'asc' },
     })
 
-    return floorPlans.flatMap((fp) =>
-      fp.rooms.map((r, i) => ({
-        nome: r.nome,
-        tags: r.tags,
-        comprimento: r.comprimento,
-        largura: r.largura,
-        peDireito: r.peDireito,
-        qtdPortas: r.qtdPortas,
-        qtdJanelas: r.qtdJanelas,
-        order: i,
-      }))
-    )
+    const result: any[] = []
+
+    for (const fp of floorPlans) {
+      // Prefer measurements if available
+      if (fp.measurements.length > 0) {
+        for (const m of fp.measurements) {
+          result.push({
+            nome: m.label,
+            tags: [],
+            comprimento: 0,
+            largura: 0,
+            peDireito: 0,
+            qtdPortas: 0,
+            qtdJanelas: 0,
+            valorDireto: m.value,
+            tipoMedicao: m.measurementType,
+            areaTipo: m.areaTipo,
+            order: m.order,
+          })
+        }
+      } else if (fp.rooms.length > 0) {
+        // Fallback to rooms for backward compat
+        for (const r of fp.rooms) {
+          result.push({
+            nome: r.nome,
+            tags: r.tags,
+            comprimento: r.comprimento,
+            largura: r.largura,
+            peDireito: r.peDireito,
+            qtdPortas: r.qtdPortas,
+            qtdJanelas: r.qtdJanelas,
+            order: r.order,
+          })
+        }
+      }
+    }
+
+    return result
   }
 
   /**
-   * If an existing levantamento has 0 ambientes, try to import from FloorPlan rooms.
+   * If an existing levantamento has 0 ambientes, try to import from FloorPlan measurements/rooms.
    * Returns the refreshed levantamento with ambientes.
    */
   private async autoImportIfEmpty(levantamento: any, projectId: string) {
     if (levantamento.ambientes.length > 0) return levantamento
 
-    const rooms = await this.loadRoomsForProject(projectId)
-    if (rooms.length === 0) return levantamento
+    const ambientesData = await this.loadMeasurementsForProject(projectId)
+    if (ambientesData.length === 0) return levantamento
 
     await this.prisma.ambiente.createMany({
-      data: rooms.map((r) => ({ levantamentoId: levantamento.id, ...r })),
+      data: ambientesData.map((r) => ({ levantamentoId: levantamento.id, ...r })),
     })
 
     // Re-fetch with populated ambientes
@@ -116,9 +146,45 @@ export class LevantamentoService {
 
     const floorPlan = await this.prisma.floorPlan.findFirst({
       where: { id: floorPlanId, project: { id: projectId, tenantId } },
-      include: { rooms: { orderBy: { order: 'asc' } } },
+      include: {
+        measurements: { orderBy: { order: 'asc' } },
+        rooms: { orderBy: { order: 'asc' } },
+      },
     })
     if (!floorPlan) throw new Error('Planta não encontrada')
+
+    // Build ambientes from measurements or rooms (fallback)
+    const ambientesData: any[] = []
+    if (floorPlan.measurements.length > 0) {
+      for (const m of floorPlan.measurements) {
+        ambientesData.push({
+          nome: m.label,
+          tags: [],
+          comprimento: 0,
+          largura: 0,
+          peDireito: 0,
+          qtdPortas: 0,
+          qtdJanelas: 0,
+          valorDireto: m.value,
+          tipoMedicao: m.measurementType,
+          areaTipo: m.areaTipo,
+          order: m.order,
+        })
+      }
+    } else if (floorPlan.rooms.length > 0) {
+      for (const r of floorPlan.rooms) {
+        ambientesData.push({
+          nome: r.nome,
+          tags: r.tags,
+          comprimento: r.comprimento,
+          largura: r.largura,
+          peDireito: r.peDireito,
+          qtdPortas: r.qtdPortas,
+          qtdJanelas: r.qtdJanelas,
+          order: r.order,
+        })
+      }
+    }
 
     return this.prisma.projetoLevantamento.create({
       data: {
@@ -126,19 +192,8 @@ export class LevantamentoService {
         projectId,
         floorPlanId,
         nome: floorPlan.name,
-        ...(floorPlan.rooms.length > 0 && {
-          ambientes: {
-            create: floorPlan.rooms.map((r, i) => ({
-              nome: r.nome,
-              tags: r.tags,
-              comprimento: r.comprimento,
-              largura: r.largura,
-              peDireito: r.peDireito,
-              qtdPortas: r.qtdPortas,
-              qtdJanelas: r.qtdJanelas,
-              order: i,
-            })),
-          },
+        ...(ambientesData.length > 0 && {
+          ambientes: { create: ambientesData },
         }),
       },
       include: {
@@ -163,7 +218,7 @@ export class LevantamentoService {
     })
     if (!project) throw new Error('Projeto não encontrado')
 
-    const allRooms = await this.loadRoomsForProject(projectId)
+    const allAmbientes = await this.loadMeasurementsForProject(projectId)
 
     return this.prisma.projetoLevantamento.create({
       data: {
@@ -171,8 +226,8 @@ export class LevantamentoService {
         projectId,
         floorPlanId: null,
         nome: project.name,
-        ...(allRooms.length > 0 && {
-          ambientes: { create: allRooms },
+        ...(allAmbientes.length > 0 && {
+          ambientes: { create: allAmbientes },
         }),
       },
       include: {

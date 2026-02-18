@@ -22,14 +22,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { AddActivityDialog } from './AddActivityDialog'
+import { UnifiedActivityWizard } from './UnifiedActivityWizard'
 import { MeasurementFormDialog } from './MeasurementFormDialog'
 import { GanttChart } from './GanttChart'
 import { activityToGanttTask } from '@/lib/gantt-types'
-import { ImportTemplateDialog } from '@/pages/settings/ImportTemplateDialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Plus,
   Trash2,
+  Pencil,
   ChevronDown,
   ChevronRight,
   Loader2,
@@ -75,6 +84,7 @@ function ActivityRow({
   toggleRow,
   canEdit,
   canMeasure,
+  onEdit,
   onDelete,
   onMeasure,
 }: {
@@ -84,6 +94,7 @@ function ActivityRow({
   toggleRow: (id: string) => void
   canEdit: boolean
   canMeasure: boolean
+  onEdit: (e: React.MouseEvent, activity: any) => void
   onDelete: (e: React.MouseEvent, activity: any) => void
   onMeasure: (e: React.MouseEvent, activityId: string, unitActivityId?: string) => void
 }) {
@@ -167,15 +178,25 @@ function ActivityRow({
         </TableCell>
         {(canEdit || canMeasure) && (
           <TableCell>
-            {canEdit && isLeaf && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-neutral-400 hover:text-destructive"
-                onClick={(e) => onDelete(e, activity)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+            {canEdit && (
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-neutral-400 hover:text-primary"
+                  onClick={(e) => onEdit(e, activity)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-neutral-400 hover:text-destructive"
+                  onClick={(e) => onDelete(e, activity)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             )}
           </TableCell>
         )}
@@ -191,6 +212,7 @@ function ActivityRow({
           toggleRow={toggleRow}
           canEdit={canEdit}
           canMeasure={canMeasure}
+          onEdit={onEdit}
           onDelete={onDelete}
           onMeasure={onMeasure}
         />
@@ -252,14 +274,41 @@ function ActivityRow({
   )
 }
 
+function countDescendants(activity: any): { phases: number; stages: number; activities: number } {
+  let phases = 0, stages = 0, activities = 0
+  function walk(items: any[]) {
+    for (const item of items) {
+      if (item.level === 'PHASE') phases++
+      else if (item.level === 'STAGE') stages++
+      else activities++
+      if (item.children?.length) walk(item.children)
+    }
+  }
+  if (activity.children?.length) walk(activity.children)
+  return { phases, stages, activities }
+}
+
+function getDeleteMessage(activity: any): string {
+  const levelLabel = activity.level === 'PHASE' ? 'a fase' : activity.level === 'STAGE' ? 'a etapa' : 'a atividade'
+  const desc = countDescendants(activity)
+  const parts: string[] = []
+  if (desc.phases > 0) parts.push(`${desc.phases} fase(s)`)
+  if (desc.stages > 0) parts.push(`${desc.stages} etapa(s)`)
+  if (desc.activities > 0) parts.push(`${desc.activities} atividade(s)`)
+
+  if (parts.length > 0) {
+    return `Excluir ${levelLabel} "${activity.name}" e seus ${parts.join(' e ')}? Todas as medições associadas também serão removidas. Esta ação não pode ser desfeita.`
+  }
+  return `Tem certeza que deseja excluir ${levelLabel} "${activity.name}"? Todas as medições associadas também serão removidas. Esta ação não pode ser desfeita.`
+}
+
 export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
   const queryClient = useQueryClient()
   const canEdit = usePermission('activities:edit')
   const canMeasure = usePermission('measurements:create')
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const [showSetupDialog, setShowSetupDialog] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [activityToDelete, setActivityToDelete] = useState<any>(null)
   const [measurementDialog, setMeasurementDialog] = useState<{
@@ -268,6 +317,9 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
     unitActivityId?: string
   }>({ open: false })
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list')
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [activityToEdit, setActivityToEdit] = useState<any>(null)
+  const [editForm, setEditForm] = useState({ name: '', weight: 0, status: 'PENDING' })
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ['project-activities', projectId],
@@ -286,6 +338,21 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Erro ao excluir atividade')
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ activityId, data }: { activityId: string; data: any }) =>
+      projectsAPI.updateActivity(projectId, activityId, data),
+    onSuccess: () => {
+      toast.success('Atividade atualizada com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
+      setEditDialogOpen(false)
+      setActivityToEdit(null)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao atualizar atividade')
     },
   })
 
@@ -308,6 +375,29 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
     if (activityToDelete) {
       deleteMutation.mutate(activityToDelete.id)
     }
+  }
+
+  const handleEditClick = (e: React.MouseEvent, activity: any) => {
+    e.stopPropagation()
+    setActivityToEdit(activity)
+    setEditForm({
+      name: activity.name || '',
+      weight: activity.weight ?? 0,
+      status: activity.status || 'PENDING',
+    })
+    setEditDialogOpen(true)
+  }
+
+  const confirmEdit = () => {
+    if (!activityToEdit) return
+    updateMutation.mutate({
+      activityId: activityToEdit.id,
+      data: {
+        name: editForm.name,
+        weight: Number(editForm.weight),
+        status: editForm.status,
+      },
+    })
   }
 
   const openMeasurementDialog = (
@@ -388,7 +478,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
             </div>
           )}
           {canEdit && (
-            <Button onClick={() => setShowAddDialog(true)}>
+            <Button onClick={() => setShowWizard(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Adicionar Atividade
             </Button>
@@ -408,7 +498,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
             importe de um planejamento para acompanhar o progresso de cada fase.
           </p>
           {canEdit && (
-            <Button className="mt-6" onClick={() => setShowSetupDialog(true)}>
+            <Button className="mt-6" onClick={() => setShowWizard(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Adicionar Primeiras Atividades
             </Button>
@@ -433,7 +523,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                   <TableHead className="w-[180px]">Progresso</TableHead>
                   <TableHead className="w-[120px]">Status</TableHead>
                   {(canEdit || canMeasure) && (
-                    <TableHead className="w-[80px]">Ações</TableHead>
+                    <TableHead className="w-[100px]">Ações</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -447,6 +537,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                     toggleRow={toggleRow}
                     canEdit={canEdit}
                     canMeasure={canMeasure}
+                    onEdit={handleEditClick}
                     onDelete={handleDeleteClick}
                     onMeasure={openMeasurementDialog}
                   />
@@ -457,19 +548,11 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
         </Card>
       )}
 
-      {/* Setup Dialog (first time - import/template/blank) */}
-      <ImportTemplateDialog
-        open={showSetupDialog}
-        onOpenChange={setShowSetupDialog}
+      {/* Unified Activity Wizard */}
+      <UnifiedActivityWizard
         projectId={projectId}
-        showBlankOption
-      />
-
-      {/* Add Activity Dialog */}
-      <AddActivityDialog
-        projectId={projectId}
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
+        open={showWizard}
+        onOpenChange={setShowWizard}
         existingCount={totalCount}
       />
 
@@ -488,12 +571,12 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir Atividade</DialogTitle>
+            <DialogTitle>
+              Excluir {activityToDelete?.level === 'PHASE' ? 'Fase' : activityToDelete?.level === 'STAGE' ? 'Etapa' : 'Atividade'}
+            </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-neutral-600">
-            Tem certeza que deseja excluir a atividade{' '}
-            <strong>{activityToDelete?.name}</strong>? Todas as medições
-            associadas também serão removidas. Esta ação não pode ser desfeita.
+            {activityToDelete && getDeleteMessage(activityToDelete)}
           </p>
           <DialogFooter>
             <Button
@@ -514,6 +597,74 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Activity Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Editar {activityToEdit?.level === 'PHASE' ? 'Fase' : activityToEdit?.level === 'STAGE' ? 'Etapa' : 'Atividade'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nome</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-weight">Peso</Label>
+              <Input
+                id="edit-weight"
+                type="number"
+                min={0}
+                max={100}
+                value={editForm.weight}
+                onChange={(e) => setEditForm((f) => ({ ...f, weight: Number(e.target.value) }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={editForm.status}
+                onValueChange={(value) => setEditForm((f) => ({ ...f, status: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pendente</SelectItem>
+                  <SelectItem value="IN_PROGRESS">Em Andamento</SelectItem>
+                  <SelectItem value="COMPLETED">Concluída</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false)
+                setActivityToEdit(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={updateMutation.isPending || !editForm.name.trim()}
+              onClick={confirmEdit}
+            >
+              {updateMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

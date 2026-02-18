@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth.store'
 import { projectsAPI } from '@/lib/api-client'
 import { useWorkflowStatus, type WorkflowStatus } from '@/hooks/useWorkflowStatus'
@@ -13,7 +13,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import {
   ClipboardList,
@@ -30,6 +29,11 @@ import {
   Lightbulb,
   ArrowRight,
   ChevronLeft,
+  Building2,
+  MapPin,
+  FolderOpen,
+  ChevronDown,
+  RefreshCw,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -46,6 +50,8 @@ interface PhaseAction {
   requiresProject: boolean
   /** Evaluates whether this action is already done */
   doneCheck?: (ctx: { projectId: string | null; project: any }) => boolean
+  /** If true, this action is optional and shown with a visual indicator */
+  optional?: boolean
 }
 
 interface Phase {
@@ -78,8 +84,8 @@ const PHASES: Phase[] = [
     tip: 'Comece criando o projeto — isso desbloqueia todas as outras funcionalidades da plataforma.',
     actions: [
       { label: 'Criar Projeto', path: '/projects', requiresProject: false, doneCheck: ({ projectId }) => !!projectId },
-      { label: 'Definir Plantas, Blocos e Unidades', path: '/units', requiresProject: true, doneCheck: ({ project }) => (project?._count?.units ?? 0) > 0 },
       { label: 'Associar Atividades ao Projeto', path: '/projects', projectPath: '/projects/:id/activities', requiresProject: true, doneCheck: ({ project }) => (project?._count?.activities ?? 0) > 0 },
+      { label: 'Definir Plantas, Blocos e Unidades', path: '/units', projectPath: '/units?project=:id', requiresProject: true, doneCheck: ({ project }) => (project?._count?.units ?? 0) > 0, optional: true },
     ],
   },
   {
@@ -99,7 +105,7 @@ const PHASES: Phase[] = [
     ],
     tip: 'Use a Calculadora de Materiais na aba "Levantamento" do projeto para criar orçamentos com preços SINAPI ou valores próprios.',
     actions: [
-      { label: 'Calculadora de Materiais', path: '/levantamento', requiresProject: false },
+      { label: 'Calculadora de Materiais', path: '/levantamento', projectPath: '/projects/:id/levantamento', requiresProject: true },
       { label: 'Revisar atividades do projeto', path: '/projects', projectPath: '/projects/:id/review-activities', requiresProject: true },
       { label: 'Relatório de Materiais', path: '/projects', projectPath: '/projects/:id/levantamento-report', requiresProject: true },
     ],
@@ -122,7 +128,7 @@ const PHASES: Phase[] = [
     tip: 'Cadastre fornecedores primeiro, depois crie pedidos de compra vinculados ao projeto selecionado.',
     actions: [
       { label: 'Cadastrar Fornecedores', path: '/suppliers', requiresProject: false },
-      { label: 'Criar Pedidos de Compra', path: '/purchases', requiresProject: false },
+      { label: 'Criar Pedidos de Compra', path: '/purchases', projectPath: '/purchases?project=:id', requiresProject: true },
     ],
   },
   {
@@ -227,7 +233,7 @@ const PHASES: Phase[] = [
     actions: [
       { label: 'Encerrar projeto', path: '/projects', projectPath: '/projects/:id/close', requiresProject: true },
       { label: 'Quitar pendências financeiras', path: '/financial', requiresProject: false },
-      { label: 'Gerenciar Unidades', path: '/units', requiresProject: false },
+      { label: 'Gerenciar Unidades', path: '/units', projectPath: '/units?project=:id', requiresProject: true },
     ],
   },
 ]
@@ -607,6 +613,8 @@ function PhaseDetailPanel({
   onNext,
   onPrev,
   workflowStatus,
+  onRefresh,
+  isRefreshing,
 }: {
   phase: Phase
   state: NodeState
@@ -617,6 +625,8 @@ function PhaseDetailPanel({
   onNext?: () => void
   onPrev?: () => void
   workflowStatus?: WorkflowStatus
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }) {
   const navigate = useNavigate()
   const Icon = phase.icon
@@ -671,9 +681,22 @@ function PhaseDetailPanel({
       {/* Sequential actions — primary section */}
       {phase.actions.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-neutral-800 mb-3">
-            Próximos passos
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-neutral-800">
+              Próximos passos
+            </h4>
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-neutral-400 hover:text-neutral-600"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
+          </div>
           <div className="space-y-2">
             {phase.actions.map((action, idx) => {
               const disabled = action.requiresProject && !selectedProjectId
@@ -683,6 +706,8 @@ function PhaseDetailPanel({
               const path = action.projectPath && selectedProjectId
                 ? action.projectPath.replace(':id', selectedProjectId)
                 : action.path
+              const separator = path.includes('?') ? '&' : '?'
+              const fullPath = `${path}${separator}phase=${phase.number}`
 
               return (
                 <div
@@ -690,12 +715,12 @@ function PhaseDetailPanel({
                   role={disabled ? undefined : 'button'}
                   tabIndex={disabled ? undefined : 0}
                   onClick={() => {
-                    if (!disabled) navigate(`${path}?phase=${phase.number}`)
+                    if (!disabled) navigate(fullPath)
                   }}
                   onKeyDown={(e) => {
                     if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
                       e.preventDefault()
-                      navigate(`${path}?phase=${phase.number}`)
+                      navigate(fullPath)
                     }
                   }}
                   className={`
@@ -704,7 +729,9 @@ function PhaseDetailPanel({
                       ? 'border-green-200 bg-green-50/60 hover:border-green-300 hover:shadow-sm cursor-pointer'
                       : disabled
                         ? 'border-neutral-100 bg-neutral-50/50 cursor-default'
-                        : 'border-neutral-200 bg-white hover:border-[#b8a378] hover:shadow-md hover:scale-[1.01] cursor-pointer'
+                        : action.optional
+                          ? 'border-blue-100 bg-blue-50/30 hover:border-blue-300 hover:shadow-md hover:scale-[1.01] cursor-pointer'
+                          : 'border-neutral-200 bg-white hover:border-[#b8a378] hover:shadow-md hover:scale-[1.01] cursor-pointer'
                     }
                   `}
                 >
@@ -718,7 +745,9 @@ function PhaseDetailPanel({
                       className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
                         disabled
                           ? 'bg-neutral-100 text-neutral-300'
-                          : 'bg-[#b8a378]/15 text-[#b8a378]'
+                          : action.optional
+                            ? 'bg-blue-100 text-blue-400'
+                            : 'bg-[#b8a378]/15 text-[#b8a378]'
                       }`}
                     >
                       {idx + 1}
@@ -726,13 +755,20 @@ function PhaseDetailPanel({
                   )}
 
                   {/* Label */}
-                  <span
-                    className={`flex-1 font-medium ${
-                      done ? 'text-green-700 text-sm' : disabled ? 'text-neutral-400 text-sm' : 'text-neutral-800 text-sm'
-                    }`}
-                  >
-                    {action.label}
-                  </span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <span
+                      className={`font-medium ${
+                        done ? 'text-green-700 text-sm' : disabled ? 'text-neutral-400 text-sm' : 'text-neutral-800 text-sm'
+                      }`}
+                    >
+                      {action.label}
+                    </span>
+                    {action.optional && (
+                      <span className="text-[10px] font-medium text-blue-400 bg-blue-50 px-1.5 py-0.5 rounded">
+                        Opcional
+                      </span>
+                    )}
+                  </div>
 
                   {/* Status indicator */}
                   {done ? (
@@ -745,7 +781,7 @@ function PhaseDetailPanel({
                       Selecione um projeto
                     </span>
                   ) : (
-                    <ArrowRight className="h-4 w-4 text-neutral-300 group-hover:text-[#b8a378] flex-shrink-0 transition-colors" />
+                    <ArrowRight className={`h-4 w-4 flex-shrink-0 transition-colors ${action.optional ? 'text-blue-300' : 'text-neutral-300 group-hover:text-[#b8a378]'}`} />
                   )}
                 </div>
               )
@@ -823,10 +859,23 @@ function PhaseDetailPanel({
 
 export function Dashboard() {
   const { user, tenant } = useAuthStore()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedPhaseIdx, setSelectedPhaseIdx] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await queryClient.invalidateQueries({ queryKey: ['projects'] })
+    await queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    if (selectedProjectId) {
+      await queryClient.invalidateQueries({ queryKey: ['project-activities', selectedProjectId] })
+      await queryClient.invalidateQueries({ queryKey: ['project-progress', selectedProjectId] })
+    }
+    setTimeout(() => setIsRefreshing(false), 600)
+  }
 
   // Restore selected phase from query param (e.g. /?phase=3)
   useEffect(() => {
@@ -868,34 +917,11 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-neutral-900">
-            Bem-vindo, {user?.name}!
-          </h1>
-          <p className="mt-1 text-neutral-600">{tenant?.name}</p>
-        </div>
-        <div className="w-full sm:w-72">
-          <Select
-            value={selectedProjectId ?? 'none'}
-            onValueChange={(v) => {
-              setSelectedProjectId(v === 'none' ? null : v)
-              setSelectedPhaseIdx(0)
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecionar Projeto" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Visão geral</SelectItem>
-              {projects.map((p: any) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-neutral-900">
+          Bem-vindo, {user?.name}!
+        </h1>
+        <p className="mt-1 text-neutral-600">{tenant?.name}</p>
       </div>
 
       {/* ── Infographic Flow (Desktop) ─────────────────────────────── */}
@@ -1019,6 +1045,146 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* ── Project Selector / Overview ─────────────────────────────── */}
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-800 mb-3">
+          Projeto
+        </h2>
+
+        {selectedProject ? (
+          /* Selected project card */
+          <Card className="border-neutral-200 overflow-hidden">
+            <div className="flex items-center gap-4 px-5 py-4">
+              <div
+                className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
+                style={{ background: `linear-gradient(135deg, ${GOLD}20, ${GOLD}10)` }}
+              >
+                <Building2 className="h-5 w-5" style={{ color: GOLD }} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-semibold text-neutral-900 truncate">
+                    {selectedProject.name}
+                  </h3>
+                  <Badge
+                    variant="secondary"
+                    className={`text-[10px] flex-shrink-0 ${
+                      selectedProject.status === 'COMPLETED'
+                        ? 'bg-green-100 text-green-700'
+                        : selectedProject.status === 'CANCELLED'
+                          ? 'bg-neutral-200 text-neutral-500'
+                          : selectedProject.status === 'PAUSED'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : selectedProject.status === 'IN_PROGRESS'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-blue-100 text-blue-700'
+                    }`}
+                  >
+                    {selectedProject.status === 'PLANNING'
+                      ? 'Planejamento'
+                      : selectedProject.status === 'IN_PROGRESS'
+                        ? 'Em Andamento'
+                        : selectedProject.status === 'PAUSED'
+                          ? 'Pausado'
+                          : selectedProject.status === 'COMPLETED'
+                            ? 'Concluído'
+                            : selectedProject.status === 'CANCELLED'
+                              ? 'Cancelado'
+                              : selectedProject.status}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center gap-4 mt-1 text-xs text-neutral-500">
+                  {selectedProject.address?.city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {selectedProject.address.neighborhood && `${selectedProject.address.neighborhood}, `}
+                      {selectedProject.address.city}/{selectedProject.address.state}
+                    </span>
+                  )}
+                  {(selectedProject._count?.units ?? 0) > 0 && (
+                    <span>{selectedProject._count.units} unidade{selectedProject._count.units !== 1 ? 's' : ''}</span>
+                  )}
+                  {(selectedProject._count?.activities ?? 0) > 0 && (
+                    <span>{selectedProject._count.activities} atividade{selectedProject._count.activities !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
+              </div>
+
+              <Select
+                value={selectedProjectId ?? 'none'}
+                onValueChange={(v) => {
+                  setSelectedProjectId(v === 'none' ? null : v)
+                  setSelectedPhaseIdx(0)
+                }}
+              >
+                <SelectTrigger className="w-auto gap-2 border-neutral-300 text-sm font-medium text-neutral-600 hover:border-[#b8a378] flex-shrink-0">
+                  <ChevronDown className="h-4 w-4" />
+                  Trocar
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Visão geral</SelectItem>
+                  {projects.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </Card>
+        ) : (
+          /* No project selected — project picker */
+          <Card className="border-neutral-200 overflow-hidden">
+            <div className="px-5 py-4">
+              {projects.length === 0 ? (
+                <div className="flex flex-col items-center py-6">
+                  <FolderOpen className="h-10 w-10 text-neutral-300" />
+                  <p className="mt-2 text-sm text-neutral-500">
+                    Nenhum projeto cadastrado. Crie um projeto para começar.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                    {projects.map((p: any) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => { setSelectedProjectId(p.id); setSelectedPhaseIdx(0) }}
+                        className="flex items-center gap-3 rounded-xl border-2 border-neutral-200 bg-white px-4 py-3 text-left transition-all duration-200 hover:border-[#b8a378] hover:shadow-md hover:scale-[1.01]"
+                      >
+                        <div
+                          className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
+                          style={{ background: `linear-gradient(135deg, ${GOLD}20, ${GOLD}10)` }}
+                        >
+                          <Building2 className="h-4 w-4" style={{ color: GOLD }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-neutral-900 block truncate">
+                            {p.name}
+                          </span>
+                          {p.address?.city && (
+                            <span className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5">
+                              <MapPin className="h-2.5 w-2.5" />
+                              {p.address.city}/{p.address.state}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-neutral-400 text-center mt-3">
+                    Selecione um projeto para acompanhar as etapas da obra.
+                  </p>
+                </>
+              )}
+            </div>
+          </Card>
+        )}
+      </div>
+
       {/* ── Phase Details (Desktop: 2-col | Mobile: detail only) ──── */}
       <div>
         <h2 className="text-lg font-semibold text-neutral-800 mb-4">
@@ -1066,6 +1232,8 @@ export function Dashboard() {
               onPrev={selectedPhaseIdx > 0 ? () => setSelectedPhaseIdx(selectedPhaseIdx - 1) : undefined}
               onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
               workflowStatus={workflowStatus}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
             />
           </Card>
         </div>
@@ -1088,6 +1256,8 @@ export function Dashboard() {
               onPrev={selectedPhaseIdx > 0 ? () => setSelectedPhaseIdx(selectedPhaseIdx - 1) : undefined}
               onNext={selectedPhaseIdx < PHASES.length - 1 ? () => setSelectedPhaseIdx(selectedPhaseIdx + 1) : undefined}
               workflowStatus={workflowStatus}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
             />
           </Card>
         </div>

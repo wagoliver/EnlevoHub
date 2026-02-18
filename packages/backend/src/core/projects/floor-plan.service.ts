@@ -12,11 +12,16 @@ function serializeFloorPlan(fp: any) {
       largura: Number(r.largura),
       peDireito: Number(r.peDireito),
     })),
+    measurements: (fp.measurements || []).map((m: any) => ({
+      ...m,
+      value: Number(m.value),
+    })),
   }
 }
 
 const ROOMS_INCLUDE = {
   rooms: { orderBy: { order: 'asc' as const } },
+  measurements: { orderBy: { order: 'asc' as const } },
   _count: { select: { units: true } },
 }
 
@@ -50,8 +55,9 @@ export class FloorPlanService {
       throw new Error('Projeto não encontrado')
     }
 
-    const { rooms, ...floorPlanData } = data
+    const { rooms, measurements, ...floorPlanData } = data
     const hasRooms = rooms && rooms.length > 0
+    const hasMeasurements = measurements && measurements.length > 0
 
     try {
       const floorPlan = await this.prisma.floorPlan.create({
@@ -64,7 +70,7 @@ export class FloorPlanService {
           bedrooms: floorPlanData.bedrooms,
           bathrooms: floorPlanData.bathrooms,
           ...(floorPlanData.defaultPrice !== undefined && { defaultPrice: floorPlanData.defaultPrice }),
-          detalhado: !!hasRooms,
+          detalhado: !!(hasRooms || hasMeasurements),
           metadata: floorPlanData.metadata || undefined,
           ...(hasRooms && {
             rooms: {
@@ -77,6 +83,18 @@ export class FloorPlanService {
                 peDireito: r.peDireito,
                 qtdPortas: r.qtdPortas,
                 qtdJanelas: r.qtdJanelas,
+                order: i,
+              })),
+            },
+          }),
+          ...(hasMeasurements && {
+            measurements: {
+              create: measurements.map((m, i) => ({
+                category: m.category,
+                label: m.label,
+                measurementType: m.measurementType,
+                value: m.value,
+                areaTipo: m.areaTipo,
                 order: i,
               })),
             },
@@ -111,8 +129,9 @@ export class FloorPlanService {
       throw new Error('Planta não encontrada')
     }
 
-    const { rooms, ...floorPlanData } = data
+    const { rooms, measurements, ...floorPlanData } = data
     const roomsProvided = rooms !== undefined
+    const measurementsProvided = measurements !== undefined
 
     try {
       // If rooms are provided, delete existing and recreate
@@ -122,7 +141,15 @@ export class FloorPlanService {
         })
       }
 
+      // If measurements are provided, delete existing and recreate
+      if (measurementsProvided) {
+        await this.prisma.floorPlanMeasurement.deleteMany({
+          where: { floorPlanId },
+        })
+      }
+
       const hasRooms = roomsProvided && rooms && rooms.length > 0
+      const hasMeasurements = measurementsProvided && measurements && measurements.length > 0
 
       const floorPlan = await this.prisma.floorPlan.update({
         where: { id: floorPlanId },
@@ -135,7 +162,7 @@ export class FloorPlanService {
           ...(floorPlanData.bathrooms !== undefined && { bathrooms: floorPlanData.bathrooms }),
           ...(floorPlanData.defaultPrice !== undefined && { defaultPrice: floorPlanData.defaultPrice }),
           ...(floorPlanData.metadata !== undefined && { metadata: floorPlanData.metadata }),
-          ...(roomsProvided && { detalhado: !!hasRooms }),
+          ...((roomsProvided || measurementsProvided) && { detalhado: !!(hasRooms || hasMeasurements) }),
           ...(hasRooms && {
             rooms: {
               create: rooms!.map((r, i) => ({
@@ -147,6 +174,18 @@ export class FloorPlanService {
                 peDireito: r.peDireito,
                 qtdPortas: r.qtdPortas,
                 qtdJanelas: r.qtdJanelas,
+                order: i,
+              })),
+            },
+          }),
+          ...(hasMeasurements && {
+            measurements: {
+              create: measurements!.map((m, i) => ({
+                category: m.category,
+                label: m.label,
+                measurementType: m.measurementType,
+                value: m.value,
+                areaTipo: m.areaTipo,
                 order: i,
               })),
             },

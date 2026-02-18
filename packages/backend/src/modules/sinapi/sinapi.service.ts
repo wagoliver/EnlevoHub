@@ -1,6 +1,31 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import type { SearchInsumosQuery, SearchComposicoesQuery, CalculateComposicaoQuery } from './sinapi.schemas'
 
+function buildSearchFilter(search: string) {
+  const words = search.trim().split(/\s+/).filter(w => w.length > 0)
+  if (words.length === 0) return undefined
+
+  if (words.length === 1) {
+    return {
+      OR: [
+        { codigo: { contains: words[0], mode: 'insensitive' as const } },
+        { descricao: { contains: words[0], mode: 'insensitive' as const } },
+      ],
+    }
+  }
+
+  return {
+    OR: [
+      { codigo: { contains: search.trim(), mode: 'insensitive' as const } },
+      {
+        AND: words.map(word => ({
+          descricao: { contains: word, mode: 'insensitive' as const },
+        })),
+      },
+    ],
+  }
+}
+
 export class SinapiService {
   constructor(private prisma: PrismaClient) {}
 
@@ -35,12 +60,7 @@ export class SinapiService {
 
     const where: Prisma.SinapiInsumoWhereInput = {
       ...(tipo && { tipo }),
-      ...(search && {
-        OR: [
-          { codigo: { contains: search, mode: 'insensitive' as const } },
-          { descricao: { contains: search, mode: 'insensitive' as const } },
-        ],
-      }),
+      ...(search && buildSearchFilter(search)),
     }
 
     const [data, total] = await Promise.all([
@@ -79,12 +99,7 @@ export class SinapiService {
     const skip = (page - 1) * limit
 
     const where: Prisma.SinapiComposicaoWhereInput = {
-      ...(search && {
-        OR: [
-          { codigo: { contains: search, mode: 'insensitive' as const } },
-          { descricao: { contains: search, mode: 'insensitive' as const } },
-        ],
-      }),
+      ...(search && buildSearchFilter(search)),
     }
 
     const [data, total] = await Promise.all([

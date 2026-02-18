@@ -181,6 +181,7 @@ model FloorPlan {
   project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   units          Unit[]
   rooms          FloorPlanRoom[]
+  measurements   FloorPlanMeasurement[]
   levantamentos  ProjetoLevantamento[]
 
   @@unique([projectId, name])
@@ -208,6 +209,24 @@ model FloorPlanRoom {
 
   @@index([floorPlanId])
   @@map("floor_plan_rooms")
+}
+
+model FloorPlanMeasurement {
+  id              String   @id @default(uuid())
+  floorPlanId     String
+  category        String       // "TERRENO", "ALVENARIA", "PISO", etc.
+  label           String       // Nome display: "Área de Piso"
+  measurementType String       // "AREA_M2", "LINEAR_M", "QUANTITY", "VOLUME_M3"
+  value           Decimal  @db.Decimal(12, 4)
+  areaTipo        String?      // Mapa p/ AreaTipo do calculator: PISO, PAREDE_LIQ, etc.
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  floorPlan FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+
+  @@index([floorPlanId])
+  @@map("floor_plan_measurements")
 }
 
 model Block {
@@ -1040,6 +1059,9 @@ model Ambiente {
   peDireito       Decimal      @db.Decimal(4, 2) @default(2.80)
   qtdPortas       Int          @default(1)
   qtdJanelas      Int          @default(1)
+  valorDireto     Decimal?     @db.Decimal(12, 4)
+  tipoMedicao     String?
+  areaTipo        String?
   observacoes     String?      @db.Text
   order           Int          @default(0)
   createdAt       DateTime     @default(now())

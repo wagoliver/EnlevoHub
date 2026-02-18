@@ -15,7 +15,7 @@ export class ProjectService {
         status: data.status || 'PLANNING',
         startDate: data.startDate ? new Date(data.startDate) : null,
         expectedEndDate: data.expectedEndDate ? new Date(data.expectedEndDate) : null,
-        budget: data.budget,
+        budget: data.budget ?? 0,
         quantidadeUnidades: data.quantidadeUnidades ?? 1,
         metadata: data.metadata as any,
       },

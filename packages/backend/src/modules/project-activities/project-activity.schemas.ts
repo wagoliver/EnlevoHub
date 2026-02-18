@@ -6,12 +6,16 @@ export const createProjectActivitySchema = z.object({
   order: z.number().int().min(0),
   scope: z.enum(['ALL_UNITS', 'SPECIFIC_UNITS', 'GENERAL']).default('ALL_UNITS'),
   unitIds: z.array(z.string()).optional(), // required when scope = SPECIFIC_UNITS
+  level: z.enum(['PHASE', 'STAGE', 'ACTIVITY']).default('ACTIVITY'),
+  parentId: z.string().uuid().optional().nullable(),
+  sinapiCodigo: z.string().max(20).optional().nullable(),
 })
 
 export const updateProjectActivitySchema = z.object({
   name: z.string().min(2).max(200).optional(),
   weight: z.number().min(0).max(100).optional(),
   order: z.number().int().min(0).optional(),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
 })
 
 export const createFromTemplateSchema = z.object({

@@ -94,7 +94,9 @@ export function Units() {
   const canEdit = usePermission('units:edit')
   const canDelete = usePermission('units:delete')
 
-  const [selectedProject, setSelectedProject] = useState('')
+  const projectParam = searchParams.get('project')
+
+  const [selectedProject, setSelectedProject] = useState(projectParam || '')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')

@@ -114,6 +114,30 @@ export function getQuantityLabel(areaTipo?: string | null): string {
   }
 }
 
+/**
+ * Resolve a quantidade para um serviço a partir de um ambiente.
+ * Se o ambiente tem valorDireto e areaTipo compatível, usa direto.
+ * Caso contrário, faz fallback para o cálculo por dimensões.
+ */
+export function getQuantidadeFromAmbiente(
+  areaTipo: AreaTipo,
+  ambiente: {
+    valorDireto?: number | null
+    areaTipo?: string | null
+    comprimento: number | string
+    largura: number | string
+    peDireito: number | string
+    qtdPortas: number
+    qtdJanelas: number
+  },
+): number {
+  if (ambiente.valorDireto != null && ambiente.areaTipo === areaTipo) {
+    return Number(ambiente.valorDireto)
+  }
+  const areas = calcularAreas(ambiente)
+  return getQuantidadePorArea(areaTipo, areas)
+}
+
 /** Lista única de etapas extraídas do catálogo, na ordem natural de obra. */
 export const ETAPAS_LISTA = [
   'Alvenaria',

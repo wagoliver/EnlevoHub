@@ -1,0 +1,903 @@
+import { useState, useRef } from 'react'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import * as XLSX from 'xlsx'
+import { projectsAPI } from '@/lib/api-client'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Loader2,
+  Upload,
+  Download,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  HelpCircle,
+  PenLine,
+  FileSpreadsheet,
+  ClipboardList,
+  Plus,
+} from 'lucide-react'
+import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from '@/pages/settings/template-models'
+import type { TemplateModel } from '@/pages/settings/template-models'
+import { HierarchicalItemEditor, type TemplatePhase } from '@/pages/settings/HierarchicalItemEditor'
+import { rowsToPhases, injectSinapiMap } from '@/pages/settings/template-utils'
+import type { ParsedPhase, ValidationError } from '@/pages/settings/template-utils'
+import { ManualActivityForm } from './ManualActivityForm'
+
+interface UnifiedActivityWizardProps {
+  projectId: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  existingCount: number
+}
+
+type SourceType = 'model' | 'upload' | 'blank' | 'manual'
+
+const HEADERS = [
+  'Fase',
+  'Percentual (%)',
+  'Cor',
+  'Etapa',
+  'Atividade',
+  'Peso (1-5)',
+  'Duração (dias)',
+  'Dependências',
+]
+
+function generateModelXLSX(template: TemplateModel) {
+  const data = [HEADERS, ...template.rows]
+  const ws = XLSX.utils.aoa_to_sheet(data)
+  ws['!cols'] = [
+    { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 20 },
+    { wch: 22 }, { wch: 8 }, { wch: 16 }, { wch: 22 },
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Template')
+  XLSX.writeFile(wb, `modelo-${template.key}.xlsx`)
+}
+
+function generateSampleXLSX() {
+  const sampleRows: any[][] = [
+    ['Fundação', 30, '#8B4513', 'Terraplanagem', 'Limpeza do terreno', 1, 2, ''],
+    ['Fundação', 30, '#8B4513', 'Terraplanagem', 'Escavação', 2, 3, 'Limpeza do terreno'],
+    ['Fundação', 30, '#8B4513', 'Infraestrutura', 'Sapatas', 4, 8, 'Escavação'],
+    ['Estrutura', 40, '#3498DB', 'Alvenaria', 'Levantamento de paredes', 4, 15, 'Sapatas'],
+    ['Estrutura', 40, '#3498DB', 'Alvenaria', 'Vergas e contravergas', 2, 4, 'Levantamento de paredes'],
+    ['Estrutura', 40, '#3498DB', 'Cobertura', 'Estrutura do telhado', 3, 7, 'Vergas e contravergas'],
+    ['Acabamento', 30, '#27AE60', 'Revestimento', 'Chapisco', 2, 5, 'Levantamento de paredes'],
+    ['Acabamento', 30, '#27AE60', 'Revestimento', 'Reboco', 3, 8, 'Chapisco'],
+    ['Acabamento', 30, '#27AE60', 'Pintura', 'Pintura interna', 2, 6, 'Reboco'],
+  ]
+  const ws = XLSX.utils.aoa_to_sheet([HEADERS, ...sampleRows])
+  ws['!cols'] = [
+    { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 20 },
+    { wch: 22 }, { wch: 8 }, { wch: 16 }, { wch: 22 },
+  ]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Atividades')
+  XLSX.writeFile(wb, 'modelo-exemplo-atividades.xlsx')
+}
+
+function parseSpreadsheet(
+  file: File,
+  autoCalcPercentage: boolean
+): Promise<{ rows: any[][]; errors: ValidationError[] }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const wb = XLSX.read(data, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
+
+        if (raw.length < 2) {
+          resolve({ rows: [], errors: [{ row: 0, message: 'Arquivo vazio ou sem dados' }] })
+          return
+        }
+
+        const headers = raw[0].map((h: any) => String(h).trim())
+        const missingHeaders = HEADERS.filter(
+          (h) => !headers.some((rh: string) => rh.toLowerCase() === h.toLowerCase())
+        )
+
+        if (missingHeaders.length > 0) {
+          resolve({
+            rows: [],
+            errors: [{ row: 1, message: `Cabeçalhos ausentes: ${missingHeaders.join(', ')}` }],
+          })
+          return
+        }
+
+        const idx: Record<string, number> = {}
+        HEADERS.forEach((h) => {
+          idx[h] = headers.findIndex((rh: string) => rh.toLowerCase() === h.toLowerCase())
+        })
+
+        const dataRows = raw.slice(1).filter((row) => row.some((cell: any) => cell != null && String(cell).trim() !== ''))
+        const errors: ValidationError[] = []
+
+        for (let i = 0; i < dataRows.length; i++) {
+          const row = dataRows[i]
+          const rowNum = i + 2
+
+          const fase = String(row[idx['Fase']] ?? '').trim()
+          const etapa = String(row[idx['Etapa']] ?? '').trim()
+          const atividade = String(row[idx['Atividade']] ?? '').trim()
+          const peso = Number(row[idx['Peso (1-5)']])
+          const percentual = Number(row[idx['Percentual (%)']])
+
+          if (!fase) errors.push({ row: rowNum, message: 'Fase não preenchida' })
+          if (!etapa) errors.push({ row: rowNum, message: 'Etapa não preenchida' })
+          if (!atividade) errors.push({ row: rowNum, message: 'Atividade não preenchida' })
+          if (!peso || !Number.isInteger(peso) || peso < 1 || peso > 5) errors.push({ row: rowNum, message: 'Peso deve ser um número inteiro de 1 a 5' })
+          if (!autoCalcPercentage && (!percentual || percentual <= 0)) errors.push({ row: rowNum, message: 'Percentual deve ser > 0' })
+        }
+
+        resolve({
+          rows: dataRows.map((row) => HEADERS.map((h) => row[idx[h]])),
+          errors,
+        })
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo'))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+/** Convert TemplatePhase[] from HierarchicalItemEditor to ParsedPhase[] format */
+function templatePhasesToParsed(templatePhases: TemplatePhase[]): ParsedPhase[] {
+  return templatePhases.map((p, pIdx) => ({
+    name: p.name,
+    order: pIdx,
+    percentageOfTotal: p.percentageOfTotal,
+    color: p.color || null,
+    stages: p.stages.map((s, sIdx) => ({
+      name: s.name,
+      order: sIdx,
+      activities: s.activities.map((a, aIdx) => ({
+        name: a.name,
+        order: aIdx,
+        weight: a.weight,
+        durationDays: a.durationDays ?? null,
+        dependencies: a.dependencies && a.dependencies.length > 0 ? a.dependencies : null,
+      })),
+    })),
+  }))
+}
+
+export function UnifiedActivityWizard({
+  projectId,
+  open,
+  onOpenChange,
+  existingCount,
+}: UnifiedActivityWizardProps) {
+  const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Wizard state
+  const [step, setStep] = useState(1)
+  const [sourceType, setSourceType] = useState<SourceType | null>(null)
+
+  // Data state
+  const [fileName, setFileName] = useState('')
+  const [phases, setPhases] = useState<ParsedPhase[]>([])
+  const [parseErrors, setParseErrors] = useState<ValidationError[]>([])
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
+  const [showHelp, setShowHelp] = useState(false)
+  const [autoCalcPercentage, setAutoCalcPercentage] = useState(true)
+  const [parsedRows, setParsedRows] = useState<any[][]>([])
+  const [rowErrors, setRowErrors] = useState<ValidationError[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+
+  // Blank editor state
+  const [blankPhases, setBlankPhases] = useState<TemplatePhase[]>([])
+
+  const hasErrors = parseErrors.length > 0
+  const blockingErrors = parseErrors.filter((e) => e.row === 0)
+
+  const totalActivities = phases.reduce(
+    (s, p) => s + p.stages.reduce((ss, st) => ss + st.activities.length, 0),
+    0
+  )
+  const totalStages = phases.reduce((s, p) => s + p.stages.length, 0)
+
+  // For manual mode, we need current total count
+  const { data: currentActivities } = useQuery({
+    queryKey: ['project-activities', projectId],
+    queryFn: () => projectsAPI.listActivities(projectId),
+    enabled: open && sourceType === 'manual',
+  })
+  const currentTotalCount = (() => {
+    if (!currentActivities || !Array.isArray(currentActivities)) return existingCount
+    const count = (items: any[]): number => {
+      let c = items.length
+      for (const item of items) {
+        if (item.children?.length) c += count(item.children)
+      }
+      return c
+    }
+    return count(currentActivities)
+  })()
+
+  // Step labels differ for manual (only 2 steps: choose method → form)
+  const isManual = sourceType === 'manual'
+  const totalSteps = isManual ? 2 : 3
+  const stepLabels = isManual
+    ? ['Escolher método', 'Adicionar']
+    : ['Escolher método', 'Configurar', 'Revisar']
+
+  // canProceed per step
+  const canProceedStep1 = sourceType !== null
+  const canProceedStep2 = sourceType === 'blank'
+    ? blankPhases.length > 0 &&
+      blankPhases.every(p => p.name.trim() && p.stages.every(s => s.name.trim() && s.activities.every(a => a.name.trim()))) &&
+      Math.abs(blankPhases.reduce((sum, p) => sum + p.percentageOfTotal, 0) - 100) < 0.1
+    : phases.length > 0 && blockingErrors.length === 0
+
+  const togglePhase = (name: string) => {
+    setExpandedPhases((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  const handleToggleAutoCalc = (checked: boolean) => {
+    setAutoCalcPercentage(checked)
+    if (parsedRows.length > 0) {
+      const { phases: parsed, errors: structErrors } = rowsToPhases(parsedRows, checked)
+      setPhases(parsed)
+      setParseErrors([...rowErrors, ...structErrors])
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setFileName(file.name)
+    setPhases([])
+    setParseErrors([])
+    setExpandedPhases(new Set())
+    setParsedRows([])
+    setRowErrors([])
+
+    try {
+      const { rows, errors: fileRowErrors } = await parseSpreadsheet(file, autoCalcPercentage)
+
+      if (fileRowErrors.length > 0 && rows.length === 0) {
+        setParseErrors(fileRowErrors)
+        return
+      }
+
+      setParsedRows(rows)
+      setRowErrors(fileRowErrors)
+
+      const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
+      setPhases(parsed)
+      setParseErrors([...fileRowErrors, ...structErrors])
+      setExpandedPhases(new Set(parsed.map((p) => p.name)))
+    } catch {
+      setParseErrors([{ row: 0, message: 'Erro ao processar arquivo. Verifique o formato.' }])
+    }
+
+    e.target.value = ''
+  }
+
+  const projectMutation = useMutation({
+    mutationFn: (data: { phases: ParsedPhase[] }) =>
+      projectsAPI.createActivitiesFromHierarchy(projectId, data),
+    onSuccess: () => {
+      toast.success('Atividades aplicadas ao projeto com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
+      handleClose()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao aplicar atividades')
+    },
+  })
+
+  const isSubmitting = projectMutation.isPending
+
+  const handleNext = () => {
+    if (step === 1 && sourceType === 'blank') {
+      if (blankPhases.length === 0) {
+        setBlankPhases([{
+          name: '',
+          order: 0,
+          percentageOfTotal: 100,
+          color: '#3B82F6',
+          stages: [{
+            name: 'Etapa 1',
+            order: 0,
+            activities: [{ name: '', order: 0, weight: 1 }],
+          }],
+        }])
+      }
+    }
+    if (step === 2 && !isManual) {
+      if (sourceType === 'blank') {
+        const parsed = templatePhasesToParsed(blankPhases)
+        setPhases(parsed)
+        setExpandedPhases(new Set(parsed.map(p => p.name)))
+      } else {
+        setExpandedPhases(new Set(phases.map(p => p.name)))
+      }
+    }
+    setStep(step + 1)
+  }
+
+  const handleBack = () => {
+    setStep(step - 1)
+  }
+
+  const handleSubmit = () => {
+    const finalPhases = sourceType === 'blank' ? templatePhasesToParsed(blankPhases) : phases
+
+    projectMutation.mutate({
+      phases: finalPhases.map((p) => ({
+        name: p.name,
+        order: p.order,
+        percentageOfTotal: p.percentageOfTotal,
+        color: p.color,
+        stages: p.stages.map((s) => ({
+          name: s.name,
+          order: s.order,
+          activities: s.activities.map((a) => ({
+            name: a.name,
+            order: a.order,
+            weight: a.weight,
+            durationDays: a.durationDays,
+            dependencies: a.dependencies,
+            sinapiCodigo: a.sinapiCodigo || null,
+            areaTipo: a.areaTipo || null,
+            tags: a.tags || [],
+            padrao: a.padrao ?? true,
+          })),
+        })),
+      })),
+    })
+  }
+
+  const handleClose = () => {
+    setStep(1)
+    setSourceType(null)
+    setFileName('')
+    setPhases([])
+    setParseErrors([])
+    setExpandedPhases(new Set())
+    setParsedRows([])
+    setRowErrors([])
+    setAutoCalcPercentage(true)
+    setSelectedTemplate('')
+    setBlankPhases([])
+    setShowHelp(false)
+    onOpenChange(false)
+  }
+
+  // Dialog sizing
+  const dialogMaxWidth = sourceType === 'blank' && step === 2
+    ? 'max-w-5xl'
+    : sourceType === 'manual' && step === 2
+    ? 'max-w-lg'
+    : 'max-w-3xl'
+
+  const dialogDescription = step === 1
+    ? 'Escolha como deseja adicionar atividades ao projeto.'
+    : step === 2 && sourceType === 'model'
+    ? 'Escolha um modelo por tipo de obra.'
+    : step === 2 && sourceType === 'upload'
+    ? 'Importe um arquivo XLSX ou CSV.'
+    : step === 2 && sourceType === 'blank'
+    ? 'Monte a estrutura manualmente.'
+    : step === 2 && sourceType === 'manual'
+    ? 'Adicione atividades individuais ao projeto.'
+    : 'Revise a estrutura antes de aplicar.'
+
+  // Preview renderer
+  const renderPreview = () => (
+    <div className="max-h-[35vh] overflow-y-auto rounded-lg border">
+      {phases.map((phase) => {
+        const isExpanded = expandedPhases.has(phase.name)
+        return (
+          <div key={phase.name} className="border-b last:border-b-0">
+            <button
+              type="button"
+              onClick={() => togglePhase(phase.name)}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-neutral-50"
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-neutral-400" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-neutral-400" />
+              )}
+              {phase.color && (
+                <span
+                  className="h-3 w-3 rounded-full shrink-0"
+                  style={{ backgroundColor: phase.color }}
+                />
+              )}
+              <span className="flex-1 text-sm font-semibold">
+                {phase.name}
+              </span>
+              <Badge variant="secondary" className="text-[10px]">
+                {phase.percentageOfTotal}%
+              </Badge>
+            </button>
+
+            {isExpanded && (
+              <div className="pb-2">
+                {phase.stages.map((stage) => (
+                  <div key={stage.name} className="px-4">
+                    <p className="py-1.5 pl-7 text-sm font-medium text-neutral-700">
+                      {stage.name}
+                    </p>
+                    {stage.activities.map((act) => (
+                      <div
+                        key={act.name}
+                        className="flex items-center gap-2 py-1 pl-14 text-sm text-neutral-600"
+                      >
+                        <span className="flex-1">{act.name}</span>
+                        <span className="text-xs text-neutral-400">
+                          Peso: {act.weight}
+                        </span>
+                        {act.durationDays && (
+                          <span className="text-xs text-neutral-400">
+                            {act.durationDays}d
+                          </span>
+                        )}
+                        {act.dependencies && act.dependencies.length > 0 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {act.dependencies.join(', ')}
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  const renderErrors = () => (
+    hasErrors ? (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+        <div className="flex items-center gap-2 text-red-700">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-medium">
+            {parseErrors.length} problema(s) encontrado(s)
+          </span>
+        </div>
+        <ul className="mt-2 space-y-1">
+          {parseErrors.slice(0, 10).map((err, i) => (
+            <li key={i} className="text-xs text-red-600">
+              {err.row > 0 ? `Linha ${err.row}: ` : ''}{err.message}
+            </li>
+          ))}
+          {parseErrors.length > 10 && (
+            <li className="text-xs text-red-500">
+              ... e mais {parseErrors.length - 10} erro(s)
+            </li>
+          )}
+        </ul>
+      </div>
+    ) : null
+  )
+
+  const renderSummary = () => (
+    phases.length > 0 ? (
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="h-4 w-4 text-green-600" />
+        <span className="text-sm text-neutral-700">
+          {phases.length} fase(s), {totalStages} etapa(s), {totalActivities} atividade(s)
+        </span>
+      </div>
+    ) : null
+  )
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => { if (!value) handleClose(); else onOpenChange(value) }}>
+      <DialogContent className={`${dialogMaxWidth} max-h-[90vh] overflow-y-auto`}>
+        <DialogHeader>
+          <DialogTitle>Adicionar Atividades</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
+        </DialogHeader>
+
+        {/* Step indicator */}
+        <div className="flex items-center justify-center gap-2">
+          {stepLabels.map((label, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={`flex items-center justify-center h-7 w-7 rounded-full text-xs font-medium ${
+                    i + 1 < step
+                      ? 'bg-primary text-primary-foreground'
+                      : i + 1 === step
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-neutral-200 text-neutral-500'
+                  }`}
+                >
+                  {i + 1 < step ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                </div>
+                <span className={`text-xs ${i + 1 <= step ? 'text-primary font-medium' : 'text-neutral-400'}`}>
+                  {label}
+                </span>
+              </div>
+              {i < stepLabels.length - 1 && (
+                <div className={`h-px w-12 mb-5 ${i + 1 < step ? 'bg-primary' : 'bg-neutral-200'}`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-5">
+          {/* ─── Step 1: Choose method ─── */}
+          {step === 1 && (() => {
+            const hasActivities = existingCount > 0
+            const isInitialDisabled = hasActivities
+            const isManualDisabled = !hasActivities
+
+            const cardClass = (type: SourceType, disabled: boolean) => {
+              if (disabled) return 'rounded-lg border-2 p-4 border-neutral-100 bg-neutral-50 opacity-50 cursor-not-allowed'
+              if (sourceType === type) return 'rounded-lg border-2 p-4 cursor-pointer transition-colors border-primary bg-primary/5'
+              return 'rounded-lg border-2 p-4 cursor-pointer transition-colors border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
+            }
+
+            return (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div
+                  className={cardClass('model', isInitialDisabled)}
+                  onClick={() => !isInitialDisabled && setSourceType('model')}
+                >
+                  <ClipboardList className={`h-6 w-6 mb-2 ${isInitialDisabled ? 'text-neutral-300' : 'text-primary'}`} />
+                  <p className="text-sm font-medium">Modelo</p>
+                  <p className="text-xs text-neutral-500">Escolha por tipo de obra</p>
+                </div>
+                <div
+                  className={cardClass('upload', isInitialDisabled)}
+                  onClick={() => !isInitialDisabled && setSourceType('upload')}
+                >
+                  <FileSpreadsheet className={`h-6 w-6 mb-2 ${isInitialDisabled ? 'text-neutral-300' : 'text-primary'}`} />
+                  <p className="text-sm font-medium">Importar</p>
+                  <p className="text-xs text-neutral-500">Arquivo XLSX ou CSV</p>
+                </div>
+                <div
+                  className={cardClass('blank', isInitialDisabled)}
+                  onClick={() => !isInitialDisabled && setSourceType('blank')}
+                >
+                  <PenLine className={`h-6 w-6 mb-2 ${isInitialDisabled ? 'text-neutral-300' : 'text-primary'}`} />
+                  <p className="text-sm font-medium">Em branco</p>
+                  <p className="text-xs text-neutral-500">Montar estrutura manualmente</p>
+                </div>
+                <div
+                  className={cardClass('manual', isManualDisabled)}
+                  onClick={() => !isManualDisabled && setSourceType('manual')}
+                >
+                  <Plus className={`h-6 w-6 mb-2 ${isManualDisabled ? 'text-neutral-300' : 'text-primary'}`} />
+                  <p className="text-sm font-medium">Manual</p>
+                  <p className="text-xs text-neutral-500">Adicionar item individual</p>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ─── Step 2: Configure — Model ─── */}
+          {step === 2 && sourceType === 'model' && (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione o tipo de obra..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TEMPLATE_CATEGORIES.map((category) => (
+                        <SelectGroup key={category}>
+                          <SelectLabel>{category}</SelectLabel>
+                          {TEMPLATE_MODELS
+                            .filter((t) => t.category === category)
+                            .map((t) => (
+                              <SelectItem key={t.key} value={t.key}>
+                                {t.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={!selectedTemplate}
+                    onClick={() => {
+                      const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
+                      if (!tpl) return
+                      const rows = tpl.rows.map((r) => [...r])
+                      setParsedRows(rows)
+                      setRowErrors([])
+                      setFileName('')
+                      const { phases: parsed, errors: structErrors } = rowsToPhases(rows, autoCalcPercentage)
+                      injectSinapiMap(parsed, tpl.sinapiMap)
+                      setPhases(parsed)
+                      setParseErrors(structErrors)
+                      setExpandedPhases(new Set(parsed.map((p) => p.name)))
+                    }}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Carregar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!selectedTemplate}
+                    onClick={() => {
+                      const tpl = TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)
+                      if (tpl) generateModelXLSX(tpl)
+                    }}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar
+                  </Button>
+                </div>
+                {selectedTemplate && (
+                  <p className="text-xs text-neutral-500 italic">
+                    {TEMPLATE_MODELS.find((t) => t.key === selectedTemplate)?.description}
+                  </p>
+                )}
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={autoCalcPercentage}
+                  onChange={(e: any) => handleToggleAutoCalc(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="text-sm font-medium text-neutral-700">
+                    Calcular percentual automaticamente
+                  </span>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    {autoCalcPercentage
+                      ? 'O percentual será calculado com base na soma dos pesos das atividades.'
+                      : 'O percentual será lido da planilha. A soma deve ser exatamente 100%.'}
+                  </p>
+                </div>
+              </label>
+
+              {renderErrors()}
+              {renderSummary()}
+            </>
+          )}
+
+          {/* ─── Step 2: Configure — Upload ─── */}
+          {step === 2 && sourceType === 'upload' && (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {fileName || 'Selecionar arquivo'}
+                  </Button>
+                  {fileName && (
+                    <span className="text-sm text-neutral-500">{fileName}</span>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs text-primary/70 hover:text-primary"
+                  onClick={generateSampleXLSX}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Baixar planilha de exemplo
+                </Button>
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={autoCalcPercentage}
+                  onChange={(e: any) => handleToggleAutoCalc(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="text-sm font-medium text-neutral-700">
+                    Calcular percentual automaticamente
+                  </span>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    {autoCalcPercentage
+                      ? 'O percentual será calculado com base na soma dos pesos das atividades. A coluna "Percentual (%)" será ignorada.'
+                      : 'O percentual será lido da coluna "Percentual (%)". A soma deve ser exatamente 100%.'}
+                  </p>
+                </div>
+              </label>
+
+              {/* Help section */}
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50">
+                <button
+                  type="button"
+                  onClick={() => setShowHelp(!showHelp)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-neutral-100 rounded-lg transition-colors"
+                >
+                  <HelpCircle className="h-4 w-4 text-neutral-500" />
+                  <span className="flex-1 text-sm font-medium text-neutral-700">
+                    Entenda os campos da planilha
+                  </span>
+                  {showHelp ? (
+                    <ChevronDown className="h-4 w-4 text-neutral-400" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-neutral-400" />
+                  )}
+                </button>
+
+                {showHelp && (
+                  <div className="border-t border-neutral-200 px-4 py-3 space-y-3 text-sm text-neutral-600">
+                    <div>
+                      <span className="font-medium text-neutral-800">Fase</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Agrupamento principal da obra. Ex: Fundação, Estrutura, Acabamento.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Percentual (%)</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Quanto essa fase representa do total da obra. A soma deve ser 100%.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Cor</span>
+                      <p className="text-xs mt-0.5">
+                        Cor da fase no painel. Código hexadecimal (ex: #FF5733). Opcional.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Etapa</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Subdivisão dentro da fase. Ex: "Pilares", "Vigas", "Lajes".
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Atividade</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        A tarefa específica a ser executada. Ex: "Concretagem", "Chapisco".
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Peso (1-5)</span>
+                      <span className="text-red-500"> *</span>
+                      <p className="text-xs mt-0.5">
+                        Grau de importância (1 a 5). Maior peso = mais influência no progresso.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Duração (dias)</span>
+                      <p className="text-xs mt-0.5">
+                        Estimativa de dias úteis. Opcional.
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-neutral-800">Dependências</span>
+                      <p className="text-xs mt-0.5">
+                        Nomes de atividades predecessoras, separadas por ponto e vírgula (;). Opcional.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {renderErrors()}
+              {renderSummary()}
+            </>
+          )}
+
+          {/* ─── Step 2: Configure — Blank ─── */}
+          {step === 2 && sourceType === 'blank' && (
+            <HierarchicalItemEditor
+              phases={blankPhases}
+              onChange={setBlankPhases}
+            />
+          )}
+
+          {/* ─── Step 2: Manual ─── */}
+          {step === 2 && sourceType === 'manual' && (
+            <ManualActivityForm
+              projectId={projectId}
+              existingCount={currentTotalCount}
+              onClose={handleClose}
+            />
+          )}
+
+          {/* ─── Step 3: Review (model/upload/blank only) ─── */}
+          {step === 3 && !isManual && (
+            <>
+              {renderSummary()}
+              {renderPreview()}
+            </>
+          )}
+        </div>
+
+        {/* Footer — hidden for manual step 2 (ManualActivityForm has its own buttons) */}
+        {!(step === 2 && sourceType === 'manual') && (
+          <DialogFooter className="gap-2 sm:gap-0">
+            {step === 1 ? (
+              <Button variant="outline" onClick={handleClose}>
+                Cancelar
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" onClick={handleBack}>
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Voltar
+              </Button>
+            )}
+            <div className="flex-1" />
+            {step < totalSteps ? (
+              <Button
+                type="button"
+                disabled={step === 1 ? !canProceedStep1 : !canProceedStep2}
+                onClick={handleNext}
+              >
+                Próximo
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            ) : step === totalSteps && !isManual ? (
+              <Button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSubmit}
+              >
+                {isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Aplicar ao Projeto
+              </Button>
+            ) : null}
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}

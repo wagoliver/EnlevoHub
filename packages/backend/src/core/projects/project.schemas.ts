@@ -17,7 +17,7 @@ export const createProjectSchema = z.object({
   status: z.enum(['PLANNING', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED']).optional(),
   startDate: z.string().datetime().optional(),
   expectedEndDate: z.string().datetime().optional(),
-  budget: z.number().positive(),
+  budget: z.number().positive().optional(),
   quantidadeUnidades: z.number().int().min(1).default(1).optional(),
   metadata: z.record(z.any()).optional(),
 })
@@ -99,6 +99,14 @@ export const floorPlanRoomSchema = z.object({
   qtdJanelas: z.number().int().min(0).default(1),
 })
 
+export const floorPlanMeasurementSchema = z.object({
+  category: z.string().min(1),
+  label: z.string().min(1),
+  measurementType: z.enum(['AREA_M2', 'LINEAR_M', 'QUANTITY', 'VOLUME_M3']),
+  value: z.number().positive(),
+  areaTipo: z.string().optional(),
+})
+
 export const createFloorPlanSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
@@ -108,6 +116,7 @@ export const createFloorPlanSchema = z.object({
   bathrooms: z.number().int().min(0).optional(),
   defaultPrice: z.number().positive().optional(),
   rooms: z.array(floorPlanRoomSchema).optional(),
+  measurements: z.array(floorPlanMeasurementSchema).optional(),
   metadata: z.record(z.any()).optional(),
 })
 

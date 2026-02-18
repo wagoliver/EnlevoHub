@@ -57,12 +57,14 @@ export function PurchaseOrders() {
   const phaseParam = searchParams.get('phase')
   const canCreate = usePermission('purchases:create')
 
+  const projectParam = searchParams.get('project')
+
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [projectFilter, setProjectFilter] = useState('')
+  const [projectFilter, setProjectFilter] = useState(projectParam || '')
   const [supplierFilter, setSupplierFilter] = useState('')
 
   const { data, isLoading } = useQuery({

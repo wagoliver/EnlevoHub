@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +15,10 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
+  Loader2,
+  Link2,
 } from 'lucide-react'
+import { sinapiAPI } from '@/lib/api-client'
 
 // === Types ===
 
@@ -25,6 +28,7 @@ export interface TemplateActivity {
   weight: number
   durationDays?: number | null
   dependencies?: string[]
+  sinapiCodigo?: string | null
 }
 
 export interface TemplateStage {
@@ -63,6 +67,120 @@ function getAllActivityNames(phases: TemplatePhase[]): string[] {
     }
   }
   return names
+}
+
+// === SINAPI Autocomplete for Activity Name ===
+
+interface ActivityNameInputProps {
+  value: string
+  sinapiCodigo?: string | null
+  onChange: (name: string) => void
+  onSinapiSelect: (codigo: string | null) => void
+}
+
+function ActivityNameInput({ value, sinapiCodigo, onChange, onSinapiSelect }: ActivityNameInputProps) {
+  const [showResults, setShowResults] = useState(false)
+  const [results, setResults] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const searchSinapi = useCallback(async (term: string) => {
+    if (term.length < 2) {
+      setResults([])
+      setShowResults(false)
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await sinapiAPI.searchComposicoes({ search: term, limit: 10 })
+      const data = (res as any).data ?? (res as any).composicoes ?? res
+      setResults(Array.isArray(data) ? data : [])
+      setShowResults(true)
+    } catch {
+      setResults([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const handleChange = (text: string) => {
+    onChange(text)
+    if (searchTimeout.current) clearTimeout(searchTimeout.current)
+    searchTimeout.current = setTimeout(() => searchSinapi(text), 400)
+  }
+
+  const handleSelect = (comp: any) => {
+    onChange(comp.descricao)
+    onSinapiSelect(comp.codigo)
+    setShowResults(false)
+    setResults([])
+  }
+
+  const handleClearSinapi = () => {
+    onSinapiSelect(null)
+  }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowResults(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-1">
+        <Input
+          placeholder="Nome da atividade (digite para buscar SINAPI)"
+          value={value}
+          onChange={(e) => handleChange(e.target.value)}
+          onFocus={() => results.length > 0 && setShowResults(true)}
+          className="h-7 text-sm"
+        />
+        {loading && <Loader2 className="h-3 w-3 animate-spin text-neutral-400 absolute right-2 top-1/2 -translate-y-1/2" />}
+        {sinapiCodigo && (
+          <Badge
+            variant="outline"
+            className="text-[9px] border-orange-300 text-orange-600 shrink-0 cursor-pointer gap-0.5 pr-0.5"
+            title={`SINAPI: ${sinapiCodigo} (clique para remover)`}
+            onClick={handleClearSinapi}
+          >
+            <Link2 className="h-2.5 w-2.5" />
+            {sinapiCodigo}
+            <X className="h-2.5 w-2.5 ml-0.5" />
+          </Badge>
+        )}
+      </div>
+
+      {showResults && results.length > 0 && (
+        <div className="absolute z-50 w-full mt-0.5 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {results.map((comp: any) => (
+            <button
+              key={comp.id}
+              type="button"
+              onClick={() => handleSelect(comp)}
+              className="flex items-start gap-2 w-full px-2.5 py-1.5 text-left hover:bg-neutral-50 border-b last:border-b-0"
+            >
+              <Badge variant="outline" className="text-[9px] mt-0.5 border-orange-300 text-orange-600 shrink-0">
+                {comp.codigo}
+              </Badge>
+              <div className="min-w-0">
+                <p className="text-[11px] text-neutral-800 line-clamp-2">{comp.descricao}</p>
+                {comp.unidade && (
+                  <span className="text-[10px] text-neutral-400">{comp.unidade}</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // === Component ===
@@ -341,11 +459,11 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
 
                       {stage.activities.map((act, actIdx) => (
                         <div key={actIdx} className="grid grid-cols-[1fr_70px_70px_120px_60px] gap-2 items-center">
-                          <Input
-                            placeholder="Nome da atividade"
+                          <ActivityNameInput
                             value={act.name}
-                            onChange={(e) => updateActivity(phaseIdx, stageIdx, actIdx, 'name', e.target.value)}
-                            className="h-7 text-sm"
+                            sinapiCodigo={act.sinapiCodigo}
+                            onChange={(name) => updateActivity(phaseIdx, stageIdx, actIdx, 'name', name)}
+                            onSinapiSelect={(codigo) => updateActivity(phaseIdx, stageIdx, actIdx, 'sinapiCodigo', codigo)}
                           />
                           <Input
                             type="number"

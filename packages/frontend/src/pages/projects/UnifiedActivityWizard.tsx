@@ -37,6 +37,8 @@ import {
   FileSpreadsheet,
   ClipboardList,
   Plus,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from '@/pages/settings/template-models'
 import type { TemplateModel } from '@/pages/settings/template-models'
@@ -184,6 +186,7 @@ function templatePhasesToParsed(templatePhases: TemplatePhase[]): ParsedPhase[] 
         weight: a.weight,
         durationDays: a.durationDays ?? null,
         dependencies: a.dependencies && a.dependencies.length > 0 ? a.dependencies : null,
+        sinapiCodigo: a.sinapiCodigo || null,
       })),
     })),
   }))
@@ -208,6 +211,7 @@ export function UnifiedActivityWizard({
   const [parseErrors, setParseErrors] = useState<ValidationError[]>([])
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
   const [showHelp, setShowHelp] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [autoCalcPercentage, setAutoCalcPercentage] = useState(true)
   const [parsedRows, setParsedRows] = useState<any[][]>([])
   const [rowErrors, setRowErrors] = useState<ValidationError[]>([])
@@ -399,11 +403,14 @@ export function UnifiedActivityWizard({
     setSelectedTemplate('')
     setBlankPhases([])
     setShowHelp(false)
+    setIsFullscreen(false)
     onOpenChange(false)
   }
 
   // Dialog sizing
-  const dialogMaxWidth = sourceType === 'blank' && step === 2
+  const dialogMaxWidth = isFullscreen
+    ? 'max-w-[100vw] w-[100vw] h-[100vh]'
+    : sourceType === 'blank' && step === 2
     ? 'max-w-5xl'
     : sourceType === 'manual' && step === 2
     ? 'max-w-lg'
@@ -528,10 +535,23 @@ export function UnifiedActivityWizard({
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) handleClose(); else onOpenChange(value) }}>
-      <DialogContent className={`${dialogMaxWidth} max-h-[90vh] overflow-y-auto`}>
+      <DialogContent className={`${dialogMaxWidth} ${isFullscreen ? '!left-0 !top-0 !translate-x-0 !translate-y-0 !rounded-none h-[100vh] max-h-[100vh]' : 'max-h-[90vh]'} overflow-y-auto`}>
         <DialogHeader>
-          <DialogTitle>Adicionar Atividades</DialogTitle>
-          <DialogDescription>{dialogDescription}</DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle>Adicionar Atividades</DialogTitle>
+              <DialogDescription>{dialogDescription}</DialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setIsFullscreen(f => !f)}
+              title={isFullscreen ? 'Restaurar tamanho' : 'Tela inteira'}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          </div>
         </DialogHeader>
 
         {/* Step indicator */}

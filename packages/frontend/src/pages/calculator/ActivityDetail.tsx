@@ -143,6 +143,7 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
             itens={activityItens}
             fixedActivityId={activity.id}
             fixedActivityName={activity.name}
+            childActivities={activity.children}
           />
         </TabsContent>
 

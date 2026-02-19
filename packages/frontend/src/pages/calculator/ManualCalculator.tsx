@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { levantamentoAPI, sinapiAPI } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -36,6 +37,7 @@ interface ManualCalculatorProps {
   activityGroups?: any
   fixedActivityId?: string
   fixedActivityName?: string
+  childActivities?: any[]
 }
 
 interface EditingItem {
@@ -49,7 +51,7 @@ interface EditingItem {
 
 const emptyItem: EditingItem = { nome: '', unidade: 'UN', quantidade: '', precoUnitario: '', etapa: '' }
 
-export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [], activityGroups, fixedActivityId, fixedActivityName }: ManualCalculatorProps) {
+export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId, etapas = [], activityGroups, fixedActivityId, fixedActivityName, childActivities }: ManualCalculatorProps) {
   const queryClient = useQueryClient()
 
   // Derive dropdown options from activityGroups (STAGE names) or fallback to etapas
@@ -404,8 +406,40 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
     </TableRow>
   )
 
+  // Child activities with contextual info
+  const childrenWithSinapi = useMemo(() => {
+    if (!childActivities?.length) return []
+    return childActivities.filter((c: any) => c.level === 'ACTIVITY')
+  }, [childActivities])
+
   return (
     <div className="space-y-4">
+      {/* Child activities context */}
+      {childrenWithSinapi.length > 0 && (
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 space-y-1.5">
+          <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
+            Atividades vinculadas
+          </span>
+          <div className="space-y-1">
+            {childrenWithSinapi.map((child: any) => (
+              <div key={child.id} className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-neutral-700">{child.name}</span>
+                {child.sinapiCodigo && (
+                  <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600">
+                    SINAPI {child.sinapiCodigo}
+                  </Badge>
+                )}
+                {child.areaTipo && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {child.areaTipo}
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* View mode toggle */}
       <div className="flex items-center justify-end gap-1">
         <button

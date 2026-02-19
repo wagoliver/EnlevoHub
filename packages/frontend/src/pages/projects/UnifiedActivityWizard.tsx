@@ -537,22 +537,19 @@ export function UnifiedActivityWizard({
     <Dialog open={open} onOpenChange={(value) => { if (!value) handleClose(); else onOpenChange(value) }}>
       <DialogContent className={`${dialogMaxWidth} ${isFullscreen ? '!left-0 !top-0 !translate-x-0 !translate-y-0 !rounded-none h-[100vh] max-h-[100vh]' : 'max-h-[90vh]'} overflow-y-auto`}>
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>Adicionar Atividades</DialogTitle>
-              <DialogDescription>{dialogDescription}</DialogDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              onClick={() => setIsFullscreen(f => !f)}
-              title={isFullscreen ? 'Restaurar tamanho' : 'Tela inteira'}
-            >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-          </div>
+          <DialogTitle>Adicionar Atividades</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
+
+        {/* Fullscreen toggle — positioned next to the X close button */}
+        <button
+          type="button"
+          onClick={() => setIsFullscreen(f => !f)}
+          title={isFullscreen ? 'Restaurar tamanho' : 'Tela inteira'}
+          className="absolute right-12 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
 
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2">

@@ -19,6 +19,11 @@ import { ComposicaoDetailDialog } from './ComposicaoDetailDialog'
 import { SinapiImportDialog } from './SinapiImportDialog'
 import { SinapiHelpText } from './SinapiHelpText'
 
+interface SinapiCodItem {
+  name: string
+  sinapiCodigo: string
+}
+
 interface SinapiCalculatorProps {
   projectId: string
   levantamentoId: string
@@ -28,9 +33,10 @@ interface SinapiCalculatorProps {
   fixedActivityName?: string
   baseQuantity?: number
   sinapiCodigo?: string | null
+  sinapiCodigos?: SinapiCodItem[]
 }
 
-export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activityGroups, fixedActivityId, fixedActivityName, baseQuantity, sinapiCodigo }: SinapiCalculatorProps) {
+export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activityGroups, fixedActivityId, fixedActivityName, baseQuantity, sinapiCodigo, sinapiCodigos }: SinapiCalculatorProps) {
   const role = useRole()
   const queryClient = useQueryClient()
   const isRoot = role === 'ROOT'
@@ -42,29 +48,50 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
   const [importOpen, setImportOpen] = useState(false)
   const [selectedActivity, setSelectedActivity] = useState<string>('_none')
 
-  // Linked SINAPI composition (auto-resolved from sinapiCodigo)
-  const [linkedComposicao, setLinkedComposicao] = useState<any>(null)
+  // Linked SINAPI compositions (auto-resolved from sinapiCodigos or sinapiCodigo)
+  const [linkedComposicoes, setLinkedComposicoes] = useState<Map<string, any>>(new Map())
   const [linkedLoading, setLinkedLoading] = useState(false)
 
+  // Merge sinapiCodigo (single, legacy) + sinapiCodigos (array)
+  const allSinapiCodigos = useMemo(() => {
+    const items: SinapiCodItem[] = [...(sinapiCodigos || [])]
+    if (sinapiCodigo && !items.some(i => i.sinapiCodigo === sinapiCodigo)) {
+      items.push({ name: fixedActivityName || '', sinapiCodigo })
+    }
+    return items
+  }, [sinapiCodigo, sinapiCodigos, fixedActivityName])
+
   useEffect(() => {
-    if (!sinapiCodigo) {
-      setLinkedComposicao(null)
+    if (allSinapiCodigos.length === 0) {
+      setLinkedComposicoes(new Map())
       return
     }
     let cancelled = false
     setLinkedLoading(true)
-    sinapiAPI.searchComposicoes({ search: sinapiCodigo, limit: 5 })
-      .then((res: any) => {
-        if (cancelled) return
-        const data = res?.data ?? res?.composicoes ?? res
-        const list = Array.isArray(data) ? data : []
-        const match = list.find((c: any) => c.codigo === sinapiCodigo) || list[0] || null
-        setLinkedComposicao(match)
-      })
-      .catch(() => { if (!cancelled) setLinkedComposicao(null) })
-      .finally(() => { if (!cancelled) setLinkedLoading(false) })
+
+    const uniqueCodigos = [...new Set(allSinapiCodigos.map(i => i.sinapiCodigo))]
+    Promise.all(
+      uniqueCodigos.map(codigo =>
+        sinapiAPI.searchComposicoes({ search: codigo, limit: 5 })
+          .then((res: any) => {
+            const data = res?.data ?? res?.composicoes ?? res
+            const list = Array.isArray(data) ? data : []
+            const match = list.find((c: any) => c.codigo === codigo) || list[0] || null
+            return { codigo, composicao: match }
+          })
+          .catch(() => ({ codigo, composicao: null }))
+      )
+    ).then(results => {
+      if (cancelled) return
+      const map = new Map<string, any>()
+      for (const r of results) {
+        if (r.composicao) map.set(r.codigo, r.composicao)
+      }
+      setLinkedComposicoes(map)
+    }).finally(() => { if (!cancelled) setLinkedLoading(false) })
+
     return () => { cancelled = true }
-  }, [sinapiCodigo])
+  }, [allSinapiCodigos.map(i => i.sinapiCodigo).join(',')])
 
   // Selected insumo for add form
   const [selectedInsumo, setSelectedInsumo] = useState<any>(null)
@@ -223,9 +250,10 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
     }
   }
 
-  const handleOpenLinkedComposicao = () => {
-    if (linkedComposicao) {
-      setSelectedComposicaoId(linkedComposicao.id)
+  const handleOpenLinkedComposicao = (codigo: string) => {
+    const comp = linkedComposicoes.get(codigo)
+    if (comp) {
+      setSelectedComposicaoId(comp.id)
       setDetailOpen(true)
     }
   }
@@ -234,47 +262,59 @@ export function SinapiCalculator({ projectId, levantamentoId, ambienteId, activi
     <div className="space-y-4">
       <SinapiHelpText />
 
-      {/* Linked SINAPI composition card */}
-      {sinapiCodigo && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+      {/* Linked SINAPI compositions cards */}
+      {allSinapiCodigos.length > 0 && (
+        <div className="space-y-2">
           {linkedLoading ? (
-            <div className="flex items-center gap-2 text-sm text-blue-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Buscando composição SINAPI {sinapiCodigo}...
-            </div>
-          ) : linkedComposicao ? (
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2 min-w-0">
-                <Link2 className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-medium text-blue-700">Composição vinculada</span>
-                    <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600">
-                      {linkedComposicao.codigo}
-                    </Badge>
-                    {linkedComposicao.unidade && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {linkedComposicao.unidade}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-neutral-700 mt-1 line-clamp-2">{linkedComposicao.descricao}</p>
-                </div>
+            <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Buscando {allSinapiCodigos.length} composiç{allSinapiCodigos.length === 1 ? 'ão' : 'ões'} SINAPI...
               </div>
-              <Button
-                size="sm"
-                className="shrink-0"
-                onClick={handleOpenLinkedComposicao}
-              >
-                <Database className="h-3.5 w-3.5 mr-1.5" />
-                Ver / Importar
-              </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-sm text-neutral-500">
-              <Link2 className="h-4 w-4" />
-              Composição SINAPI <Badge variant="outline" className="text-[10px]">{sinapiCodigo}</Badge> não encontrada na base local.
-            </div>
+            allSinapiCodigos.map((item) => {
+              const comp = linkedComposicoes.get(item.sinapiCodigo)
+              return (
+                <div key={item.sinapiCodigo} className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+                  {comp ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <Link2 className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-medium text-blue-700">{item.name}</span>
+                            <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600">
+                              {comp.codigo}
+                            </Badge>
+                            {comp.unidade && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {comp.unidade}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-neutral-700 mt-1 line-clamp-2">{comp.descricao}</p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => handleOpenLinkedComposicao(item.sinapiCodigo)}
+                      >
+                        <Database className="h-3.5 w-3.5 mr-1.5" />
+                        Ver / Importar
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-neutral-500">
+                      <Link2 className="h-4 w-4" />
+                      <span>{item.name}:</span>
+                      Composição SINAPI <Badge variant="outline" className="text-[10px]">{item.sinapiCodigo}</Badge> não encontrada na base local.
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}

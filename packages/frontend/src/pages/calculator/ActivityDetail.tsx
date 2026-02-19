@@ -27,6 +27,24 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
   const unit = getUnitForAreaTipo(activity.areaTipo)
   const quantityLabel = getQuantityLabel(activity.areaTipo)
 
+  // Collect SINAPI codes from child ACTIVITY-level items (since the calculator works at STAGE level)
+  const childSinapiCodigos = useMemo(() => {
+    const codigos: { name: string; sinapiCodigo: string }[] = []
+    if (activity.sinapiCodigo) {
+      codigos.push({ name: activity.name, sinapiCodigo: activity.sinapiCodigo })
+    }
+    if (activity.children?.length) {
+      for (const child of activity.children) {
+        if (child.sinapiCodigo) {
+          codigos.push({ name: child.name, sinapiCodigo: child.sinapiCodigo })
+        }
+      }
+    }
+    return codigos
+  }, [activity])
+
+  const hasSinapi = childSinapiCodigos.length > 0
+
   const activityItens = useMemo(
     () => itens.filter((i: any) => i.projectActivityId === activity.id),
     [itens, activity.id],
@@ -50,11 +68,11 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
         {activity.areaTipo && (
           <Badge variant="secondary" className="text-xs">{activity.areaTipo}</Badge>
         )}
-        {activity.sinapiCodigo && (
-          <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">
-            SINAPI {activity.sinapiCodigo}
+        {childSinapiCodigos.map((item) => (
+          <Badge key={item.sinapiCodigo} variant="outline" className="text-xs border-blue-300 text-blue-600">
+            SINAPI {item.sinapiCodigo}
           </Badge>
-        )}
+        ))}
       </div>
 
       {/* Quantity input */}
@@ -112,7 +130,7 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
       )}
 
       {/* Calculator tabs */}
-      <Tabs defaultValue={activity.sinapiCodigo ? 'sinapi' : 'manual'}>
+      <Tabs defaultValue={hasSinapi ? 'sinapi' : 'manual'}>
         <TabsList>
           <TabsTrigger value="manual">Manual</TabsTrigger>
           <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
@@ -135,7 +153,7 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
             fixedActivityId={activity.id}
             fixedActivityName={activity.name}
             baseQuantity={parsedBaseQuantity}
-            sinapiCodigo={activity.sinapiCodigo}
+            sinapiCodigos={childSinapiCodigos}
           />
         </TabsContent>
       </Tabs>

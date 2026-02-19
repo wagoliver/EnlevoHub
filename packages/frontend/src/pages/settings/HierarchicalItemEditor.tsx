@@ -129,14 +129,15 @@ function ActivityNameInput({ value, sinapiCodigo, onChange, onSelectComposition,
   }, [])
 
   return (
-    <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-1">
+    <div ref={containerRef} className="relative min-w-0">
+      <div className="flex items-center gap-1 min-w-0">
         <Input
           placeholder="Nome da atividade (digite para buscar SINAPI)"
           value={value}
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => results.length > 0 && setShowResults(true)}
-          className="h-7 text-sm"
+          className="h-7 text-sm min-w-0"
+          title={value}
         />
         {loading && <Loader2 className="h-3 w-3 animate-spin text-neutral-400 absolute right-2 top-1/2 -translate-y-1/2" />}
         {sinapiCodigo && (
@@ -449,7 +450,7 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
                     {/* Activities */}
                     <div className="p-2 space-y-1.5">
                       {/* Activity Header */}
-                      <div className="grid grid-cols-[1fr_70px_70px_120px_60px] gap-2 px-1 text-xs text-neutral-500 font-medium">
+                      <div className="grid grid-cols-[minmax(0,1fr)_70px_70px_120px_60px] gap-2 px-1 text-xs text-neutral-500 font-medium">
                         <span>Atividade</span>
                         <span className="text-center">Peso</span>
                         <span className="text-center">Dias</span>
@@ -458,7 +459,7 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
                       </div>
 
                       {stage.activities.map((act, actIdx) => (
-                        <div key={actIdx} className="grid grid-cols-[1fr_70px_70px_120px_60px] gap-2 items-center">
+                        <div key={actIdx} className="grid grid-cols-[minmax(0,1fr)_70px_70px_120px_60px] gap-2 items-center">
                           <ActivityNameInput
                             value={act.name}
                             sinapiCodigo={act.sinapiCodigo}

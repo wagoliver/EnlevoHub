@@ -11,6 +11,7 @@ import {
   calculateComposicaoSchema,
   batchResolveSchema,
 } from './sinapi.schemas'
+import { sinapiMappingRoutes } from './sinapi-mapping.routes'
 
 function requirePermission(permission: string) {
   return async (request: any, reply: any) => {
@@ -104,6 +105,22 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(404).send({ error: 'Not Found', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // ---- Grupos ----
+
+  fastify.get('/grupos', {
+    preHandler: [authMiddleware],
+  }, async (_request, reply) => {
+    try {
+      const result = await service.listGrupos()
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
       }
       throw error
     }
@@ -365,4 +382,7 @@ export async function sinapiRoutes(fastify: FastifyInstance) {
       throw error
     }
   })
+
+  // ---- Mapeamentos Etapa→SINAPI ----
+  fastify.register(sinapiMappingRoutes, { prefix: '/mapeamentos' })
 }

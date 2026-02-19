@@ -142,6 +142,9 @@ export class SinapiCollectorService {
       workbook, errors, log,
     )
 
+    log('Extraindo grupos das composições (CSD)...')
+    await this.parseCSDGrupos(workbook, errors, log)
+
     // Cleanup
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })
@@ -718,6 +721,87 @@ export class SinapiCollectorService {
       totalItens,
       importedItens: importedInsumoLinks + importedFilhoLinks,
     }
+  }
+
+  // ---- CSD Grupos ----
+
+  private async parseCSDGrupos(
+    workbook: ExcelJS.Workbook,
+    errors: string[],
+    log: (msg: string) => void,
+  ) {
+    const ws = workbook.getWorksheet('CSD')
+    if (!ws) {
+      log('  Sheet CSD não encontrada, pulando extração de grupos.')
+      return
+    }
+
+    // Find header row (contains "Grupo" and "Código")
+    let headerRow = 0
+    let grupoCol = 0
+    let codigoCol = 0
+    ws.eachRow((row, rowNum) => {
+      if (headerRow) return
+      row.eachCell((cell, colNum) => {
+        const val = String(cell.value || '').trim()
+        if (val === 'Grupo' || val === 'GRUPO') grupoCol = colNum
+        if ((val.includes('Código') || val.includes('Codigo')) && val.includes('Composi')) codigoCol = colNum
+      })
+      if (grupoCol && codigoCol) headerRow = rowNum
+    })
+
+    if (!headerRow) {
+      log('  Header de grupos não encontrado na CSD.')
+      return
+    }
+
+    const dataStartRow = headerRow + 1
+    const rowCount = ws.rowCount
+
+    // Build map: codigo → grupo
+    const grupoMap = new Map<string, string>()
+    let currentGrupo = ''
+
+    for (let r = dataStartRow; r <= rowCount; r++) {
+      const row = ws.getRow(r)
+      const grupoVal = String(row.getCell(grupoCol).value || '').trim()
+      const codigoVal = String(row.getCell(codigoCol).value || '').trim()
+
+      if (grupoVal) currentGrupo = grupoVal
+      if (codigoVal && currentGrupo) {
+        grupoMap.set(codigoVal, currentGrupo)
+      }
+    }
+
+    log(`  CSD: ${grupoMap.size} composições com grupo identificado`)
+
+    // Batch update composições
+    const entries = [...grupoMap.entries()]
+    const batchSize = 200
+    let updated = 0
+
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize)
+      try {
+        await this.prisma.$transaction(
+          batch.map(([codigo, grupo]) =>
+            this.prisma.sinapiComposicao.updateMany({
+              where: { codigo },
+              data: { grupo },
+            }),
+          ),
+        )
+        updated += batch.length
+      } catch (err: any) {
+        errors.push(`Batch grupo CSD: ${err.message}`)
+      }
+
+      if (i % 2000 === 0 && i > 0) {
+        log(`  CSD grupos: ${i}/${entries.length}...`)
+      }
+    }
+
+    log(`  CSD: ${updated} composições atualizadas com grupo`)
   }
 
   // ---- Helpers ----

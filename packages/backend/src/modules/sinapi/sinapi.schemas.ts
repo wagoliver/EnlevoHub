@@ -9,6 +9,7 @@ export const searchInsumosSchema = z.object({
 
 export const searchComposicoesSchema = z.object({
   search: z.string().optional(),
+  grupo: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })

@@ -131,6 +131,29 @@ export class AuthService {
         console.warn('Failed to seed default template (non-blocking):', err)
       }
 
+      // Copy SINAPI mappings from system to new tenant
+      try {
+        const systemMappings = await tx.etapaSinapiMapping.findMany({
+          where: { tenantId: null },
+        })
+        if (systemMappings.length > 0) {
+          await tx.etapaSinapiMapping.createMany({
+            data: systemMappings.map((m: any) => ({
+              tenantId: tenant.id,
+              fase: m.fase,
+              etapa: m.etapa,
+              atividade: m.atividade,
+              sinapiCodigo: m.sinapiCodigo,
+              unidade: m.unidade,
+              grupoSinapi: m.grupoSinapi,
+              order: m.order,
+            })),
+          })
+        }
+      } catch (err) {
+        console.warn('Failed to copy SINAPI mappings (non-blocking):', err)
+      }
+
       return { user, tenant }
     })
 

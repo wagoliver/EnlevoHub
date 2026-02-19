@@ -95,11 +95,12 @@ export class SinapiService {
   }
 
   async searchComposicoes(query: SearchComposicoesQuery) {
-    const { search, page, limit } = query
+    const { search, grupo, page, limit } = query
     const skip = (page - 1) * limit
 
     const where: Prisma.SinapiComposicaoWhereInput = {
       ...(search && buildSearchFilter(search)),
+      ...(grupo && { grupo: { contains: grupo, mode: 'insensitive' as const } }),
     }
 
     const [data, total] = await Promise.all([
@@ -116,6 +117,13 @@ export class SinapiService {
       data,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     }
+  }
+
+  async listGrupos() {
+    const rows = await this.prisma.$queryRaw<{ grupo: string }[]>`
+      SELECT DISTINCT grupo FROM sinapi_composicoes WHERE grupo IS NOT NULL ORDER BY grupo
+    `
+    return rows.map((r) => r.grupo)
   }
 
   async getComposicao(id: string) {

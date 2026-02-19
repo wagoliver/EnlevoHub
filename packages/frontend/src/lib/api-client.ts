@@ -594,7 +594,7 @@ export const sinapiAPI = {
     return apiClient.get<any>(`/sinapi/insumos${qs ? `?${qs}` : ''}`)
   },
   getInsumo: (id: string) => apiClient.get<any>(`/sinapi/insumos/${id}`),
-  searchComposicoes: (params?: { search?: string; page?: number; limit?: number }) => {
+  searchComposicoes: (params?: { search?: string; grupo?: string; page?: number; limit?: number }) => {
     const searchParams = new URLSearchParams()
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -639,6 +639,31 @@ export const sinapiAPI = {
     formData.append('file', file)
     return sseRequest('/sinapi/collect-from-zip', { body: formData }, onProgress)
   },
+  listGrupos: () => apiClient.get<string[]>('/sinapi/grupos'),
+
+  // Mapeamentos Etapa→SINAPI
+  listMappings: (params?: { fase?: string; search?: string; page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') searchParams.set(key, String(value))
+      })
+    }
+    const qs = searchParams.toString()
+    return apiClient.get<any>(`/sinapi/mapeamentos${qs ? `?${qs}` : ''}`)
+  },
+  createMapping: (data: any) => apiClient.post<any>('/sinapi/mapeamentos', data),
+  updateMapping: (id: string, data: any) => apiClient.patch<any>(`/sinapi/mapeamentos/${id}`, data),
+  deleteMapping: (id: string) => apiClient.delete<any>(`/sinapi/mapeamentos/${id}`),
+  copySystemMappings: () => apiClient.post<any>('/sinapi/mapeamentos/copy'),
+  listMappingFases: () => apiClient.get<string[]>('/sinapi/mapeamentos/fases'),
+  suggestMappings: (fase: string, etapa: string) =>
+    apiClient.get<any>(`/sinapi/mapeamentos/suggest?fase=${encodeURIComponent(fase)}&etapa=${encodeURIComponent(etapa)}`),
+
+  // System mappings (ROOT only)
+  createSystemMapping: (data: any) => apiClient.post<any>('/sinapi/mapeamentos/system', data),
+  updateSystemMapping: (id: string, data: any) => apiClient.patch<any>(`/sinapi/mapeamentos/system/${id}`, data),
+  deleteSystemMapping: (id: string) => apiClient.delete<any>(`/sinapi/mapeamentos/system/${id}`),
 }
 
 /** POST that reads SSE progress events and returns the final result */

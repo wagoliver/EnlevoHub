@@ -83,6 +83,10 @@ export const createFromHierarchySchema = z.object({
 
 export type CreateFromHierarchyInput = z.infer<typeof createFromHierarchySchema>
 
+// Sync hierarchy — same shape as createFromHierarchy, replaces entire activity tree
+export const syncHierarchySchema = createFromHierarchySchema
+export type SyncHierarchyInput = CreateFromHierarchyInput
+
 export const createMeasurementSchema = z.object({
   activityId: z.string().uuid(),
   unitActivityId: z.string().uuid().optional(),

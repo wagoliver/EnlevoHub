@@ -23,6 +23,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { UnifiedActivityWizard } from './UnifiedActivityWizard'
+import { HierarchicalItemEditor, type TemplatePhase, type TemplateActivity } from '@/pages/settings/HierarchicalItemEditor'
 import { MeasurementFormDialog } from './MeasurementFormDialog'
 import { GanttChart } from './GanttChart'
 import { activityToGanttTask } from '@/lib/gantt-types'
@@ -46,7 +47,11 @@ import {
   Ruler,
   BarChart3,
   List,
+  Settings2,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
+import { DialogDescription } from '@/components/ui/dialog'
 
 const statusVariant: Record<string, any> = {
   PENDING: 'secondary',
@@ -302,6 +307,34 @@ function getDeleteMessage(activity: any): string {
   return `Tem certeza que deseja excluir ${levelLabel} "${activity.name}"? Todas as medições associadas também serão removidas. Esta ação não pode ser desfeita.`
 }
 
+/** Convert hierarchical ProjectActivity[] (tree from API) to TemplatePhase[] for the editor */
+function activitiesToTemplatePhases(activities: any[]): TemplatePhase[] {
+  return activities
+    .filter((a: any) => a.level === 'PHASE')
+    .map((phase: any, pIdx: number) => ({
+      name: phase.name,
+      order: pIdx,
+      percentageOfTotal: Number(phase.weight) || 0,
+      color: phase.color || null,
+      stages: (phase.children || [])
+        .filter((s: any) => s.level === 'STAGE')
+        .map((stage: any, sIdx: number) => ({
+          name: stage.name,
+          order: sIdx,
+          activities: (stage.children || [])
+            .filter((a: any) => a.level === 'ACTIVITY')
+            .map((act: any, aIdx: number): TemplateActivity => ({
+              name: act.name,
+              order: aIdx,
+              weight: Number(act.weight) || 1,
+              durationDays: act.durationDays ?? null,
+              dependencies: act.dependencies || undefined,
+              sinapiCodigo: act.sinapiCodigo || null,
+            })),
+        })),
+    }))
+}
+
 export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
   const queryClient = useQueryClient()
   const canEdit = usePermission('activities:edit')
@@ -320,6 +353,9 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [activityToEdit, setActivityToEdit] = useState<any>(null)
   const [editForm, setEditForm] = useState({ name: '', weight: 0, status: 'PENDING' })
+  const [hierarchyEditorOpen, setHierarchyEditorOpen] = useState(false)
+  const [hierarchyPhases, setHierarchyPhases] = useState<TemplatePhase[]>([])
+  const [hierarchyFullscreen, setHierarchyFullscreen] = useState(false)
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ['project-activities', projectId],
@@ -355,6 +391,48 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
       toast.error(error.message || 'Erro ao atualizar atividade')
     },
   })
+
+  const syncHierarchyMutation = useMutation({
+    mutationFn: (data: { phases: any[] }) =>
+      projectsAPI.syncActivitiesHierarchy(projectId, data),
+    onSuccess: () => {
+      toast.success('Estrutura de atividades atualizada com sucesso!')
+      queryClient.invalidateQueries({ queryKey: ['project-activities', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-progress', projectId] })
+      setHierarchyEditorOpen(false)
+      setHierarchyFullscreen(false)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Erro ao atualizar estrutura')
+    },
+  })
+
+  const openHierarchyEditor = () => {
+    const phases = activitiesToTemplatePhases(activities)
+    setHierarchyPhases(phases)
+    setHierarchyEditorOpen(true)
+  }
+
+  const confirmSyncHierarchy = () => {
+    const payload = {
+      phases: hierarchyPhases.map((p) => ({
+        name: p.name,
+        percentageOfTotal: p.percentageOfTotal,
+        color: p.color || null,
+        stages: p.stages.map((s) => ({
+          name: s.name,
+          activities: s.activities.map((a) => ({
+            name: a.name,
+            weight: a.weight,
+            durationDays: a.durationDays,
+            dependencies: a.dependencies && a.dependencies.length > 0 ? a.dependencies : null,
+            sinapiCodigo: a.sinapiCodigo || null,
+          })),
+        })),
+      })),
+    }
+    syncHierarchyMutation.mutate(payload)
+  }
 
   const toggleRow = (activityId: string) => {
     setExpandedRows((prev) => {
@@ -476,6 +554,12 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                 Gantt
               </Button>
             </div>
+          )}
+          {canEdit && activities.length > 0 && (
+            <Button variant="outline" onClick={openHierarchyEditor}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              Editar Estrutura
+            </Button>
           )}
           {canEdit && (
             <Button onClick={() => setShowWizard(true)}>
@@ -602,7 +686,7 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Activity Dialog */}
+      {/* Edit Activity Dialog (single item) */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -665,6 +749,55 @@ export function ActivitiesTab({ projectId }: ActivitiesTabProps) {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hierarchy Editor Dialog */}
+      <Dialog open={hierarchyEditorOpen} onOpenChange={(open) => { if (!open) { setHierarchyEditorOpen(false); setHierarchyFullscreen(false) } }}>
+        <DialogContent className={`${hierarchyFullscreen ? 'max-w-[100vw] w-[100vw] !left-0 !top-0 !translate-x-0 !translate-y-0 !rounded-none h-[100vh] max-h-[100vh]' : 'max-w-5xl max-h-[90vh]'} overflow-y-auto`}>
+          <DialogHeader>
+            <DialogTitle>Editar Estrutura de Atividades</DialogTitle>
+            <DialogDescription>
+              Edite fases, etapas e atividades do projeto. Ao salvar, a estrutura será substituída.
+            </DialogDescription>
+          </DialogHeader>
+
+          <button
+            type="button"
+            onClick={() => setHierarchyFullscreen(f => !f)}
+            title={hierarchyFullscreen ? 'Restaurar tamanho' : 'Tela inteira'}
+            className="absolute right-12 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            {hierarchyFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+
+          <HierarchicalItemEditor
+            phases={hierarchyPhases}
+            onChange={setHierarchyPhases}
+          />
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => { setHierarchyEditorOpen(false); setHierarchyFullscreen(false) }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={
+                syncHierarchyMutation.isPending ||
+                hierarchyPhases.length === 0 ||
+                !hierarchyPhases.every(p => p.name.trim() && p.stages.every(s => s.name.trim() && s.activities.every(a => a.name.trim()))) ||
+                Math.abs(hierarchyPhases.reduce((sum, p) => sum + p.percentageOfTotal, 0) - 100) >= 0.1
+              }
+              onClick={confirmSyncHierarchy}
+            >
+              {syncHierarchyMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Salvar Estrutura
             </Button>
           </DialogFooter>
         </DialogContent>

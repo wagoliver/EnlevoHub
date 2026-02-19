@@ -12,6 +12,7 @@ import {
   createFromTemplateSchema,
   createFromTemplateWithScheduleSchema,
   createFromHierarchySchema,
+  syncHierarchySchema,
   createMeasurementSchema,
   createBatchMeasurementSchema,
   reviewMeasurementSchema,
@@ -164,6 +165,37 @@ export async function projectActivityRoutes(fastify: FastifyInstance) {
         body
       )
       return reply.status(201).send(activities)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Sync (replace) entire activity hierarchy
+  fastify.put('/:id/activities/sync-hierarchy', {
+    preHandler: [authMiddleware, requirePermission('activities:edit')],
+    schema: {
+      description: 'Replace the entire activity hierarchy for a project',
+      tags: ['activities'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = syncHierarchySchema.parse(request.body)
+      const activities = await activityService.syncHierarchy(
+        getTenantId(request),
+        id,
+        body
+      )
+      return reply.send(activities)
     } catch (error) {
       if (error instanceof Error) {
         return reply.status(400).send({ error: 'Bad Request', message: error.message })

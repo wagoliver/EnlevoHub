@@ -4,6 +4,7 @@ import {
   UpdateProjectActivityInput,
   CreateFromTemplateWithScheduleInput,
   CreateFromHierarchyInput,
+  SyncHierarchyInput,
 } from './project-activity.schemas'
 import { ContractorScope } from '../../core/rbac/contractor-filter'
 
@@ -568,6 +569,64 @@ export class ProjectActivityService {
     }))
 
     return this.prisma.$transaction(async (tx) => {
+      const created = await this.createActivitiesRecursive(
+        tx, projectId, activities, null, units
+      )
+      return created
+    })
+  }
+
+  /**
+   * Replace the entire activity hierarchy for a project.
+   * Deletes all existing activities and recreates from the provided phases.
+   */
+  async syncHierarchy(
+    tenantId: string,
+    projectId: string,
+    data: SyncHierarchyInput
+  ) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, tenantId },
+    })
+    if (!project) throw new Error('Projeto não encontrado')
+
+    const units = await this.prisma.unit.findMany({
+      where: { projectId },
+      select: { id: true },
+    })
+
+    // Convert phases hierarchy to the recursive format
+    const activities: any[] = data.phases.map((phase, phaseIdx) => ({
+      name: phase.name,
+      level: 'PHASE',
+      order: phaseIdx,
+      weight: phase.percentageOfTotal,
+      color: phase.color || null,
+      children: phase.stages.map((stage, stageIdx) => ({
+        name: stage.name,
+        level: 'STAGE',
+        order: stageIdx,
+        weight: 1,
+        children: stage.activities.map((act, actIdx) => ({
+          name: act.name,
+          level: 'ACTIVITY',
+          order: actIdx,
+          weight: act.weight,
+          dependencies: act.dependencies || null,
+          scope: 'ALL_UNITS',
+          sinapiCodigo: act.sinapiCodigo || null,
+          areaTipo: act.areaTipo || null,
+          tags: act.tags || [],
+          padrao: act.padrao ?? true,
+        })),
+      })),
+    }))
+
+    return this.prisma.$transaction(async (tx) => {
+      // Delete all existing activities for this project (cascades to unitActivities, measurements, etc.)
+      await tx.projectActivity.deleteMany({ where: { projectId } })
+
+      // Recreate from hierarchy
       const created = await this.createActivitiesRecursive(
         tx, projectId, activities, null, units
       )

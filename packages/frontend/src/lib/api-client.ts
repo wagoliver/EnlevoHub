@@ -312,6 +312,8 @@ export const projectsAPI = {
     apiClient.post<any>(`/projects/${projectId}/activities/from-template`, data),
   createActivitiesFromHierarchy: (projectId: string, data: any) =>
     apiClient.post<any>(`/projects/${projectId}/activities/from-hierarchy`, data),
+  syncActivitiesHierarchy: (projectId: string, data: any) =>
+    apiClient.put<any>(`/projects/${projectId}/activities/sync-hierarchy`, data),
   getActivity: (projectId: string, activityId: string) =>
     apiClient.get<any>(`/projects/${projectId}/activities/${activityId}`),
   updateActivity: (projectId: string, activityId: string, data: any) =>

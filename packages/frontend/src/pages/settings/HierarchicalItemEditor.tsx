@@ -75,10 +75,11 @@ interface ActivityNameInputProps {
   value: string
   sinapiCodigo?: string | null
   onChange: (name: string) => void
-  onSinapiSelect: (codigo: string | null) => void
+  onSelectComposition: (name: string, codigo: string) => void
+  onClearComposition: () => void
 }
 
-function ActivityNameInput({ value, sinapiCodigo, onChange, onSinapiSelect }: ActivityNameInputProps) {
+function ActivityNameInput({ value, sinapiCodigo, onChange, onSelectComposition, onClearComposition }: ActivityNameInputProps) {
   const [showResults, setShowResults] = useState(false)
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -111,14 +112,9 @@ function ActivityNameInput({ value, sinapiCodigo, onChange, onSinapiSelect }: Ac
   }
 
   const handleSelect = (comp: any) => {
-    onChange(comp.descricao)
-    onSinapiSelect(comp.codigo)
+    onSelectComposition(comp.descricao, comp.codigo)
     setShowResults(false)
     setResults([])
-  }
-
-  const handleClearSinapi = () => {
-    onSinapiSelect(null)
   }
 
   // Close dropdown on outside click
@@ -148,7 +144,7 @@ function ActivityNameInput({ value, sinapiCodigo, onChange, onSinapiSelect }: Ac
             variant="outline"
             className="text-[9px] border-orange-300 text-orange-600 shrink-0 cursor-pointer gap-0.5 pr-0.5"
             title={`SINAPI: ${sinapiCodigo} (clique para remover)`}
-            onClick={handleClearSinapi}
+            onClick={onClearComposition}
           >
             <Link2 className="h-2.5 w-2.5" />
             {sinapiCodigo}
@@ -296,12 +292,16 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
   }
 
   const updateActivity = (phaseIdx: number, stageIdx: number, actIdx: number, field: keyof TemplateActivity, value: any) => {
+    updateActivityFields(phaseIdx, stageIdx, actIdx, { [field]: value })
+  }
+
+  const updateActivityFields = (phaseIdx: number, stageIdx: number, actIdx: number, fields: Partial<TemplateActivity>) => {
     const updated = [...phases]
     const phase = { ...updated[phaseIdx] }
     const stages = [...phase.stages]
     const stage = { ...stages[stageIdx] }
     const activities = [...stage.activities]
-    activities[actIdx] = { ...activities[actIdx], [field]: value }
+    activities[actIdx] = { ...activities[actIdx], ...fields }
     stage.activities = activities
     stages[stageIdx] = stage
     phase.stages = stages
@@ -463,7 +463,8 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
                             value={act.name}
                             sinapiCodigo={act.sinapiCodigo}
                             onChange={(name) => updateActivity(phaseIdx, stageIdx, actIdx, 'name', name)}
-                            onSinapiSelect={(codigo) => updateActivity(phaseIdx, stageIdx, actIdx, 'sinapiCodigo', codigo)}
+                            onSelectComposition={(name, codigo) => updateActivityFields(phaseIdx, stageIdx, actIdx, { name, sinapiCodigo: codigo })}
+                            onClearComposition={() => updateActivity(phaseIdx, stageIdx, actIdx, 'sinapiCodigo', null)}
                           />
                           <Input
                             type="number"

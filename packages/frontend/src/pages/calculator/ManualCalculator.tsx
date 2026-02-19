@@ -20,7 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Trash2, Loader2, Save, List, Layers, GitBranch, ChevronRight, ChevronDown } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Plus, Trash2, Loader2, Save, List, Layers, GitBranch, ChevronRight, ChevronDown, Lightbulb, PackagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ComposicaoTree } from './ComposicaoTree'
 
@@ -406,34 +407,330 @@ export function ManualCalculator({ projectId, levantamentoId, itens, ambienteId,
     </TableRow>
   )
 
-  // Child activities with contextual info
-  const childrenWithSinapi = useMemo(() => {
+  // === SINAPI Suggestions ===
+  const childSinapiCodigos = useMemo(() => {
     if (!childActivities?.length) return []
-    return childActivities.filter((c: any) => c.level === 'ACTIVITY')
+    return childActivities
+      .filter((c: any) => c.level === 'ACTIVITY' && c.sinapiCodigo)
+      .map((c: any) => ({ name: c.name, sinapiCodigo: c.sinapiCodigo, id: c.id }))
   }, [childActivities])
+
+  const childrenWithoutSinapi = useMemo(() => {
+    if (!childActivities?.length) return []
+    return childActivities.filter((c: any) => c.level === 'ACTIVITY' && !c.sinapiCodigo)
+  }, [childActivities])
+
+  // Fetch composition details (with insumos) for each child SINAPI code
+  const { data: suggestionsData, isLoading: suggestionsLoading } = useQuery({
+    queryKey: ['sinapi-suggestions', childSinapiCodigos.map(c => c.sinapiCodigo).join(',')],
+    queryFn: async () => {
+      // Step 1: find composition IDs by code
+      const resolvedComps = await Promise.all(
+        childSinapiCodigos.map(async (item) => {
+          try {
+            const res = await sinapiAPI.searchComposicoes({ search: item.sinapiCodigo, limit: 5 })
+            const data = (res as any).data ?? (res as any).composicoes ?? res
+            const list = Array.isArray(data) ? data : []
+            const match = list.find((c: any) => c.codigo === item.sinapiCodigo) || list[0]
+            return match ? { ...item, composicaoId: match.id, composicaoDesc: match.descricao } : null
+          } catch {
+            return null
+          }
+        })
+      )
+      const valid = resolvedComps.filter(Boolean) as { name: string; sinapiCodigo: string; id: string; composicaoId: string; composicaoDesc: string }[]
+
+      // Step 2: fetch full composition details (with insumos) for each
+      const details = await Promise.all(
+        valid.map(async (comp) => {
+          try {
+            const detail = await sinapiAPI.getComposicao(comp.composicaoId)
+            return {
+              activityName: comp.name,
+              sinapiCodigo: comp.sinapiCodigo,
+              composicaoDesc: comp.composicaoDesc,
+              itens: (detail.itens || []).map((item: any) => ({
+                insumoId: item.insumo?.id || item.insumoId,
+                codigo: item.insumo?.codigo || item.codigo,
+                descricao: item.insumo?.descricao || item.descricao,
+                unidade: item.insumo?.unidade || item.unidade || 'UN',
+                tipo: item.insumo?.tipo || item.tipo,
+                coeficiente: Number(item.coeficiente) || 0,
+              })),
+            }
+          } catch {
+            return null
+          }
+        })
+      )
+      return details.filter(Boolean)
+    },
+    enabled: childSinapiCodigos.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Suggestions state: track selected items and user-adjusted values
+  interface SuggestionItem {
+    key: string
+    selected: boolean
+    descricao: string
+    unidade: string
+    quantidade: string
+    precoUnitario: string
+    activityName: string
+    sinapiCodigo: string
+    insumoId?: string
+  }
+
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([])
+  const [suggestionsInitialized, setSuggestionsInitialized] = useState(false)
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true)
+
+  // Initialize suggestions when data loads
+  useEffect(() => {
+    if (!suggestionsData?.length || suggestionsInitialized) return
+    const items: SuggestionItem[] = []
+    for (const comp of suggestionsData) {
+      if (!comp) continue
+      for (const insumo of comp.itens) {
+        items.push({
+          key: `${comp.sinapiCodigo}_${insumo.codigo}`,
+          selected: false,
+          descricao: insumo.descricao,
+          unidade: insumo.unidade,
+          quantidade: insumo.coeficiente > 0 ? String(insumo.coeficiente) : '',
+          precoUnitario: '',
+          activityName: comp.activityName,
+          sinapiCodigo: comp.sinapiCodigo,
+          insumoId: insumo.insumoId,
+        })
+      }
+    }
+    setSuggestions(items)
+    setSuggestionsInitialized(true)
+  }, [suggestionsData, suggestionsInitialized])
+
+  // Reset suggestions when child activities change
+  useEffect(() => {
+    setSuggestionsInitialized(false)
+    setSuggestions([])
+  }, [childSinapiCodigos.map(c => c.sinapiCodigo).join(',')])
+
+  const toggleSuggestion = (key: string) => {
+    setSuggestions(prev => prev.map(s => s.key === key ? { ...s, selected: !s.selected } : s))
+  }
+
+  const toggleAllSuggestions = (selected: boolean) => {
+    setSuggestions(prev => prev.map(s => ({ ...s, selected })))
+  }
+
+  const updateSuggestionField = (key: string, field: 'quantidade' | 'precoUnitario', value: string) => {
+    setSuggestions(prev => prev.map(s => s.key === key ? { ...s, [field]: value } : s))
+  }
+
+  const selectedSuggestions = suggestions.filter(s => s.selected)
+
+  const addSuggestionsMutation = useMutation({
+    mutationFn: async (items: SuggestionItem[]) => {
+      const results = []
+      for (const item of items) {
+        const qtd = parseFloat(item.quantidade)
+        const preco = parseFloat(item.precoUnitario)
+        if (!item.descricao || isNaN(qtd) || qtd <= 0) continue
+        results.push(
+          levantamentoAPI.addItem(projectId, levantamentoId, {
+            nome: item.descricao,
+            unidade: item.unidade,
+            quantidade: qtd,
+            precoUnitario: isNaN(preco) ? 0 : preco,
+            sinapiInsumoId: item.insumoId || undefined,
+            projectActivityId: fixedActivityId || undefined,
+            etapa: fixedActivityName || undefined,
+            ambienteId: ambienteId || undefined,
+          })
+        )
+      }
+      return Promise.all(results)
+    },
+    onSuccess: (results) => {
+      toast.success(`${results.length} ite${results.length === 1 ? 'm adicionado' : 'ns adicionados'}`)
+      queryClient.invalidateQueries({ queryKey: ['levantamento-project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-check', 'levantamento-items'] })
+      // Uncheck added items
+      const addedKeys = new Set(selectedSuggestions.map(s => s.key))
+      setSuggestions(prev => prev.map(s => addedKeys.has(s.key) ? { ...s, selected: false } : s))
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const handleAddSuggestions = () => {
+    const valid = selectedSuggestions.filter(s => {
+      const qtd = parseFloat(s.quantidade)
+      return s.descricao && !isNaN(qtd) && qtd > 0
+    })
+    if (valid.length === 0) {
+      toast.error('Preencha a quantidade dos itens selecionados')
+      return
+    }
+    addSuggestionsMutation.mutate(valid)
+  }
+
+  // Group suggestions by activity name
+  const groupedSuggestions = useMemo(() => {
+    const groups: { activityName: string; sinapiCodigo: string; items: SuggestionItem[] }[] = []
+    const map = new Map<string, SuggestionItem[]>()
+    const order: string[] = []
+    for (const s of suggestions) {
+      const key = `${s.activityName}__${s.sinapiCodigo}`
+      if (!map.has(key)) { map.set(key, []); order.push(key) }
+      map.get(key)!.push(s)
+    }
+    for (const key of order) {
+      const items = map.get(key)!
+      groups.push({ activityName: items[0].activityName, sinapiCodigo: items[0].sinapiCodigo, items })
+    }
+    return groups
+  }, [suggestions])
+
+  const hasSuggestions = suggestions.length > 0 || suggestionsLoading || childSinapiCodigos.length > 0
 
   return (
     <div className="space-y-4">
-      {/* Child activities context */}
-      {childrenWithSinapi.length > 0 && (
+      {/* SINAPI Suggestions */}
+      {hasSuggestions && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 overflow-hidden">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full px-4 py-2.5 hover:bg-amber-50 transition-colors"
+            onClick={() => setSuggestionsExpanded(e => !e)}
+          >
+            <div className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800">
+                Sugestões de materiais
+              </span>
+              {suggestions.length > 0 && (
+                <Badge variant="secondary" className="text-[10px]">
+                  {suggestions.length} ite{suggestions.length === 1 ? 'm' : 'ns'}
+                </Badge>
+              )}
+            </div>
+            {suggestionsExpanded
+              ? <ChevronDown className="h-4 w-4 text-amber-500" />
+              : <ChevronRight className="h-4 w-4 text-amber-500" />
+            }
+          </button>
+
+          {suggestionsExpanded && (
+            <div className="border-t border-amber-200 px-4 py-3 space-y-3">
+              {suggestionsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-amber-600 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Buscando sugestões na base SINAPI...
+                </div>
+              ) : suggestions.length === 0 && childSinapiCodigos.length > 0 ? (
+                <p className="text-xs text-amber-600">Nenhum insumo encontrado para as composições vinculadas.</p>
+              ) : (
+                <>
+                  {/* Select all / Deselect all */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="text-xs text-amber-700 underline hover:text-amber-900"
+                        onClick={() => toggleAllSuggestions(true)}
+                      >
+                        Selecionar todos
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-amber-700 underline hover:text-amber-900"
+                        onClick={() => toggleAllSuggestions(false)}
+                      >
+                        Limpar seleção
+                      </button>
+                    </div>
+                    {selectedSuggestions.length > 0 && (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={handleAddSuggestions}
+                        disabled={addSuggestionsMutation.isPending}
+                      >
+                        {addSuggestionsMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                        ) : (
+                          <PackagePlus className="h-3 w-3 mr-1.5" />
+                        )}
+                        Adicionar {selectedSuggestions.length} selecionado{selectedSuggestions.length !== 1 ? 's' : ''}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Grouped suggestions */}
+                  {groupedSuggestions.map((group) => (
+                    <div key={`${group.activityName}_${group.sinapiCodigo}`} className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-neutral-700">{group.activityName}</span>
+                        <Badge variant="outline" className="text-[9px] border-blue-300 text-blue-600">
+                          SINAPI {group.sinapiCodigo}
+                        </Badge>
+                      </div>
+                      <div className="rounded border border-amber-100 bg-white divide-y divide-amber-100">
+                        {group.items.map((s) => (
+                          <div key={s.key} className="flex items-center gap-2 px-3 py-1.5">
+                            <Checkbox
+                              checked={s.selected}
+                              onChange={() => toggleSuggestion(s.key)}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className={cn(
+                              "flex-1 text-xs min-w-0 truncate",
+                              s.selected ? 'text-neutral-800' : 'text-neutral-500'
+                            )} title={s.descricao}>
+                              {s.descricao}
+                            </span>
+                            <span className="text-[10px] text-neutral-400 w-8 text-center shrink-0">{s.unidade}</span>
+                            <Input
+                              type="number"
+                              className="h-6 w-20 text-xs text-right shrink-0"
+                              placeholder="Qtd"
+                              value={s.quantidade}
+                              onChange={(e) => updateSuggestionField(s.key, 'quantidade', e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                            <Input
+                              type="number"
+                              className="h-6 w-24 text-xs text-right shrink-0"
+                              placeholder="R$ Preço"
+                              value={s.precoUnitario}
+                              onChange={(e) => updateSuggestionField(s.key, 'precoUnitario', e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Activities without SINAPI (context only) */}
+      {childrenWithoutSinapi.length > 0 && (
         <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3 space-y-1.5">
           <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-            Atividades vinculadas
+            Atividades sem referência SINAPI
           </span>
-          <div className="space-y-1">
-            {childrenWithSinapi.map((child: any) => (
-              <div key={child.id} className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-neutral-700">{child.name}</span>
-                {child.sinapiCodigo && (
-                  <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600">
-                    SINAPI {child.sinapiCodigo}
-                  </Badge>
-                )}
-                {child.areaTipo && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    {child.areaTipo}
-                  </Badge>
-                )}
+          <div className="space-y-0.5">
+            {childrenWithoutSinapi.map((child: any) => (
+              <div key={child.id} className="flex items-center gap-2">
+                <span className="text-xs text-neutral-600">{child.name}</span>
               </div>
             ))}
           </div>

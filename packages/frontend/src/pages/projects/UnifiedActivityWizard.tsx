@@ -471,17 +471,27 @@ export function UnifiedActivityWizard({
                         key={act.name}
                         className="flex items-center gap-2 py-1 pl-14 text-sm text-neutral-600"
                       >
-                        <span className="flex-1">{act.name}</span>
-                        <span className="text-xs text-neutral-400">
+                        <span className="flex-1 min-w-0 truncate">{act.name}</span>
+                        {act.sinapiCodigo && (
+                          <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600 shrink-0">
+                            SINAPI {act.sinapiCodigo}
+                          </Badge>
+                        )}
+                        {act.areaTipo && (
+                          <Badge variant="secondary" className="text-[10px] shrink-0">
+                            {act.areaTipo}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-neutral-400 shrink-0">
                           Peso: {act.weight}
                         </span>
                         {act.durationDays && (
-                          <span className="text-xs text-neutral-400">
+                          <span className="text-xs text-neutral-400 shrink-0">
                             {act.durationDays}d
                           </span>
                         )}
                         {act.dependencies && act.dependencies.length > 0 && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-[10px] shrink-0">
                             {act.dependencies.join(', ')}
                           </Badge>
                         )}

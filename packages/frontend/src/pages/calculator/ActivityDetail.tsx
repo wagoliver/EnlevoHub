@@ -112,7 +112,7 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
       )}
 
       {/* Calculator tabs */}
-      <Tabs defaultValue="manual">
+      <Tabs defaultValue={activity.sinapiCodigo ? 'sinapi' : 'manual'}>
         <TabsList>
           <TabsTrigger value="manual">Manual</TabsTrigger>
           <TabsTrigger value="sinapi">SINAPI</TabsTrigger>
@@ -135,6 +135,7 @@ export function ActivityDetail({ activity, projectId, levantamentoId, itens }: A
             fixedActivityId={activity.id}
             fixedActivityName={activity.name}
             baseQuantity={parsedBaseQuantity}
+            sinapiCodigo={activity.sinapiCodigo}
           />
         </TabsContent>
       </Tabs>

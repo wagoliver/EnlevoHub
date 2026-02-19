@@ -59,7 +59,12 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Limpeza Final', 15, '#F39C12', 'Finalização', 'Paisagismo básico', 1, 3, 'Limpeza geral'],
     ],
     sinapiMap: {
+      'Escavação': { sinapiCodigo: '93358', areaTipo: 'MANUAL' },
       'Levantamento de paredes': { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+      'Estrutura do telhado': { sinapiCodigo: '92543', areaTipo: 'TETO' },
+      'Telhas': { sinapiCodigo: '94218', areaTipo: 'TETO' },
+      'Tubulação e fiação': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
+      'Quadro e disjuntores': { sinapiCodigo: '91953', areaTipo: 'MANUAL' },
       'Chapisco e reboco': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Cerâmica (pisos)': { sinapiCodigo: '87263', areaTipo: 'PISO' },
       'Cerâmica (paredes)': { sinapiCodigo: '87265', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'] },
@@ -96,6 +101,11 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 5, '#F39C12', 'Limpeza', 'Limpeza e entrega', 1, 3, 'Portas e janelas'],
     ],
     sinapiMap: {
+      'Alvenaria térreo': { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+      'Alvenaria superior': { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+      'Estrutura do telhado': { sinapiCodigo: '92543', areaTipo: 'TETO' },
+      'Telhas e calhas': { sinapiCodigo: '94218', areaTipo: 'TETO' },
+      'Tubulação e fiação': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Reboco interno': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Pisos': { sinapiCodigo: '87263', areaTipo: 'PISO' },
       'Massa e pintura': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
@@ -130,9 +140,13 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 5, '#1ABC9C', 'Entrega', 'Limpeza e vistoria', 2, 5, 'Portas e janelas'],
     ],
     sinapiMap: {
+      'Alvenaria dos pavimentos': { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+      'Infraestrutura elétrica': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Reboco e gesso': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Pisos e azulejos': { sinapiCodigo: '87263', areaTipo: 'PISO' },
+      'Revestimento externo': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Pintura interna': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
+      'Pintura externa': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
   {
@@ -161,6 +175,8 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
     ],
     sinapiMap: {
       'Paredes das unidades': { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+      'Telhado das unidades': { sinapiCodigo: '92543', areaTipo: 'TETO' },
+      'Instalação elétrica': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Reboco e pisos': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Pintura das unidades': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
@@ -190,8 +206,11 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 6, '#1ABC9C', 'Entrega', 'Limpeza e habite-se', 2, 5, 'Jardins e iluminação'],
     ],
     sinapiMap: {
+      'Alvenaria dos blocos': { sinapiCodigo: '103324', areaTipo: 'PAREDE_LIQ' },
+      'Instalação elétrica': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Reboco e contrapiso': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Pisos e azulejos': { sinapiCodigo: '87263', areaTipo: 'PISO' },
+      'Revestimento de fachada': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Pintura interna e externa': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
@@ -219,6 +238,9 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 15, '#F39C12', 'Entrega', 'Limpeza e entrega', 1, 2, 'Pátio e estacionamento'],
     ],
     sinapiMap: {
+      'Piso industrial': { sinapiCodigo: '87620', areaTipo: 'PISO' },
+      'Telhas e rufos': { sinapiCodigo: '94218', areaTipo: 'TETO' },
+      'Infraestrutura elétrica': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Pintura e sinalização': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
@@ -244,6 +266,9 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 18, '#F39C12', 'Entrega', 'Limpeza final', 1, 1, 'Portas e fechamentos'],
     ],
     sinapiMap: {
+      'Piso comercial': { sinapiCodigo: '87263', areaTipo: 'PISO' },
+      'Revestimento de paredes': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
+      'Quadro e circuitos': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Pintura e acabamento': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
@@ -275,6 +300,10 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Limpeza', 5, '#F39C12', 'Final', 'Limpeza e entrega', 1, 1, 'Portas e rodapés'],
     ],
     sinapiMap: {
+      'Remoção de revestimentos': { sinapiCodigo: '97634', areaTipo: 'MANUAL' },
+      'Demolição de paredes': { sinapiCodigo: '97622', areaTipo: 'MANUAL' },
+      'Retirada de entulho': { sinapiCodigo: '100981', areaTipo: 'MANUAL' },
+      'Nova fiação e pontos': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Chapisco e reboco': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Contrapiso e nivelamento': { sinapiCodigo: '87620', areaTipo: 'PISO' },
       'Piso cerâmico / porcelanato': { sinapiCodigo: '87263', areaTipo: 'PISO' },
@@ -306,8 +335,11 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 10, '#F39C12', 'Acabamento', 'Limpeza geral', 1, 2, 'Desmontagem de andaimes'],
     ],
     sinapiMap: {
+      'Remoção de revestimento antigo': { sinapiCodigo: '97634', areaTipo: 'MANUAL' },
       'Chapisco e reboco externo': { sinapiCodigo: '87879', areaTipo: 'PAREDE_LIQ' },
       'Impermeabilização de fachada': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
+      'Impermeabilização de laje': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
+      'Pintura final': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
   {
@@ -332,7 +364,11 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Limpeza', 10, '#F39C12', 'Final', 'Limpeza pós-obra', 1, 2, 'Porta de entrada'],
     ],
     sinapiMap: {
+      'Demolição e remoções': { sinapiCodigo: '97622', areaTipo: 'MANUAL' },
+      'Retirada de entulho': { sinapiCodigo: '100981', areaTipo: 'MANUAL' },
       'Forro de gesso': { sinapiCodigo: '96109', areaTipo: 'TETO' },
+      'Novo projeto elétrico': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
+      'Piso vinílico / porcelanato': { sinapiCodigo: '87263', areaTipo: 'PISO' },
       'Pintura e textura': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
@@ -360,6 +396,7 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 10, '#9B59B6', 'Documentação', 'Laudo e ART', 2, 2, 'Testes e medições'],
     ],
     sinapiMap: {
+      'Fiação dos circuitos': { sinapiCodigo: '91926', areaTipo: 'MANUAL' },
       'Tomadas e interruptores': { sinapiCodigo: '91947', areaTipo: 'MANUAL' },
     },
   },
@@ -384,6 +421,9 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Finalização', 10, '#9B59B6', 'Teste', 'Teste de pressão', 3, 1, 'Pontos de consumo'],
       ['Finalização', 10, '#9B59B6', 'Louças', 'Conexão de louças e metais', 2, 2, 'Teste de pressão'],
     ],
+    sinapiMap: {
+      'Calhas e condutores': { sinapiCodigo: '100434', areaTipo: 'MANUAL' },
+    },
   },
   {
     key: 'energia-solar',
@@ -452,6 +492,8 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
     ],
     sinapiMap: {
       'Massa corrida / acrílica': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
+      '1ª demão': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
+      '2ª demão': { sinapiCodigo: '88489', areaTipo: 'PAREDE_LIQ' },
     },
   },
   {
@@ -493,6 +535,7 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Entorno', 10, '#E67E22', 'Área', 'Ducha e paisagismo', 1, 2, 'Piso do entorno'],
     ],
     sinapiMap: {
+      'Escavação e remoção de terra': { sinapiCodigo: '93358', areaTipo: 'MANUAL' },
       'Impermeabilização interna': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
       'Pastilha / Azulejo': { sinapiCodigo: '87265', areaTipo: 'PAREDE_LIQ', tags: ['AREA_MOLHADA'] },
     },
@@ -518,6 +561,9 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Limpeza', 10, '#F39C12', 'Final', 'Limpeza final', 1, 1, 'Limpeza ácida'],
     ],
     sinapiMap: {
+      'Remoção do piso antigo': { sinapiCodigo: '97634', areaTipo: 'MANUAL' },
+      'Remoção de azulejos': { sinapiCodigo: '97634', areaTipo: 'MANUAL' },
+      'Retirada de entulho': { sinapiCodigo: '100981', areaTipo: 'MANUAL' },
       'Contrapiso / Nivelamento': { sinapiCodigo: '87620', areaTipo: 'PISO' },
       'Impermeabilização áreas molhadas': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
       'Porcelanato / Cerâmica (piso)': { sinapiCodigo: '87263', areaTipo: 'PISO' },
@@ -544,6 +590,12 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Complementos', 20, '#3498DB', 'Acabamento', 'Arremates e vedações', 2, 2, 'Cumeeiras e espigões'],
       ['Finalização', 10, '#2ECC71', 'Limpeza', 'Limpeza e teste de estanqueidade', 2, 1, 'Arremates e vedações'],
     ],
+    sinapiMap: {
+      'Tesouras / Treliças': { sinapiCodigo: '92543', areaTipo: 'TETO' },
+      'Assentamento de telhas': { sinapiCodigo: '94218', areaTipo: 'TETO' },
+      'Cumeeiras e espigões': { sinapiCodigo: '94219', areaTipo: 'MANUAL' },
+      'Calhas e rufos': { sinapiCodigo: '100434', areaTipo: 'MANUAL' },
+    },
   },
   {
     key: 'impermeabilizacao',
@@ -566,7 +618,10 @@ export const TEMPLATE_MODELS: TemplateModel[] = [
       ['Acabamento', 15, '#E67E22', 'Rejunte', 'Rejunte e acabamentos', 2, 1, 'Contrapiso e piso'],
     ],
     sinapiMap: {
+      '1ª camada impermeabilizante': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
+      '2ª camada impermeabilizante': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
       'Teste de estanqueidade': { sinapiCodigo: '98555', areaTipo: 'PISO', tags: ['AREA_MOLHADA'] },
+      'Contrapiso e piso': { sinapiCodigo: '87620', areaTipo: 'PISO' },
     },
   },
 ]

@@ -526,6 +526,28 @@ export class ProjectActivityService {
   /**
    * Create activities directly from a phases hierarchy (no template needed).
    */
+  /**
+   * Load EtapaSinapiMapping records for a tenant (falls back to system mappings).
+   * Returns a Map keyed by lowercase activity name for fast lookup.
+   */
+  private async loadSinapiMappings(tenantId: string): Promise<Map<string, { sinapiCodigo: string; unidade?: string | null }>> {
+    const tenantCount = await this.prisma.etapaSinapiMapping.count({ where: { tenantId } })
+    const effectiveTenantId = tenantCount === 0 ? null : tenantId
+
+    const mappings = await this.prisma.etapaSinapiMapping.findMany({
+      where: { tenantId: effectiveTenantId, sinapiCodigo: { not: null } },
+      select: { atividade: true, sinapiCodigo: true, unidade: true },
+    })
+
+    const map = new Map<string, { sinapiCodigo: string; unidade?: string | null }>()
+    for (const m of mappings) {
+      if (m.sinapiCodigo) {
+        map.set(m.atividade.toLowerCase().trim(), { sinapiCodigo: m.sinapiCodigo, unidade: m.unidade })
+      }
+    }
+    return map
+  }
+
   async createFromHierarchy(
     tenantId: string,
     projectId: string,
@@ -541,6 +563,9 @@ export class ProjectActivityService {
       select: { id: true },
     })
 
+    // Load SINAPI mappings for auto-fill fallback
+    const sinapiMap = await this.loadSinapiMappings(tenantId)
+
     // Convert phases hierarchy to the recursive format expected by createActivitiesRecursive
     const activities: any[] = data.phases.map((phase, phaseIdx) => ({
       name: phase.name,
@@ -553,18 +578,26 @@ export class ProjectActivityService {
         level: 'STAGE',
         order: stageIdx,
         weight: 1,
-        children: stage.activities.map((act, actIdx) => ({
-          name: act.name,
-          level: 'ACTIVITY',
-          order: actIdx,
-          weight: act.weight,
-          dependencies: act.dependencies || null,
-          scope: 'ALL_UNITS',
-          sinapiCodigo: act.sinapiCodigo || null,
-          areaTipo: act.areaTipo || null,
-          tags: act.tags || [],
-          padrao: act.padrao ?? true,
-        })),
+        children: stage.activities.map((act, actIdx) => {
+          // Auto-fill sinapiCodigo from mapping table if not provided
+          let sinapiCodigo = act.sinapiCodigo || null
+          if (!sinapiCodigo) {
+            const mapping = sinapiMap.get(act.name.toLowerCase().trim())
+            if (mapping) sinapiCodigo = mapping.sinapiCodigo
+          }
+          return {
+            name: act.name,
+            level: 'ACTIVITY',
+            order: actIdx,
+            weight: act.weight,
+            dependencies: act.dependencies || null,
+            scope: 'ALL_UNITS',
+            sinapiCodigo,
+            areaTipo: act.areaTipo || null,
+            tags: act.tags || [],
+            padrao: act.padrao ?? true,
+          }
+        }),
       })),
     }))
 
@@ -595,6 +628,9 @@ export class ProjectActivityService {
       select: { id: true },
     })
 
+    // Load SINAPI mappings for auto-fill fallback
+    const sinapiMap = await this.loadSinapiMappings(tenantId)
+
     // Convert phases hierarchy to the recursive format
     const activities: any[] = data.phases.map((phase, phaseIdx) => ({
       name: phase.name,
@@ -607,18 +643,25 @@ export class ProjectActivityService {
         level: 'STAGE',
         order: stageIdx,
         weight: 1,
-        children: stage.activities.map((act, actIdx) => ({
-          name: act.name,
-          level: 'ACTIVITY',
-          order: actIdx,
-          weight: act.weight,
-          dependencies: act.dependencies || null,
-          scope: 'ALL_UNITS',
-          sinapiCodigo: act.sinapiCodigo || null,
-          areaTipo: act.areaTipo || null,
-          tags: act.tags || [],
-          padrao: act.padrao ?? true,
-        })),
+        children: stage.activities.map((act, actIdx) => {
+          let sinapiCodigo = act.sinapiCodigo || null
+          if (!sinapiCodigo) {
+            const mapping = sinapiMap.get(act.name.toLowerCase().trim())
+            if (mapping) sinapiCodigo = mapping.sinapiCodigo
+          }
+          return {
+            name: act.name,
+            level: 'ACTIVITY',
+            order: actIdx,
+            weight: act.weight,
+            dependencies: act.dependencies || null,
+            scope: 'ALL_UNITS',
+            sinapiCodigo,
+            areaTipo: act.areaTipo || null,
+            tags: act.tags || [],
+            padrao: act.padrao ?? true,
+          }
+        }),
       })),
     }))
 

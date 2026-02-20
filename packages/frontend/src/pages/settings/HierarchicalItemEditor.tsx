@@ -17,8 +17,10 @@ import {
   ChevronsUpDown,
   Loader2,
   Link2,
+  Sparkles,
 } from 'lucide-react'
-import { sinapiAPI } from '@/lib/api-client'
+import { toast } from 'sonner'
+import { sinapiAPI, aiAPI } from '@/lib/api-client'
 
 // === Types ===
 
@@ -184,10 +186,48 @@ function ActivityNameInput({ value, sinapiCodigo, onChange, onSelectComposition,
 
 export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEditorProps) {
   const [openPhases, setOpenPhases] = useState<Set<number>>(new Set([0]))
+  const [aiGeneratingPhase, setAiGeneratingPhase] = useState<number | null>(null)
 
   const totalPercentage = phases.reduce((sum, p) => sum + (p.percentageOfTotal || 0), 0)
   const percentageValid = Math.abs(totalPercentage - 100) < 0.1
   const allActivityNames = getAllActivityNames(phases)
+
+  // === AI Generate Phase ===
+  const handleAiGeneratePhase = async (phaseIdx: number) => {
+    const phase = phases[phaseIdx]
+    if (!phase.name.trim()) {
+      toast.error('Preencha o nome da fase antes de gerar com IA')
+      return
+    }
+    setAiGeneratingPhase(phaseIdx)
+    try {
+      const result = await aiAPI.generatePhase(phase.name)
+      const aiStages: TemplateStage[] = (result.stages || []).map((s: any, sIdx: number) => ({
+        name: s.name || `Etapa ${sIdx + 1}`,
+        order: sIdx,
+        activities: (s.activities || []).map((a: any, aIdx: number) => ({
+          name: a.name || '',
+          order: aIdx,
+          weight: a.weight || 1,
+          durationDays: a.durationDays || null,
+          dependencies: a.dependencies?.length ? a.dependencies : undefined,
+        })),
+      }))
+      if (aiStages.length === 0) {
+        toast.error('A IA não retornou etapas válidas. Tente novamente.')
+        return
+      }
+      const updated = [...phases]
+      updated[phaseIdx] = { ...updated[phaseIdx], stages: aiStages }
+      onChange(updated)
+      setOpenPhases(prev => new Set([...prev, phaseIdx]))
+      toast.success(`${aiStages.length} etapas geradas com nomenclatura SINAPI`)
+    } catch {
+      toast.error('Erro ao gerar com IA. Verifique se o serviço está disponível.')
+    } finally {
+      setAiGeneratingPhase(null)
+    }
+  }
 
   // === Phase operations ===
   const addPhase = () => {
@@ -403,6 +443,27 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
                 className="h-7 w-7 cursor-pointer rounded border-0 p-0"
                 title="Cor da fase"
               />
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs text-[#b8a378] hover:text-[#a09068] hover:bg-[#b8a378]/10 shrink-0"
+                disabled={aiGeneratingPhase !== null}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleAiGeneratePhase(phaseIdx)
+                }}
+                title="Preencher etapas e atividades com IA (SINAPI)"
+              >
+                {aiGeneratingPhase === phaseIdx ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">
+                  {aiGeneratingPhase === phaseIdx ? 'Gerando...' : 'IA'}
+                </span>
+              </Button>
 
               <div className="flex items-center gap-0.5 shrink-0">
                 <Button variant="ghost" size="icon" className="h-7 w-7" disabled={phaseIdx === 0} onClick={() => movePhase(phaseIdx, 'up')}>

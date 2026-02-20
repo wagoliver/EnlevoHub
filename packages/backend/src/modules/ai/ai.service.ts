@@ -80,6 +80,44 @@ REGRAS:
 
 /no_think`
 
+const GENERATE_PHASE_SYSTEM_PROMPT = `Você é um engenheiro civil especialista em planejamento de obras com conhecimento da tabela SINAPI.
+
+Gere as ETAPAS e ATIVIDADES para a fase de obra informada.
+
+FORMATO DE SAÍDA (JSON estrito):
+{
+  "stages": [
+    {
+      "name": "Nome da Etapa",
+      "activities": [
+        {
+          "name": "Nome da Atividade (usar nomenclatura SINAPI)",
+          "weight": 3,
+          "durationDays": 10,
+          "dependencies": []
+        }
+      ]
+    }
+  ]
+}
+
+REGRAS IMPORTANTES:
+- Use nomes de atividades alinhados com a nomenclatura SINAPI (ex: "Chapisco e reboco", "Levantamento de paredes", "Contrapiso e nivelamento", "Piso cerâmico/porcelanato")
+- Peso de 1 a 5 (1=simples/rápido, 5=complexo/crítico)
+- Duração em dias úteis realistas para construção civil brasileira
+- Dependencies referencia nomes de atividades que devem terminar antes (da mesma fase)
+- Gere entre 3 e 8 etapas por fase, com 1 a 4 atividades por etapa
+- Responda SOMENTE com o JSON, sem texto adicional, sem markdown
+
+EXEMPLOS DE NOMES SINAPI POR FASE:
+- Fundação: Limpeza do terreno, Escavação, Estacas/Sapatas, Baldrame, Impermeabilização de fundação
+- Estrutura: Levantamento de paredes, Vergas e contravergas, Estrutura do telhado, Telhas, Laje
+- Instalações: Tubulação hidráulica, Fiação elétrica, Quadro de distribuição, Esgoto e caixas de inspeção
+- Acabamento: Chapisco e reboco, Contrapiso e nivelamento, Piso cerâmico/porcelanato, Massa corrida, Pintura final, Azulejo (áreas molhadas)
+- Cobertura: Estrutura de madeira para telhado, Telhas cerâmicas/concreto, Calhas e rufos, Impermeabilização de laje
+
+/no_think`
+
 export class AIService {
   private baseUrl: string
   private model: string
@@ -126,6 +164,31 @@ Nível de detalhe: ${activityCounts[detailLevel]}`
     } catch (parseError) {
       logger.error({ response }, 'Falha ao parsear resposta da IA para atividades')
       throw new Error('A IA não conseguiu gerar um cronograma válido. Tente novamente com uma descrição mais detalhada.')
+    }
+  }
+
+  async generatePhase(phaseName: string, context?: string): Promise<any> {
+    const userPrompt = context
+      ? `Gere etapas e atividades para a fase "${phaseName}".
+Contexto adicional da obra: ${context}`
+      : `Gere etapas e atividades para a fase "${phaseName}".`
+
+    const messages: OllamaChatMessage[] = [
+      { role: 'system', content: GENERATE_PHASE_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ]
+
+    const response = await this.callOllama(messages)
+
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error('IA não retornou JSON válido')
+      }
+      return JSON.parse(jsonMatch[0])
+    } catch {
+      logger.error({ response }, 'Falha ao parsear resposta da IA para fase')
+      throw new Error('A IA não conseguiu gerar as atividades. Tente novamente.')
     }
   }
 

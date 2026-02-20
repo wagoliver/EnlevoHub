@@ -837,6 +837,9 @@ export const aiAPI = {
   generateActivities: (description: string, detailLevel: 'resumido' | 'padrao' | 'detalhado' = 'padrao') =>
     apiClient.post<any>('/ai/generate-activities', { description, detailLevel }),
 
+  generatePhase: (phaseName: string, context?: string) =>
+    apiClient.post<any>('/ai/generate-phase', { phaseName, context }),
+
   health: () => apiClient.get<{ status: string; model: string }>('/ai/health'),
 }
 

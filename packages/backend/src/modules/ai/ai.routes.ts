@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { createAuthMiddleware } from '../../core/auth/auth.middleware'
 import { JWTService } from '../../core/auth/jwt.service'
 import { AIService } from './ai.service'
-import { chatMessageSchema, generateActivitiesSchema } from './ai.schemas'
+import { chatMessageSchema, generateActivitiesSchema, generatePhaseSchema } from './ai.schemas'
 
 export async function aiRoutes(fastify: FastifyInstance) {
   const jwtService = new JWTService(fastify)
@@ -59,6 +59,27 @@ export async function aiRoutes(fastify: FastifyInstance) {
     try {
       const { description, detailLevel } = generateActivitiesSchema.parse(request.body)
       const result = await service.generateActivities(description, detailLevel)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // Gerar etapas/atividades para UMA fase
+  fastify.post('/generate-phase', {
+    preHandler: [authMiddleware],
+    schema: {
+      description: 'Gera etapas e atividades para uma fase específica usando IA',
+      tags: ['ai'],
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    try {
+      const { phaseName, context } = generatePhaseSchema.parse(request.body)
+      const result = await service.generatePhase(phaseName, context)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

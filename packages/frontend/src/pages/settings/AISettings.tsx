@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Save, Plug, Eye, EyeOff, Info, CheckCircle2, XCircle, Server, Cloud } from 'lucide-react'
+import { Loader2, Save, Plug, Eye, EyeOff, Info, CheckCircle2, XCircle, Server, Cloud, Key, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -72,6 +72,7 @@ type AIConfigFormData = z.infer<typeof aiConfigFormSchema>
 export function AISettings() {
   const queryClient = useQueryClient()
   const [showApiKey, setShowApiKey] = useState(false)
+  const [editingApiKey, setEditingApiKey] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [isTesting, setIsTesting] = useState(false)
 
@@ -148,7 +149,9 @@ export function AISettings() {
         // For Groq, inject default baseUrl if empty
         const defaultBaseUrl = data.provider === 'groq' ? 'https://api.groq.com/openai/v1' : undefined
         payload.baseUrl = data.baseUrl || defaultBaseUrl
-        if (data.apiKey) {
+        if (data.apiKey === '__REMOVE__') {
+          payload.apiKey = '__REMOVE__'
+        } else if (data.apiKey) {
           payload.apiKey = data.apiKey
         }
       }
@@ -157,6 +160,7 @@ export function AISettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-config'] })
       queryClient.invalidateQueries({ queryKey: ['ai-health'] })
+      setEditingApiKey(false)
       toast.success('Configuração de IA salva com sucesso')
     },
     onError: (error: Error) => {
@@ -320,25 +324,59 @@ export function AISettings() {
             {isGroq && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="apiKey">API Key</Label>
-                  <div className="relative">
-                    <Input
-                      id="apiKey"
-                      type={showApiKey ? 'text' : 'password'}
-                      placeholder="gsk_..."
-                      {...register('apiKey')}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                    >
-                      {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {config?.apiKey && (
-                    <p className="text-xs text-neutral-400">Chave atual: {config.apiKey} (deixe vazio para manter)</p>
+                  <Label>API Key</Label>
+                  {config?.apiKey && !editingApiKey ? (
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 flex-1">
+                        <Key className="h-4 w-4 shrink-0" />
+                        <span>Chave configurada: <code className="font-mono">{config.apiKey}</code></span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setEditingApiKey(true); setValue('apiKey', '', { shouldDirty: true }) }}
+                      >
+                        Alterar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => { setValue('apiKey', '__REMOVE__', { shouldDirty: true }) }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          id="apiKey"
+                          type={showApiKey ? 'text' : 'password'}
+                          placeholder="gsk_..."
+                          {...register('apiKey')}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                        >
+                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {editingApiKey && (
+                        <button
+                          type="button"
+                          className="text-xs text-neutral-500 hover:text-neutral-700 underline"
+                          onClick={() => { setEditingApiKey(false); setValue('apiKey', '', { shouldDirty: false }) }}
+                        >
+                          Cancelar alteração
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -365,34 +403,69 @@ export function AISettings() {
 
             {provider === 'openai-compatible' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="baseUrl">URL Base da API</Label>
-                    <Input
-                      id="baseUrl"
-                      placeholder="http://localhost:1234/v1"
-                      {...register('baseUrl')}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="apiKey">API Key (opcional)</Label>
-                    <div className="relative">
-                      <Input
-                        id="apiKey"
-                        type={showApiKey ? 'text' : 'password'}
-                        placeholder="sk-..."
-                        {...register('apiKey')}
-                        className="pr-10"
-                      />
-                      <button
+                <div className="space-y-2">
+                  <Label htmlFor="baseUrl">URL Base da API</Label>
+                  <Input
+                    id="baseUrl"
+                    placeholder="http://localhost:1234/v1"
+                    {...register('baseUrl')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>API Key (opcional)</Label>
+                  {config?.apiKey && !editingApiKey ? (
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 flex-1">
+                        <Key className="h-4 w-4 shrink-0" />
+                        <span>Chave configurada: <code className="font-mono">{config.apiKey}</code></span>
+                      </div>
+                      <Button
                         type="button"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setEditingApiKey(true); setValue('apiKey', '', { shouldDirty: true }) }}
                       >
-                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                        Alterar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => { setValue('apiKey', '__REMOVE__', { shouldDirty: true }) }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          id="apiKey"
+                          type={showApiKey ? 'text' : 'password'}
+                          placeholder="sk-..."
+                          {...register('apiKey')}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                        >
+                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {editingApiKey && (
+                        <button
+                          type="button"
+                          className="text-xs text-neutral-500 hover:text-neutral-700 underline"
+                          onClick={() => { setEditingApiKey(false); setValue('apiKey', '', { shouldDirty: false }) }}
+                        >
+                          Cancelar alteração
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="model">Modelo</Label>

@@ -38,8 +38,10 @@ export function saveAIConfig(config: AIProviderConfig): void {
     config.baseUrl = 'https://api.groq.com/openai/v1'
   }
 
-  // Merge apiKey: if not provided, keep existing key from file
-  if (!config.apiKey) {
+  // Handle apiKey: __REMOVE__ clears it, empty keeps existing
+  if (config.apiKey === '__REMOVE__') {
+    delete config.apiKey
+  } else if (!config.apiKey) {
     const existing = readAIConfig()
     if (existing?.apiKey) {
       config.apiKey = existing.apiKey

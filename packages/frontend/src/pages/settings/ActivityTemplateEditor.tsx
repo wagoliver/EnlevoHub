@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { activityTemplatesAPI } from '@/lib/api-client'
+import { activityTemplatesAPI, aiAPI } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +30,7 @@ import {
   ListTree,
   CheckSquare,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 import {
   HierarchicalItemEditor,
@@ -38,7 +39,7 @@ import {
 import { ImportTemplateDialog, type ParsedPhase } from './ImportTemplateDialog'
 import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from './template-models'
 
-type StartingPoint = null | 'model' | 'import' | 'blank'
+type StartingPoint = null | 'model' | 'import' | 'blank' | 'ai'
 
 function modelRowsToPhases(rows: any[][]): TemplatePhase[] {
   const phaseMap = new Map<string, {
@@ -134,6 +135,11 @@ export function ActivityTemplateEditor() {
   const [startingPoint, setStartingPoint] = useState<StartingPoint>(null)
   const [selectedModel, setSelectedModel] = useState('')
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+
+  // AI state
+  const [aiDescription, setAiDescription] = useState('')
+  const [aiDetailLevel, setAiDetailLevel] = useState<'resumido' | 'padrao' | 'detalhado'>('padrao')
+  const [aiGenerating, setAiGenerating] = useState(false)
 
   const showStartingPoint = isNew && startingPoint === null
 
@@ -321,12 +327,51 @@ export function ActivityTemplateEditor() {
     setImportDialogOpen(false)
   }
 
+  const handleAiGenerate = async () => {
+    if (!aiDescription.trim() || aiGenerating) return
+    setAiGenerating(true)
+    try {
+      const result = await aiAPI.generateActivities(aiDescription.trim(), aiDetailLevel)
+      if (result.phases && Array.isArray(result.phases)) {
+        const parsed: TemplatePhase[] = result.phases.map((p: any, pIdx: number) => ({
+          name: p.name || `Fase ${pIdx + 1}`,
+          order: pIdx,
+          percentageOfTotal: p.percentage || 0,
+          color: p.color || null,
+          stages: (p.stages || []).map((s: any, sIdx: number) => ({
+            name: s.name || `Etapa ${sIdx + 1}`,
+            order: sIdx,
+            activities: (s.activities || []).map((a: any, aIdx: number) => ({
+              name: a.name || `Atividade ${aIdx + 1}`,
+              order: aIdx,
+              weight: a.weight || 1,
+              durationDays: a.durationDays || null,
+              dependencies: a.dependencies?.length ? a.dependencies : undefined,
+            })),
+          })),
+        }))
+        setPhases(parsed)
+        if (!name) setName('Planejamento gerado por IA')
+        toast.success('Cronograma gerado! Você pode editar antes de salvar.')
+      } else {
+        toast.error('A IA não retornou um formato válido. Tente novamente.')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao gerar atividades com IA')
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
   const handleBackToCards = () => {
     setStartingPoint(null)
     setName('')
     setDescription('')
     setPhases([])
     setSelectedModel('')
+    setAiDescription('')
+    setAiDetailLevel('padrao')
+    setAiGenerating(false)
   }
 
   if (isEditing && isLoading) {
@@ -361,7 +406,7 @@ export function ActivityTemplateEditor() {
         </div>
 
         {/* Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <button
             type="button"
             onClick={() => setStartingPoint('model')}
@@ -410,6 +455,22 @@ export function ActivityTemplateEditor() {
             </h3>
             <p className="text-sm text-neutral-500">
               Comece do zero adicionando fases e atividades
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStartingPoint('ai')}
+            className="group flex flex-col items-center gap-3 rounded-xl border-2 border-neutral-200 bg-white p-8 text-center transition-all hover:border-[#b8a378] hover:shadow-md"
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#b8a378]/10 text-[#b8a378] transition-colors group-hover:bg-[#b8a378]/20">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900">
+              Com IA
+            </h3>
+            <p className="text-sm text-neutral-500">
+              Descreva a obra e a IA gera o cronograma
             </p>
           </button>
         </div>
@@ -477,6 +538,10 @@ export function ActivityTemplateEditor() {
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 font-bold text-amber-600">&bull;</span>
                   <span><strong>Em branco</strong> — Para quem prefere montar a estrutura do zero, com total liberdade na organização.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold text-amber-600">&bull;</span>
+                  <span><strong>Com IA</strong> — Descreva o tipo de obra em texto livre e a inteligência artificial gera as fases, etapas e atividades. Ideal para personalizar rapidamente.</span>
                 </li>
               </ul>
             </div>
@@ -588,6 +653,78 @@ export function ActivityTemplateEditor() {
                 {TEMPLATE_MODELS.find((t) => t.key === selectedModel)?.description}
               </p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* AI Generator - shown when starting from AI */}
+      {startingPoint === 'ai' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-5 w-5 text-[#b8a378]" />
+              Gerar com IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="ai-desc">Descreva o tipo de obra</Label>
+              <Textarea
+                id="ai-desc"
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                placeholder="Ex: Casa térrea de 120m², alvenaria estrutural, 3 quartos, 2 banheiros, com piscina e área gourmet."
+                rows={3}
+                maxLength={2000}
+                className="mt-1.5"
+              />
+              <p className="mt-1 text-xs text-neutral-400">
+                Quanto mais detalhada a descrição, melhor o resultado.
+              </p>
+            </div>
+
+            <div>
+              <Label>Nível de detalhe</Label>
+              <div className="mt-1.5 flex gap-2">
+                {([
+                  { value: 'resumido' as const, label: 'Resumido', desc: '~15 atividades' },
+                  { value: 'padrao' as const, label: 'Padrão', desc: '~30 atividades' },
+                  { value: 'detalhado' as const, label: 'Detalhado', desc: '~50 atividades' },
+                ]).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAiDetailLevel(opt.value)}
+                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-center transition-colors ${
+                      aiDetailLevel === opt.value
+                        ? 'border-[#b8a378] bg-[#b8a378]/5'
+                        : 'border-neutral-200 hover:border-neutral-300'
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{opt.label}</p>
+                    <p className="text-xs text-neutral-400">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button
+              onClick={handleAiGenerate}
+              disabled={!aiDescription.trim() || aiGenerating}
+              className="bg-[#b8a378] hover:bg-[#a09068]"
+            >
+              {aiGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Gerando cronograma...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {phases.length > 0 ? 'Regenerar' : 'Gerar atividades'}
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
       )}

@@ -6,6 +6,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, LayoutDashboard } from 'lucide-react'
+import { AIChatBubble } from '@/components/ai/AIChatBubble'
 
 const PHASE_NAMES: Record<string, string> = {
   '1': 'Planejamento',
@@ -61,6 +62,7 @@ export function MainLayout() {
             <Outlet />
           </main>
         </div>
+        <AIChatBubble />
       </div>
     </TooltipProvider>
   )

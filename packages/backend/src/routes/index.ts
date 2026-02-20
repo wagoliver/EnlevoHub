@@ -13,6 +13,7 @@ import { supplierRoutes } from '../modules/suppliers'
 import { brokerRoutes } from '../modules/brokers'
 import { sinapiRoutes } from '../modules/sinapi'
 import { levantamentoRoutes } from '../modules/levantamento'
+import { aiRoutes } from '../modules/ai'
 
 export function registerRoutes(server: FastifyInstance) {
   // API v1 routes
@@ -43,6 +44,7 @@ export function registerRoutes(server: FastifyInstance) {
       api.register(brokerRoutes, { prefix: '/brokers' })
       api.register(sinapiRoutes, { prefix: '/sinapi' })
       api.register(levantamentoRoutes, { prefix: '/projects' })
+      api.register(aiRoutes, { prefix: '/ai' })
 
       // Placeholder route
       api.get('/', async () => {

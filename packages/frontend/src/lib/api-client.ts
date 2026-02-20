@@ -830,6 +830,16 @@ export const levantamentoAPI = {
     apiClient.delete<any>(`/projects/ambiente-tags/${id}`),
 }
 
+export const aiAPI = {
+  chat: (message: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []) =>
+    apiClient.post<{ response: string }>('/ai/chat', { message, history }),
+
+  generateActivities: (description: string, detailLevel: 'resumido' | 'padrao' | 'detalhado' = 'padrao') =>
+    apiClient.post<any>('/ai/generate-activities', { description, detailLevel }),
+
+  health: () => apiClient.get<{ status: string; model: string }>('/ai/health'),
+}
+
 export const monitoringAPI = {
   getOverview: () => apiClient.get<any>('/monitoring/overview'),
   getSystem: () => apiClient.get<any>('/monitoring/system'),

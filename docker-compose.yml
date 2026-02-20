@@ -17,6 +17,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Ollama (IA Local) ──
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2"
+
   # ── Backend API ──
   backend:
     build:
@@ -25,6 +43,8 @@ services:
     restart: always
     depends_on:
       postgres:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     environment:
       DATABASE_URL: "postgresql://postgres:${DB_PASSWORD:-enlevohub2026}@postgres:5432/enlevohub"
@@ -40,6 +60,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DB_HOST: postgres
       DB_PORT: 5432
+      OLLAMA_URL: http://ollama:11434
     volumes:
       - storage:/app/storage
       - appdata:/app/data
@@ -63,4 +84,6 @@ volumes:
   storage:
     driver: local
   appdata:
+    driver: local
+  ollama_models:
     driver: local

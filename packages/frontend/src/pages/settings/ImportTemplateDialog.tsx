@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
-import { activityTemplatesAPI, projectsAPI } from '@/lib/api-client'
+import { activityTemplatesAPI, projectsAPI, aiAPI } from '@/lib/api-client'
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -38,6 +39,7 @@ import {
   PenLine,
   FileSpreadsheet,
   ClipboardList,
+  Sparkles,
 } from 'lucide-react'
 import { TEMPLATE_MODELS, TEMPLATE_CATEGORIES } from './template-models'
 import type { TemplateModel } from './template-models'
@@ -226,7 +228,7 @@ export function ImportTemplateDialog({
 
   // Wizard state
   const [step, setStep] = useState(1)
-  const [sourceType, setSourceType] = useState<'model' | 'upload' | 'blank' | null>(null)
+  const [sourceType, setSourceType] = useState<'model' | 'upload' | 'blank' | 'ai' | null>(null)
 
   // Data state
   const [templateName, setTemplateName] = useState('')
@@ -242,6 +244,12 @@ export function ImportTemplateDialog({
 
   // Blank editor state
   const [blankPhases, setBlankPhases] = useState<TemplatePhase[]>([])
+
+  // AI state
+  const [aiDescription, setAiDescription] = useState('')
+  const [aiDetailLevel, setAiDetailLevel] = useState<'resumido' | 'padrao' | 'detalhado'>('padrao')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiGenerated, setAiGenerated] = useState(false)
 
   const hasErrors = parseErrors.length > 0
   const blockingErrors = parseErrors.filter((e) => e.row === 0)
@@ -262,6 +270,8 @@ export function ImportTemplateDialog({
     ? blankPhases.length > 0 &&
       blankPhases.every(p => p.name.trim() && p.stages.every(s => s.name.trim() && s.activities.every(a => a.name.trim()))) &&
       Math.abs(blankPhases.reduce((sum, p) => sum + p.percentageOfTotal, 0) - 100) < 0.1
+    : sourceType === 'ai'
+    ? aiGenerated && phases.length > 0
     : phases.length > 0 && blockingErrors.length === 0
   const canProceedStep3 = isProjectMode || templateName.trim().length >= 2
 
@@ -352,6 +362,48 @@ export function ImportTemplateDialog({
   })
 
   const isSubmitting = createMutation.isPending || projectMutation.isPending
+
+  // AI generation
+  const handleAiGenerate = async () => {
+    if (!aiDescription.trim() || aiGenerating) return
+    setAiGenerating(true)
+    setAiGenerated(false)
+    setPhases([])
+    setParseErrors([])
+
+    try {
+      const result = await aiAPI.generateActivities(aiDescription.trim(), aiDetailLevel)
+      if (result.phases && Array.isArray(result.phases)) {
+        const parsed: ParsedPhase[] = result.phases.map((p: any, pIdx: number) => ({
+          name: p.name || `Fase ${pIdx + 1}`,
+          order: pIdx,
+          percentageOfTotal: p.percentage || 0,
+          color: p.color || null,
+          stages: (p.stages || []).map((s: any, sIdx: number) => ({
+            name: s.name || `Etapa ${sIdx + 1}`,
+            order: sIdx,
+            activities: (s.activities || []).map((a: any, aIdx: number) => ({
+              name: a.name || `Atividade ${aIdx + 1}`,
+              order: aIdx,
+              weight: a.weight || 1,
+              durationDays: a.durationDays || null,
+              dependencies: a.dependencies?.length ? a.dependencies : null,
+            })),
+          })),
+        }))
+        setPhases(parsed)
+        setExpandedPhases(new Set(parsed.map(p => p.name)))
+        setAiGenerated(true)
+        toast.success('Cronograma gerado com sucesso!')
+      } else {
+        toast.error('A IA não retornou um formato válido. Tente novamente.')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao gerar atividades com IA')
+    } finally {
+      setAiGenerating(false)
+    }
+  }
 
   // Navigation
   const handleNext = () => {
@@ -464,6 +516,10 @@ export function ImportTemplateDialog({
     setAutoCalcPercentage(true)
     setSelectedTemplate('')
     setBlankPhases([])
+    setAiDescription('')
+    setAiDetailLevel('padrao')
+    setAiGenerating(false)
+    setAiGenerated(false)
     onOpenChange(false)
   }
 
@@ -478,6 +534,8 @@ export function ImportTemplateDialog({
       ? 'Escolha um modelo por tipo de obra.'
       : sourceType === 'upload'
       ? 'Importe um arquivo XLSX ou CSV.'
+      : sourceType === 'ai'
+      ? 'Descreva a obra e a IA gera o cronograma.'
       : 'Monte a estrutura manualmente.')
     : 'Revise a estrutura antes de aplicar.'
 
@@ -632,7 +690,7 @@ export function ImportTemplateDialog({
         <div className="space-y-5">
           {/* ─── Step 1: Choose method ─── */}
           {step === 1 && (
-            <div className={`grid gap-3 ${showBlankOption ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <div className={`grid gap-3 ${showBlankOption ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
               <div
                 className={`rounded-lg border-2 p-4 cursor-pointer transition-colors ${
                   sourceType === 'model'
@@ -671,6 +729,18 @@ export function ImportTemplateDialog({
                   <p className="text-xs text-neutral-500">Criar do zero</p>
                 </div>
               )}
+              <div
+                className={`rounded-lg border-2 p-4 cursor-pointer transition-colors ${
+                  sourceType === 'ai'
+                    ? 'border-[#b8a378] bg-[#b8a378]/5'
+                    : 'border-neutral-200 hover:border-[#b8a378] hover:bg-[#b8a378]/5'
+                }`}
+                onClick={() => setSourceType('ai')}
+              >
+                <Sparkles className="h-6 w-6 text-[#b8a378] mb-2" />
+                <p className="text-sm font-medium">Com IA</p>
+                <p className="text-xs text-neutral-500">Descreva a obra e a IA gera</p>
+              </div>
             </div>
           )}
 
@@ -935,6 +1005,77 @@ export function ImportTemplateDialog({
               {renderErrors()}
               {renderSummary()}
             </>
+          )}
+
+          {/* ─── Step 2: Configure — AI ─── */}
+          {step === 2 && sourceType === 'ai' && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="ai-description">Descreva o tipo de obra</Label>
+                <Textarea
+                  id="ai-description"
+                  value={aiDescription}
+                  onChange={(e) => setAiDescription(e.target.value)}
+                  placeholder="Ex: Casa térrea de 120m², alvenaria estrutural, 3 quartos, 2 banheiros, com piscina e área gourmet."
+                  rows={3}
+                  maxLength={2000}
+                  className="mt-1.5"
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Quanto mais detalhada a descrição, melhor o resultado.
+                </p>
+              </div>
+
+              <div>
+                <Label>Nível de detalhe</Label>
+                <div className="mt-1.5 flex gap-2">
+                  {([
+                    { value: 'resumido' as const, label: 'Resumido', desc: '~15 atividades' },
+                    { value: 'padrao' as const, label: 'Padrão', desc: '~30 atividades' },
+                    { value: 'detalhado' as const, label: 'Detalhado', desc: '~50 atividades' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setAiDetailLevel(opt.value)}
+                      className={`flex-1 rounded-lg border-2 px-3 py-2 text-center transition-colors ${
+                        aiDetailLevel === opt.value
+                          ? 'border-[#b8a378] bg-[#b8a378]/5'
+                          : 'border-neutral-200 hover:border-neutral-300'
+                      }`}
+                    >
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-neutral-400">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAiGenerate}
+                disabled={!aiDescription.trim() || aiGenerating}
+                className="w-full bg-[#b8a378] hover:bg-[#a09068]"
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Gerando cronograma...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Gerar atividades com IA
+                  </>
+                )}
+              </Button>
+
+              {aiGenerated && phases.length > 0 && (
+                <>
+                  {renderSummary()}
+                  {renderPreview()}
+                </>
+              )}
+            </div>
           )}
 
           {/* ─── Step 2: Configure — Blank ─── */}

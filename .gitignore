@@ -28,6 +28,7 @@ yarn-error.log*
 
 # Credentials
 .db-credentials.txt
+.IA.md
 
 # Turbo
 .turbo

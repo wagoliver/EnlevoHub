@@ -146,7 +146,6 @@ export async function aiRoutes(fastify: FastifyInstance) {
 
       const where: any = {
         tenantId: effectiveTenantId,
-        sinapiCodigo: { not: null },
       }
       if (fase) {
         where.fase = { equals: fase, mode: 'insensitive' }

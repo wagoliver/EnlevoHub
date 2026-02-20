@@ -4,6 +4,7 @@ import { JWTService } from '../../core/auth/jwt.service'
 import { AIService } from './ai.service'
 import { chatMessageSchema, generateActivitiesSchema, generatePhaseSchema, aiConfigSchema } from './ai.schemas'
 import { saveAIConfig, getAIConfigMasked } from './ai-config'
+import { logger } from '../../utils/logger'
 
 export async function aiRoutes(fastify: FastifyInstance) {
   const jwtService = new JWTService(fastify)
@@ -134,6 +135,44 @@ export async function aiRoutes(fastify: FastifyInstance) {
     }
   })
 
+  /**
+   * Load mapped activity names from EtapaSinapiMapping for a tenant.
+   * Falls back to system mappings (tenantId=null) if tenant has none.
+   */
+  async function loadMappedActivities(tenantId: string, fase?: string): Promise<{ byPhase: Record<string, string[]>; forPhase: string[] }> {
+    try {
+      const tenantCount = await fastify.prisma.etapaSinapiMapping.count({ where: { tenantId } })
+      const effectiveTenantId = tenantCount === 0 ? null : tenantId
+
+      const where: any = {
+        tenantId: effectiveTenantId,
+        sinapiCodigo: { not: null },
+      }
+      if (fase) {
+        where.fase = { equals: fase, mode: 'insensitive' }
+      }
+
+      const mappings = await fastify.prisma.etapaSinapiMapping.findMany({
+        where,
+        select: { fase: true, atividade: true },
+        orderBy: [{ fase: 'asc' }, { order: 'asc' }],
+      })
+
+      const byPhase: Record<string, string[]> = {}
+      const forPhase: string[] = []
+      for (const m of mappings) {
+        if (!byPhase[m.fase]) byPhase[m.fase] = []
+        byPhase[m.fase].push(m.atividade)
+        forPhase.push(m.atividade)
+      }
+
+      return { byPhase, forPhase }
+    } catch (error) {
+      logger.warn({ error }, 'Falha ao carregar mapeamentos SINAPI para prompt da IA')
+      return { byPhase: {}, forPhase: [] }
+    }
+  }
+
   // Gerar atividades com IA
   fastify.post('/generate-activities', {
     preHandler: [authMiddleware],
@@ -145,7 +184,9 @@ export async function aiRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { description, detailLevel } = generateActivitiesSchema.parse(request.body)
-      const result = await service.generateActivities(description, detailLevel)
+      const user = (request as unknown as AuthenticatedRequest).user
+      const { byPhase } = await loadMappedActivities(user.tenantId)
+      const result = await service.generateActivities(description, detailLevel, byPhase)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {
@@ -166,7 +207,9 @@ export async function aiRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { phaseName, context } = generatePhaseSchema.parse(request.body)
-      const result = await service.generatePhase(phaseName, context)
+      const user = (request as unknown as AuthenticatedRequest).user
+      const { forPhase } = await loadMappedActivities(user.tenantId, phaseName)
+      const result = await service.generatePhase(phaseName, context, forPhase)
       return reply.send(result)
     } catch (error) {
       if (error instanceof Error) {

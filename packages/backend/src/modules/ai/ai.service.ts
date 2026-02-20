@@ -76,6 +76,7 @@ REGRAS:
 - Dependencies referencia nomes de outras atividades que devem terminar antes
 - Use cores distintas para cada fase
 - Cores disponíveis: #3b82f6, #ef4444, #22c55e, #f59e0b, #8b5cf6, #ec4899, #06b6d4, #f97316, #14b8a6, #6366f1
+- Se o usuário fornecer ATIVIDADES MAPEADAS POR FASE, use PREFERENCIALMENTE esses nomes exatos. Eles já estão vinculados ao SINAPI no sistema.
 - Responda SOMENTE com o JSON, sem texto adicional, sem markdown`
 
 const GENERATE_PHASE_SYSTEM_PROMPT = `Você é um engenheiro civil especialista em planejamento de obras com conhecimento da tabela SINAPI.
@@ -100,14 +101,15 @@ FORMATO DE SAÍDA (JSON estrito):
 }
 
 REGRAS IMPORTANTES:
-- Use nomes de atividades alinhados com a nomenclatura SINAPI (ex: "Chapisco e reboco", "Levantamento de paredes", "Contrapiso e nivelamento", "Piso cerâmico/porcelanato")
+- Use PREFERENCIALMENTE os nomes de atividades listados abaixo em "ATIVIDADES MAPEADAS" (se fornecidos). Esses nomes já estão vinculados ao SINAPI no sistema.
+- Se precisar de atividades adicionais que não estejam na lista, pode criar com nomenclatura SINAPI.
 - Peso de 1 a 5 (1=simples/rápido, 5=complexo/crítico)
 - Duração em dias úteis realistas para construção civil brasileira
 - Dependencies referencia nomes de atividades que devem terminar antes (da mesma fase)
 - Gere entre 3 e 8 etapas por fase, com 1 a 4 atividades por etapa
 - Responda SOMENTE com o JSON, sem texto adicional, sem markdown
 
-EXEMPLOS DE NOMES SINAPI POR FASE:
+EXEMPLOS DE NOMES SINAPI POR FASE (use apenas se não houver ATIVIDADES MAPEADAS):
 - Fundação: Limpeza do terreno, Escavação, Estacas/Sapatas, Baldrame, Impermeabilização de fundação
 - Estrutura: Levantamento de paredes, Vergas e contravergas, Estrutura do telhado, Telhas, Laje
 - Instalações: Tubulação hidráulica, Fiação elétrica, Quadro de distribuição, Esgoto e caixas de inspeção
@@ -139,14 +141,21 @@ export class AIService {
     return this.callProvider(messages)
   }
 
-  async generateActivities(description: string, detailLevel: 'resumido' | 'padrao' | 'detalhado' = 'padrao'): Promise<any> {
+  async generateActivities(description: string, detailLevel: 'resumido' | 'padrao' | 'detalhado' = 'padrao', mappedByPhase?: Record<string, string[]>): Promise<any> {
     const activityCounts = {
       resumido: '10-15 atividades no total',
       padrao: '20-30 atividades no total',
       detalhado: '35-50 atividades no total',
     }
 
-    const userPrompt = this.appendNoThink(`Gere o cronograma para: ${description}\n\nNível de detalhe: ${activityCounts[detailLevel]}`)
+    let userPromptText = `Gere o cronograma para: ${description}\n\nNível de detalhe: ${activityCounts[detailLevel]}`
+    if (mappedByPhase && Object.keys(mappedByPhase).length > 0) {
+      userPromptText += '\n\nATIVIDADES MAPEADAS POR FASE (use estes nomes exatos quando aplicável):'
+      for (const [fase, atividades] of Object.entries(mappedByPhase)) {
+        userPromptText += `\n${fase}: ${atividades.join(', ')}`
+      }
+    }
+    const userPrompt = this.appendNoThink(userPromptText)
 
     const messages: ChatMessage[] = [
       { role: 'system', content: GENERATE_ACTIVITIES_SYSTEM_PROMPT },
@@ -167,10 +176,15 @@ export class AIService {
     }
   }
 
-  async generatePhase(phaseName: string, context?: string): Promise<any> {
-    const userPrompt = context
-      ? this.appendNoThink(`Gere etapas e atividades para a fase "${phaseName}".\nContexto adicional da obra: ${context}`)
-      : this.appendNoThink(`Gere etapas e atividades para a fase "${phaseName}".`)
+  async generatePhase(phaseName: string, context?: string, mappedActivities?: string[]): Promise<any> {
+    let userPromptText = `Gere etapas e atividades para a fase "${phaseName}".`
+    if (context) {
+      userPromptText += `\nContexto adicional da obra: ${context}`
+    }
+    if (mappedActivities && mappedActivities.length > 0) {
+      userPromptText += `\n\nATIVIDADES MAPEADAS (use estes nomes exatos quando aplicável):\n- ${mappedActivities.join('\n- ')}`
+    }
+    const userPrompt = this.appendNoThink(userPromptText)
 
     const messages: ChatMessage[] = [
       { role: 'system', content: GENERATE_PHASE_SYSTEM_PROMPT },

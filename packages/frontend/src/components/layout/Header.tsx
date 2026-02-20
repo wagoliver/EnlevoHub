@@ -7,7 +7,9 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Sparkles,
 } from 'lucide-react'
+import { useChatStore } from '@/stores/chat.store'
 import { useAuthStore, Role } from '@/stores/auth.store'
 import { usePermission } from '@/hooks/usePermission'
 import { useSidebarStore } from '@/stores/sidebar.store'
@@ -50,6 +52,7 @@ export function Header() {
   const { isCollapsed, toggleCollapsed, setMobileOpen } = useSidebarStore()
   const isMobile = useIsMobile()
   const canEditTenant = usePermission('tenant:edit')
+  const { isOpen: isChatOpen, toggleOpen: toggleChat } = useChatStore()
 
   const handleLogout = () => {
     queryClient.clear()
@@ -113,6 +116,21 @@ export function Header() {
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* AI Assistant */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleChat}
+          className={`mr-2 gap-2 transition-colors ${
+            isChatOpen
+              ? 'bg-[#b8a378]/10 text-[#b8a378]'
+              : 'text-neutral-500 hover:text-[#b8a378]'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          <span className="hidden sm:inline text-xs font-medium">Enlevo IA</span>
+        </Button>
 
         {/* User Menu */}
         {user && (

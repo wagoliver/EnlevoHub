@@ -18,10 +18,19 @@ export const generatePhaseSchema = z.object({
   context: z.string().max(500).optional(),
 })
 
+// Preprocess: convert empty strings to undefined so .url() doesn't reject them
+const optionalUrl = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+  z.string().url().optional(),
+)
+
 export const aiConfigSchema = z.object({
   provider: z.enum(['ollama-local', 'ollama-docker', 'groq', 'openai-compatible']),
-  ollamaUrl: z.string().url().optional(),
-  apiKey: z.string().optional(),
-  baseUrl: z.string().url().optional(),
+  ollamaUrl: optionalUrl,
+  apiKey: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().optional(),
+  ),
+  baseUrl: optionalUrl,
   model: z.string().min(1, 'Modelo e obrigatorio'),
 })

@@ -137,14 +137,17 @@ export function AISettings() {
 
   const saveMutation = useMutation({
     mutationFn: (data: AIConfigFormData) => {
+      const isOllamaProvider = data.provider === 'ollama-local' || data.provider === 'ollama-docker'
       const payload: any = {
         provider: data.provider,
         model: data.model,
       }
-      if (isOllama) {
-        payload.ollamaUrl = data.ollamaUrl
+      if (isOllamaProvider) {
+        payload.ollamaUrl = data.ollamaUrl || undefined
       } else {
-        payload.baseUrl = data.baseUrl
+        // For Groq, inject default baseUrl if empty
+        const defaultBaseUrl = data.provider === 'groq' ? 'https://api.groq.com/openai/v1' : undefined
+        payload.baseUrl = data.baseUrl || defaultBaseUrl
         if (data.apiKey) {
           payload.apiKey = data.apiKey
         }
@@ -167,6 +170,7 @@ export function AISettings() {
 
   const handleTestConnection = async () => {
     const values = watch()
+    const isOllamaProvider = values.provider === 'ollama-local' || values.provider === 'ollama-docker'
     setIsTesting(true)
     setTestResult(null)
     try {
@@ -174,10 +178,11 @@ export function AISettings() {
         provider: values.provider,
         model: values.model || 'test',
       }
-      if (isOllama) {
-        payload.ollamaUrl = values.ollamaUrl
+      if (isOllamaProvider) {
+        payload.ollamaUrl = values.ollamaUrl || undefined
       } else {
-        payload.baseUrl = values.baseUrl
+        const defaultBaseUrl = values.provider === 'groq' ? 'https://api.groq.com/openai/v1' : undefined
+        payload.baseUrl = values.baseUrl || defaultBaseUrl
         if (values.apiKey) {
           payload.apiKey = values.apiKey
         }

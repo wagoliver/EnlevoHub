@@ -15,8 +15,8 @@ const BACKEND_ROOT = path.resolve(__dirname, '..', '..', '..')
 const CONFIG_PATH = path.resolve(BACKEND_ROOT, 'data', 'ai-config.json')
 
 const DEFAULTS: AIProviderConfig = {
-  provider: 'ollama-docker',
-  ollamaUrl: 'http://ollama:11434',
+  provider: 'ollama-local',
+  ollamaUrl: 'http://localhost:11434',
   model: 'qwen3:1.7b',
 }
 
@@ -33,6 +33,19 @@ export function readAIConfig(): AIProviderConfig | null {
 }
 
 export function saveAIConfig(config: AIProviderConfig): void {
+  // Normalize: inject default baseUrl for Groq if missing
+  if (config.provider === 'groq' && !config.baseUrl) {
+    config.baseUrl = 'https://api.groq.com/openai/v1'
+  }
+
+  // Merge apiKey: if not provided, keep existing key from file
+  if (!config.apiKey) {
+    const existing = readAIConfig()
+    if (existing?.apiKey) {
+      config.apiKey = existing.apiKey
+    }
+  }
+
   const dir = path.dirname(CONFIG_PATH)
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })

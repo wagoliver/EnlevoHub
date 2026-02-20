@@ -187,10 +187,20 @@ function ActivityNameInput({ value, sinapiCodigo, onChange, onSelectComposition,
 export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEditorProps) {
   const [openPhases, setOpenPhases] = useState<Set<number>>(new Set([0]))
   const [aiGeneratingPhase, setAiGeneratingPhase] = useState<number | null>(null)
+  const [aiElapsed, setAiElapsed] = useState(0)
+  const aiAbortRef = useRef<AbortController | null>(null)
+  const aiTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const totalPercentage = phases.reduce((sum, p) => sum + (p.percentageOfTotal || 0), 0)
   const percentageValid = Math.abs(totalPercentage - 100) < 0.1
   const allActivityNames = getAllActivityNames(phases)
+
+  // Limpar timer ao desmontar
+  useEffect(() => {
+    return () => {
+      if (aiTimerRef.current) clearInterval(aiTimerRef.current)
+    }
+  }, [])
 
   // === AI Generate Phase ===
   const handleAiGeneratePhase = async (phaseIdx: number) => {
@@ -199,9 +209,17 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
       toast.error('Preencha o nome da fase antes de gerar com IA')
       return
     }
+
+    // Iniciar timer e abort controller
+    const abortController = new AbortController()
+    aiAbortRef.current = abortController
     setAiGeneratingPhase(phaseIdx)
+    setAiElapsed(0)
+    aiTimerRef.current = setInterval(() => setAiElapsed(prev => prev + 1), 1000)
+
     try {
       const result = await aiAPI.generatePhase(phase.name)
+      if (abortController.signal.aborted) return
       const aiStages: TemplateStage[] = (result.stages || []).map((s: any, sIdx: number) => ({
         name: s.name || `Etapa ${sIdx + 1}`,
         order: sIdx,
@@ -223,10 +241,25 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
       setOpenPhases(prev => new Set([...prev, phaseIdx]))
       toast.success(`${aiStages.length} etapas geradas com nomenclatura SINAPI`)
     } catch {
-      toast.error('Erro ao gerar com IA. Verifique se o serviço está disponível.')
+      if (!abortController.signal.aborted) {
+        toast.error('Erro ao gerar com IA. Verifique se o serviço está disponível.')
+      }
     } finally {
+      if (aiTimerRef.current) clearInterval(aiTimerRef.current)
+      aiTimerRef.current = null
       setAiGeneratingPhase(null)
+      setAiElapsed(0)
+      aiAbortRef.current = null
     }
+  }
+
+  const handleAiCancel = () => {
+    aiAbortRef.current?.abort()
+    if (aiTimerRef.current) clearInterval(aiTimerRef.current)
+    aiTimerRef.current = null
+    setAiGeneratingPhase(null)
+    setAiElapsed(0)
+    toast.info('Geração cancelada')
   }
 
   // === Phase operations ===
@@ -444,26 +477,36 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
                 title="Cor da fase"
               />
 
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 text-xs text-[#b8a378] hover:text-[#a09068] hover:bg-[#b8a378]/10 shrink-0"
-                disabled={aiGeneratingPhase !== null}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleAiGeneratePhase(phaseIdx)
-                }}
-                title="Preencher etapas e atividades com IA (SINAPI)"
-              >
-                {aiGeneratingPhase === phaseIdx ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
+              {aiGeneratingPhase === phaseIdx ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleAiCancel()
+                  }}
+                  title="Cancelar geração"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Cancelar</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs text-[#b8a378] hover:text-[#a09068] hover:bg-[#b8a378]/10 shrink-0"
+                  disabled={aiGeneratingPhase !== null}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleAiGeneratePhase(phaseIdx)
+                  }}
+                  title="Preencher etapas e atividades com IA (SINAPI)"
+                >
                   <Sparkles className="h-3.5 w-3.5" />
-                )}
-                <span className="hidden sm:inline">
-                  {aiGeneratingPhase === phaseIdx ? 'Gerando...' : 'IA'}
-                </span>
-              </Button>
+                  <span className="hidden sm:inline">IA</span>
+                </Button>
+              )}
 
               <div className="flex items-center gap-0.5 shrink-0">
                 <Button variant="ghost" size="icon" className="h-7 w-7" disabled={phaseIdx === 0} onClick={() => movePhase(phaseIdx, 'up')}>
@@ -481,6 +524,30 @@ export function HierarchicalItemEditor({ phases, onChange }: HierarchicalItemEdi
             {/* Phase Content */}
             <CollapsibleContent>
               <div className="p-3 space-y-3">
+                {/* AI Generating Banner */}
+                {aiGeneratingPhase === phaseIdx && (
+                  <div className="flex items-center gap-3 rounded-lg border border-[#b8a378]/30 bg-[#b8a378]/5 px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#b8a378] shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-neutral-700">
+                        Gerando etapas e atividades com IA...
+                      </p>
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        {aiElapsed < 10
+                          ? 'Carregando modelo e processando...'
+                          : aiElapsed < 30
+                            ? 'A IA está elaborando as atividades SINAPI...'
+                            : aiElapsed < 60
+                              ? 'Quase lá, gerando JSON completo...'
+                              : 'Ainda processando, aguarde mais um pouco...'}
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono text-neutral-400 shrink-0">
+                      {aiElapsed}s
+                    </span>
+                  </div>
+                )}
+
                 {/* Stages */}
                 {phase.stages.map((stage, stageIdx) => (
                   <div key={stageIdx} className="rounded-md border bg-white">

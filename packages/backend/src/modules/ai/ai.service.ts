@@ -115,15 +115,18 @@ EXEMPLOS DE NOMES SINAPI POR FASE:
 - Cobertura: Estrutura de madeira para telhado, Telhas cerâmicas/concreto, Calhas e rufos, Impermeabilização de laje`
 
 export class AIService {
-  private config: AIProviderConfig
-
-  constructor() {
-    this.config = getAIConfig()
+  /**
+   * Always reads fresh config from file on each access.
+   * This ensures manual edits to ai-config.json take effect without restart.
+   */
+  private get config(): AIProviderConfig {
+    return getAIConfig()
   }
 
   reloadConfig(): void {
-    this.config = getAIConfig()
-    logger.info({ provider: this.config.provider, model: this.config.model }, 'AI config reloaded')
+    // Config is now read fresh each time, this method just logs for confirmation
+    const config = getAIConfig()
+    logger.info({ provider: config.provider, model: config.model }, 'AI config reloaded')
   }
 
   async chat(userMessage: string, history: ChatMessage[] = []): Promise<string> {

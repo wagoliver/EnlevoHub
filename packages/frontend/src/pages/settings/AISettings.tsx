@@ -187,8 +187,11 @@ export function AISettings() {
       } else {
         const defaultBaseUrl = values.provider === 'groq' ? 'https://api.groq.com/openai/v1' : undefined
         payload.baseUrl = values.baseUrl || defaultBaseUrl
-        if (values.apiKey) {
+        // Use form key if editing, otherwise signal backend to use saved key
+        if (values.apiKey && values.apiKey !== '__REMOVE__') {
           payload.apiKey = values.apiKey
+        } else if (!editingApiKey && config?.apiKey) {
+          payload.apiKey = '__USE_SAVED__'
         }
       }
       const result = await aiAPI.testConnection(payload)

@@ -277,13 +277,19 @@ export class AIService {
       if (!baseUrl) {
         return { success: false, message: 'URL base é obrigatória' }
       }
-      if (!testConfig.apiKey) {
+
+      // Resolve API key: __USE_SAVED__ reads from saved config file
+      let apiKey = testConfig.apiKey
+      if (apiKey === '__USE_SAVED__') {
+        apiKey = this.config.apiKey
+      }
+      if (!apiKey) {
         return { success: false, message: 'API Key é obrigatória' }
       }
 
       const res = await fetch(`${baseUrl}/models`, {
         headers: {
-          'Authorization': `Bearer ${testConfig.apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
       })

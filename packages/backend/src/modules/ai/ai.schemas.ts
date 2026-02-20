@@ -17,3 +17,11 @@ export const generatePhaseSchema = z.object({
   phaseName: z.string().min(2).max(200),
   context: z.string().max(500).optional(),
 })
+
+export const aiConfigSchema = z.object({
+  provider: z.enum(['ollama-local', 'ollama-docker', 'groq', 'openai-compatible']),
+  ollamaUrl: z.string().url().optional(),
+  apiKey: z.string().optional(),
+  baseUrl: z.string().url().optional(),
+  model: z.string().min(1, 'Modelo e obrigatorio'),
+})

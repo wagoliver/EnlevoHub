@@ -1,9 +1,7 @@
 import { logger } from '../../utils/logger'
+import { getAIConfig, AIProviderConfig, AIProvider } from './ai-config'
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
-const AI_MODEL = process.env.AI_MODEL || 'qwen3:1.7b'
-
-interface OllamaChatMessage {
+interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
 }
@@ -11,6 +9,10 @@ interface OllamaChatMessage {
 interface OllamaChatResponse {
   message: { role: string; content: string; thinking?: string }
   done: boolean
+}
+
+interface OpenAIChatResponse {
+  choices: Array<{ message: { role: string; content: string } }>
 }
 
 const FAQ_SYSTEM_PROMPT = `Você é o assistente de IA do EnlevoHub, um sistema SaaS para gestão e acompanhamento de obras de construção civil.
@@ -113,22 +115,25 @@ EXEMPLOS DE NOMES SINAPI POR FASE:
 - Cobertura: Estrutura de madeira para telhado, Telhas cerâmicas/concreto, Calhas e rufos, Impermeabilização de laje`
 
 export class AIService {
-  private baseUrl: string
-  private model: string
+  private config: AIProviderConfig
 
   constructor() {
-    this.baseUrl = OLLAMA_URL
-    this.model = AI_MODEL
+    this.config = getAIConfig()
   }
 
-  async chat(userMessage: string, history: OllamaChatMessage[] = []): Promise<string> {
-    const messages: OllamaChatMessage[] = [
+  reloadConfig(): void {
+    this.config = getAIConfig()
+    logger.info({ provider: this.config.provider, model: this.config.model }, 'AI config reloaded')
+  }
+
+  async chat(userMessage: string, history: ChatMessage[] = []): Promise<string> {
+    const messages: ChatMessage[] = [
       { role: 'system', content: FAQ_SYSTEM_PROMPT },
       ...history,
-      { role: 'user', content: `${userMessage} /no_think` },
+      { role: 'user', content: this.appendNoThink(userMessage) },
     ]
 
-    return this.callOllama(messages)
+    return this.callProvider(messages)
   }
 
   async generateActivities(description: string, detailLevel: 'resumido' | 'padrao' | 'detalhado' = 'padrao'): Promise<any> {
@@ -138,16 +143,14 @@ export class AIService {
       detalhado: '35-50 atividades no total',
     }
 
-    const userPrompt = `Gere o cronograma para: ${description}
+    const userPrompt = this.appendNoThink(`Gere o cronograma para: ${description}\n\nNível de detalhe: ${activityCounts[detailLevel]}`)
 
-Nível de detalhe: ${activityCounts[detailLevel]} /no_think`
-
-    const messages: OllamaChatMessage[] = [
+    const messages: ChatMessage[] = [
       { role: 'system', content: GENERATE_ACTIVITIES_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ]
 
-    const response = await this.callOllama(messages, 2048)
+    const response = await this.callProvider(messages, 2048)
 
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/)
@@ -163,16 +166,15 @@ Nível de detalhe: ${activityCounts[detailLevel]} /no_think`
 
   async generatePhase(phaseName: string, context?: string): Promise<any> {
     const userPrompt = context
-      ? `Gere etapas e atividades para a fase "${phaseName}".
-Contexto adicional da obra: ${context} /no_think`
-      : `Gere etapas e atividades para a fase "${phaseName}". /no_think`
+      ? this.appendNoThink(`Gere etapas e atividades para a fase "${phaseName}".\nContexto adicional da obra: ${context}`)
+      : this.appendNoThink(`Gere etapas e atividades para a fase "${phaseName}".`)
 
-    const messages: OllamaChatMessage[] = [
+    const messages: ChatMessage[] = [
       { role: 'system', content: GENERATE_PHASE_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ]
 
-    const response = await this.callOllama(messages, 2048)
+    const response = await this.callProvider(messages, 2048)
 
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/)
@@ -186,43 +188,165 @@ Contexto adicional da obra: ${context} /no_think`
     }
   }
 
-  async checkHealth(): Promise<boolean> {
+  async checkHealth(): Promise<{ healthy: boolean; provider: AIProvider; model: string }> {
+    const { provider, model } = this.config
     try {
-      const res = await fetch(`${this.baseUrl}/api/tags`)
-      return res.ok
+      if (this.isOllama()) {
+        const res = await fetch(`${this.getOllamaUrl()}/api/tags`)
+        return { healthy: res.ok, provider, model }
+      }
+      // Cloud providers: test with a minimal request
+      const url = this.getOpenAIBaseUrl()
+      const res = await fetch(`${url}/models`, {
+        headers: this.getAuthHeaders(),
+      })
+      return { healthy: res.ok, provider, model }
     } catch {
-      return false
+      return { healthy: false, provider, model }
     }
   }
 
   async ensureModel(): Promise<void> {
+    if (!this.isOllama()) return
     try {
-      const res = await fetch(`${this.baseUrl}/api/tags`)
+      const ollamaUrl = this.getOllamaUrl()
+      const res = await fetch(`${ollamaUrl}/api/tags`)
       if (!res.ok) return
 
       const data = await res.json() as { models: Array<{ name: string }> }
-      const hasModel = data.models?.some((m: any) => m.name.includes(this.model.split(':')[0]))
+      const hasModel = data.models?.some((m: any) => m.name.includes(this.config.model.split(':')[0]))
 
       if (!hasModel) {
-        logger.info(`Modelo ${this.model} não encontrado. Iniciando download...`)
-        await fetch(`${this.baseUrl}/api/pull`, {
+        logger.info(`Modelo ${this.config.model} não encontrado. Iniciando download...`)
+        await fetch(`${ollamaUrl}/api/pull`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: this.model, stream: false }),
+          body: JSON.stringify({ name: this.config.model, stream: false }),
         })
-        logger.info(`Modelo ${this.model} baixado com sucesso`)
+        logger.info(`Modelo ${this.config.model} baixado com sucesso`)
       }
     } catch (error) {
       logger.warn({ error }, 'Não foi possível verificar/baixar modelo Ollama')
     }
   }
 
-  private async callOllama(messages: OllamaChatMessage[], maxTokens = 1024): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/api/chat`, {
+  async listModels(): Promise<string[]> {
+    try {
+      if (this.isOllama()) {
+        const res = await fetch(`${this.getOllamaUrl()}/api/tags`)
+        if (!res.ok) return []
+        const data = await res.json() as { models: Array<{ name: string }> }
+        return data.models?.map((m) => m.name) || []
+      }
+      // OpenAI-compatible: GET /models
+      const url = this.getOpenAIBaseUrl()
+      const res = await fetch(`${url}/models`, {
+        headers: this.getAuthHeaders(),
+      })
+      if (!res.ok) return []
+      const data = await res.json() as { data: Array<{ id: string }> }
+      return data.data?.map((m) => m.id) || []
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Test connection with a given config (before saving)
+   */
+  async testConnection(testConfig: AIProviderConfig): Promise<{ success: boolean; message: string; models?: string[] }> {
+    try {
+      const isOllama = testConfig.provider === 'ollama-local' || testConfig.provider === 'ollama-docker'
+
+      if (isOllama) {
+        const url = testConfig.ollamaUrl || 'http://localhost:11434'
+        const res = await fetch(`${url}/api/tags`)
+        if (!res.ok) {
+          return { success: false, message: `Ollama retornou status ${res.status}` }
+        }
+        const data = await res.json() as { models: Array<{ name: string }> }
+        const models = data.models?.map((m) => m.name) || []
+        return { success: true, message: `Conectado! ${models.length} modelo(s) disponível(is).`, models }
+      }
+
+      // Cloud provider
+      const baseUrl = testConfig.baseUrl || (testConfig.provider === 'groq' ? 'https://api.groq.com/openai/v1' : '')
+      if (!baseUrl) {
+        return { success: false, message: 'URL base é obrigatória' }
+      }
+      if (!testConfig.apiKey) {
+        return { success: false, message: 'API Key é obrigatória' }
+      }
+
+      const res = await fetch(`${baseUrl}/models`, {
+        headers: {
+          'Authorization': `Bearer ${testConfig.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!res.ok) {
+        return { success: false, message: `Provedor retornou status ${res.status}` }
+      }
+
+      const data = await res.json() as { data: Array<{ id: string }> }
+      const models = data.data?.map((m) => m.id) || []
+      return { success: true, message: `Conectado! ${models.length} modelo(s) disponível(is).`, models }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido'
+      return { success: false, message: `Falha na conexão: ${msg}` }
+    }
+  }
+
+  // --- Private helpers ---
+
+  private isOllama(): boolean {
+    return this.config.provider === 'ollama-local' || this.config.provider === 'ollama-docker'
+  }
+
+  private getOllamaUrl(): string {
+    return this.config.ollamaUrl || 'http://localhost:11434'
+  }
+
+  private getOpenAIBaseUrl(): string {
+    if (this.config.provider === 'groq') {
+      return this.config.baseUrl || 'https://api.groq.com/openai/v1'
+    }
+    return this.config.baseUrl || ''
+  }
+
+  private getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (this.config.apiKey) {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`
+    }
+    return headers
+  }
+
+  /**
+   * Append /no_think only for Ollama + qwen models
+   */
+  private appendNoThink(text: string): string {
+    if (this.isOllama() && this.config.model.toLowerCase().includes('qwen')) {
+      return `${text} /no_think`
+    }
+    return text
+  }
+
+  private async callProvider(messages: ChatMessage[], maxTokens = 1024): Promise<string> {
+    if (this.isOllama()) {
+      return this.callOllama(messages, maxTokens)
+    }
+    return this.callOpenAI(messages, maxTokens)
+  }
+
+  private async callOllama(messages: ChatMessage[], maxTokens: number): Promise<string> {
+    const url = this.getOllamaUrl()
+    const res = await fetch(`${url}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: this.model,
+        model: this.config.model,
         messages,
         stream: false,
         options: {
@@ -241,7 +365,34 @@ Contexto adicional da obra: ${context} /no_think`
     }
 
     const data = await res.json() as OllamaChatResponse
-    // Qwen3 pode colocar resposta em 'thinking' quando modo thinking está ativo
     return data.message.content || data.message.thinking || ''
+  }
+
+  private async callOpenAI(messages: ChatMessage[], maxTokens: number): Promise<string> {
+    const url = this.getOpenAIBaseUrl()
+    if (!url) {
+      throw new Error('URL base do provedor de IA não configurada')
+    }
+
+    const res = await fetch(`${url}/chat/completions`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({
+        model: this.config.model,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        top_p: 0.8,
+      }),
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      logger.error({ status: res.status, body: errorText }, 'Erro na chamada OpenAI-compatible')
+      throw new Error(`Erro ao comunicar com IA: ${res.status}`)
+    }
+
+    const data = await res.json() as OpenAIChatResponse
+    return data.choices?.[0]?.message?.content || ''
   }
 }

@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify'
-import { createAuthMiddleware } from '../../core/auth/auth.middleware'
+import { createAuthMiddleware, AuthenticatedRequest } from '../../core/auth/auth.middleware'
 import { JWTService } from '../../core/auth/jwt.service'
 import { AIService } from './ai.service'
-import { chatMessageSchema, generateActivitiesSchema, generatePhaseSchema } from './ai.schemas'
+import { chatMessageSchema, generateActivitiesSchema, generatePhaseSchema, aiConfigSchema } from './ai.schemas'
+import { saveAIConfig, getAIConfigMasked } from './ai-config'
 
 export async function aiRoutes(fastify: FastifyInstance) {
   const jwtService = new JWTService(fastify)
@@ -19,11 +20,97 @@ export async function aiRoutes(fastify: FastifyInstance) {
       tags: ['ai'],
     },
   }, async (_request, reply) => {
-    const healthy = await service.checkHealth()
-    if (healthy) {
-      return reply.send({ status: 'ok', model: process.env.AI_MODEL || 'qwen3:1.7b' })
+    const result = await service.checkHealth()
+    if (result.healthy) {
+      return reply.send({ status: 'ok', model: result.model, provider: result.provider })
     }
-    return reply.status(503).send({ status: 'unavailable', message: 'Serviço de IA indisponível' })
+    return reply.status(503).send({ status: 'unavailable', message: 'Serviço de IA indisponível', provider: result.provider })
+  })
+
+  // GET /config — retorna config atual (API key mascarada)
+  fastify.get('/config', {
+    preHandler: [authMiddleware],
+    schema: {
+      description: 'Retorna configuração atual do provedor de IA',
+      tags: ['ai'],
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = (request as unknown as AuthenticatedRequest).user
+    if (user.role !== 'ROOT' && user.role !== 'MASTER') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Apenas ROOT/MASTER pode acessar configurações de IA' })
+    }
+    return reply.send(getAIConfigMasked())
+  })
+
+  // PUT /config — salva config + reloadConfig
+  fastify.put('/config', {
+    preHandler: [authMiddleware],
+    schema: {
+      description: 'Salva configuração do provedor de IA',
+      tags: ['ai'],
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = (request as unknown as AuthenticatedRequest).user
+    if (user.role !== 'ROOT' && user.role !== 'MASTER') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Apenas ROOT/MASTER pode alterar configurações de IA' })
+    }
+    try {
+      const config = aiConfigSchema.parse(request.body)
+      saveAIConfig(config)
+      service.reloadConfig()
+      // Re-ensure model for Ollama providers
+      service.ensureModel().catch(() => {})
+      return reply.send({ success: true, message: 'Configuração salva com sucesso' })
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // POST /config/test — testa conexão com config fornecida (antes de salvar)
+  fastify.post('/config/test', {
+    preHandler: [authMiddleware],
+    schema: {
+      description: 'Testa conexão com provedor de IA',
+      tags: ['ai'],
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = (request as unknown as AuthenticatedRequest).user
+    if (user.role !== 'ROOT' && user.role !== 'MASTER') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Apenas ROOT/MASTER pode testar conexão de IA' })
+    }
+    try {
+      const config = aiConfigSchema.parse(request.body)
+      const result = await service.testConnection(config)
+      return reply.send(result)
+    } catch (error) {
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: 'Bad Request', message: error.message })
+      }
+      throw error
+    }
+  })
+
+  // GET /config/models — lista modelos disponíveis no provedor atual
+  fastify.get('/config/models', {
+    preHandler: [authMiddleware],
+    schema: {
+      description: 'Lista modelos disponíveis no provedor de IA',
+      tags: ['ai'],
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
+    const user = (request as unknown as AuthenticatedRequest).user
+    if (user.role !== 'ROOT' && user.role !== 'MASTER') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Apenas ROOT/MASTER pode listar modelos de IA' })
+    }
+    const models = await service.listModels()
+    return reply.send({ models })
   })
 
   // Chat FAQ

@@ -1,10 +1,11 @@
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { usePermission, useRole } from '@/hooks/usePermission'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Mail, Database, GitBranch } from 'lucide-react'
+import { Mail, Database, GitBranch, Sparkles } from 'lucide-react'
 import { EmailSettings } from './EmailSettings'
 import { SinapiSettings } from './SinapiSettings'
 import { SinapiMappingSettings } from './SinapiMappingSettings'
+import { AISettings } from './AISettings'
 
 export function SettingsPage() {
   const canEditTenant = usePermission('tenant:edit')
@@ -49,6 +50,12 @@ export function SettingsPage() {
               Mapeamento SINAPI
             </TabsTrigger>
           )}
+          {canManageSinapi && (
+            <TabsTrigger value="ia" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              Integração com I.A.
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="email" className="mt-6">
@@ -64,6 +71,12 @@ export function SettingsPage() {
         {canManageSinapi && (
           <TabsContent value="mapeamento" className="mt-6">
             <SinapiMappingSettings />
+          </TabsContent>
+        )}
+
+        {canManageSinapi && (
+          <TabsContent value="ia" className="mt-6">
+            <AISettings />
           </TabsContent>
         )}
       </Tabs>

@@ -840,7 +840,34 @@ export const aiAPI = {
   generatePhase: (phaseName: string, context?: string) =>
     apiClient.post<any>('/ai/generate-phase', { phaseName, context }),
 
-  health: () => apiClient.get<{ status: string; model: string }>('/ai/health'),
+  health: () => apiClient.get<{ status: string; model: string; provider: string }>('/ai/health'),
+
+  getConfig: () => apiClient.get<{
+    provider: string
+    ollamaUrl?: string
+    apiKey?: string
+    baseUrl?: string
+    model: string
+    source: string
+  }>('/ai/config'),
+
+  saveConfig: (config: {
+    provider: string
+    ollamaUrl?: string
+    apiKey?: string
+    baseUrl?: string
+    model: string
+  }) => apiClient.put<{ success: boolean; message: string }>('/ai/config', config),
+
+  testConnection: (config: {
+    provider: string
+    ollamaUrl?: string
+    apiKey?: string
+    baseUrl?: string
+    model: string
+  }) => apiClient.post<{ success: boolean; message: string; models?: string[] }>('/ai/config/test', config),
+
+  listModels: () => apiClient.get<{ models: string[] }>('/ai/config/models'),
 }
 
 export const monitoringAPI = {

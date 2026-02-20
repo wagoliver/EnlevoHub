@@ -9,7 +9,7 @@ interface OllamaChatMessage {
 }
 
 interface OllamaChatResponse {
-  message: { role: string; content: string }
+  message: { role: string; content: string; thinking?: string }
   done: boolean
 }
 
@@ -39,9 +39,7 @@ FUNCIONALIDADES DO ENLEVOHUB:
 NAVEGAÇÃO:
 - Menu lateral esquerdo contém todas as seções
 - Cada projeto tem abas: Visão Geral, Atividades, Unidades, Levantamento
-- Configurações ficam na parte inferior do menu (Planejamentos, Usuários, Armazenamento)
-
-/no_think`
+- Configurações ficam na parte inferior do menu (Planejamentos, Usuários, Armazenamento)`
 
 const GENERATE_ACTIVITIES_SYSTEM_PROMPT = `Você é um engenheiro civil especialista em planejamento de obras. Gere um cronograma hierárquico para a obra descrita.
 
@@ -76,9 +74,7 @@ REGRAS:
 - Dependencies referencia nomes de outras atividades que devem terminar antes
 - Use cores distintas para cada fase
 - Cores disponíveis: #3b82f6, #ef4444, #22c55e, #f59e0b, #8b5cf6, #ec4899, #06b6d4, #f97316, #14b8a6, #6366f1
-- Responda SOMENTE com o JSON, sem texto adicional, sem markdown
-
-/no_think`
+- Responda SOMENTE com o JSON, sem texto adicional, sem markdown`
 
 const GENERATE_PHASE_SYSTEM_PROMPT = `Você é um engenheiro civil especialista em planejamento de obras com conhecimento da tabela SINAPI.
 
@@ -114,9 +110,7 @@ EXEMPLOS DE NOMES SINAPI POR FASE:
 - Estrutura: Levantamento de paredes, Vergas e contravergas, Estrutura do telhado, Telhas, Laje
 - Instalações: Tubulação hidráulica, Fiação elétrica, Quadro de distribuição, Esgoto e caixas de inspeção
 - Acabamento: Chapisco e reboco, Contrapiso e nivelamento, Piso cerâmico/porcelanato, Massa corrida, Pintura final, Azulejo (áreas molhadas)
-- Cobertura: Estrutura de madeira para telhado, Telhas cerâmicas/concreto, Calhas e rufos, Impermeabilização de laje
-
-/no_think`
+- Cobertura: Estrutura de madeira para telhado, Telhas cerâmicas/concreto, Calhas e rufos, Impermeabilização de laje`
 
 export class AIService {
   private baseUrl: string
@@ -131,7 +125,7 @@ export class AIService {
     const messages: OllamaChatMessage[] = [
       { role: 'system', content: FAQ_SYSTEM_PROMPT },
       ...history,
-      { role: 'user', content: userMessage },
+      { role: 'user', content: `${userMessage} /no_think` },
     ]
 
     return this.callOllama(messages)
@@ -146,14 +140,14 @@ export class AIService {
 
     const userPrompt = `Gere o cronograma para: ${description}
 
-Nível de detalhe: ${activityCounts[detailLevel]}`
+Nível de detalhe: ${activityCounts[detailLevel]} /no_think`
 
     const messages: OllamaChatMessage[] = [
       { role: 'system', content: GENERATE_ACTIVITIES_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ]
 
-    const response = await this.callOllama(messages)
+    const response = await this.callOllama(messages, 2048)
 
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/)
@@ -170,15 +164,15 @@ Nível de detalhe: ${activityCounts[detailLevel]}`
   async generatePhase(phaseName: string, context?: string): Promise<any> {
     const userPrompt = context
       ? `Gere etapas e atividades para a fase "${phaseName}".
-Contexto adicional da obra: ${context}`
-      : `Gere etapas e atividades para a fase "${phaseName}".`
+Contexto adicional da obra: ${context} /no_think`
+      : `Gere etapas e atividades para a fase "${phaseName}". /no_think`
 
     const messages: OllamaChatMessage[] = [
       { role: 'system', content: GENERATE_PHASE_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ]
 
-    const response = await this.callOllama(messages)
+    const response = await this.callOllama(messages, 2048)
 
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/)
@@ -223,7 +217,7 @@ Contexto adicional da obra: ${context}`
     }
   }
 
-  private async callOllama(messages: OllamaChatMessage[]): Promise<string> {
+  private async callOllama(messages: OllamaChatMessage[], maxTokens = 1024): Promise<string> {
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -235,7 +229,7 @@ Contexto adicional da obra: ${context}`
           temperature: 0.7,
           top_p: 0.8,
           top_k: 20,
-          num_predict: 1024,
+          num_predict: maxTokens,
         },
       }),
     })
@@ -247,6 +241,7 @@ Contexto adicional da obra: ${context}`
     }
 
     const data = await res.json() as OllamaChatResponse
-    return data.message.content
+    // Qwen3 pode colocar resposta em 'thinking' quando modo thinking está ativo
+    return data.message.content || data.message.thinking || ''
   }
 }
